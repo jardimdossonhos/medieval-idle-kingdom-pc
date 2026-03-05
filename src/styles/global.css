@@ -1,48 +1,237 @@
 ﻿:root {
-  --bg-top: #ece6d8;
-  --bg-bottom: #d8c8aa;
-  --ink: #2a241b;
-  --panel: #f6f0e2;
-  --panel-border: #8a7a5b;
-  --accent: #6b2f1a;
+  --paper-top: #f1e7d1;
+  --paper-bottom: #cfb58d;
+  --ink: #2f2618;
+  --card: #f7f0e0;
+  --card-border: #8c724f;
+  --accent: #6d2f1c;
+  --accent-soft: #8f5d3a;
+  --ok: #335a38;
+  --shadow: rgb(29 20 12 / 0.15);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  font-family: "Georgia", "Times New Roman", serif;
+  min-height: 100%;
+  font-family: Georgia, "Times New Roman", serif;
   color: var(--ink);
-  background: radial-gradient(circle at top, var(--bg-top), var(--bg-bottom));
+  background: radial-gradient(circle at 20% 10%, var(--paper-top), var(--paper-bottom));
 }
 
-.shell {
-  max-width: 1080px;
+button,
+select {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fef8ed, #ead9bc);
+  color: var(--ink);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent-soft);
+}
+
+.app-shell {
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 24px;
-}
-
-.topbar h1 {
-  margin: 0;
-  letter-spacing: 0.04em;
-}
-
-.topbar p {
-  margin: 8px 0 20px;
-}
-
-.panel-grid {
+  padding: 18px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
 }
 
-.panel {
-  padding: 12px;
-  border: 1px solid var(--panel-border);
-  background: color-mix(in srgb, var(--panel) 90%, white 10%);
+.card {
+  background: color-mix(in srgb, var(--card) 92%, white 8%);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px var(--shadow);
+  padding: 14px;
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr;
+  gap: 16px;
+}
+
+.app-header h1 {
+  margin: 0;
+  color: var(--accent);
+  letter-spacing: 0.03em;
+}
+
+.app-header p {
+  margin: 8px 0 0;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.status-grid div {
+  display: flex;
+  flex-direction: column;
+  background: rgb(255 255 255 / 0.35);
+  border: 1px solid rgb(140 114 79 / 0.55);
   border-radius: 8px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
+  padding: 6px 10px;
+}
+
+.status-grid span {
+  font-size: 0.78rem;
+  opacity: 0.72;
+}
+
+.status-grid strong {
+  margin-top: 2px;
+}
+
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.control-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast {
+  min-height: 1.4em;
+  color: var(--ok);
+  font-size: 0.92rem;
+}
+
+.top-grid {
+  display: grid;
+  grid-template-columns: 2.1fr 1fr;
+  gap: 14px;
+}
+
+.map-card {
+  min-height: 520px;
+}
+
+.map-card h2,
+.side-column h2,
+.bottom-grid h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
+.map-canvas {
+  width: 100%;
+  min-height: 455px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #e3d2b5, #c7ae83);
+}
+
+.side-column {
+  display: grid;
+  gap: 14px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 10px;
+}
+
+.summary-grid span {
+  opacity: 0.8;
+}
+
+.summary-grid strong {
+  text-align: right;
+}
+
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 14px;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.list.compact {
+  gap: 6px;
+}
+
+.list li {
+  border: 1px solid rgb(140 114 79 / 0.6);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: rgb(255 255 255 / 0.35);
+  display: grid;
+  gap: 4px;
+}
+
+.list li small {
+  font-size: 0.76rem;
+  opacity: 0.72;
+}
+
+.save-list {
+  display: grid;
+  gap: 8px;
+}
+
+.save-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid rgb(140 114 79 / 0.6);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgb(255 255 255 / 0.35);
+}
+
+.save-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.save-meta span {
+  font-size: 0.82rem;
+}
+
+@media (max-width: 1120px) {
+  .app-header,
+  .top-grid,
+  .bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .map-card {
+    min-height: 430px;
+  }
+
+  .map-canvas {
+    min-height: 360px;
+  }
 }
