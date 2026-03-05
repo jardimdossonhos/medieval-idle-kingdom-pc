@@ -23,7 +23,7 @@ export function createVictorySystem(): SimulationSystem {
           state.victory.postVictoryMode = true;
 
           context.events.push({
-            id: createEventId("evt_victory", state.meta.tick),
+            id: createEventId("evt_victory", state.meta.tick, context.events.length),
             type: "victory.achieved",
             actorKingdomId: player.id,
             payload: {

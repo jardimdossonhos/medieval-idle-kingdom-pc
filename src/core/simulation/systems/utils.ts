@@ -35,7 +35,6 @@ export function ensureResourceNonNegative(kingdom: KingdomState): void {
   }
 }
 
-export function createEventId(prefix: string, tick: number): string {
-  const entropy = Math.random().toString(36).slice(2, 8);
-  return `${prefix}_${tick}_${entropy}`;
+export function createEventId(prefix: string, tick: number, sequence: number): string {
+  return `${prefix}_${tick}_${sequence}`;
 }

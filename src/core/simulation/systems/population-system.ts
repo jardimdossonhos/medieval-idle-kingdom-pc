@@ -31,7 +31,7 @@ export function createPopulationSystem(): SimulationSystem {
 
         if (kingdom.population.unrest > 0.75 && context.nextState.meta.tick % 7 === 0) {
           context.events.push({
-            id: createEventId("evt_unrest", context.nextState.meta.tick),
+            id: createEventId("evt_unrest", context.nextState.meta.tick, context.events.length),
             type: "population.unrest_warning",
             actorKingdomId: kingdom.id,
             payload: {

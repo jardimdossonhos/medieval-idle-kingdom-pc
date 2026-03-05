@@ -33,7 +33,7 @@ export function createTechnologySystem(): SimulationSystem {
           kingdom.technology.researchRate = roundTo(clamp(kingdom.technology.researchRate + 0.03, 0.5, 3));
 
           context.events.push({
-            id: createEventId("evt_research", context.nextState.meta.tick),
+            id: createEventId("evt_research", context.nextState.meta.tick, context.events.length),
             type: "technology.completed",
             actorKingdomId: kingdom.id,
             payload: {

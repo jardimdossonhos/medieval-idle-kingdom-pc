@@ -26,6 +26,7 @@ export class GameSession {
   private ticksSinceAutosave = 0;
   private autoSlotIndex = 0;
   private ioQueue: Promise<void> = Promise.resolve();
+  private sessionLogSeq = 0;
 
   constructor(private readonly deps: GameSessionDeps) {
     this.pipeline = new TickPipeline(deps.systems);
@@ -159,12 +160,29 @@ export class GameSession {
       return;
     }
 
+    void now;
+
     this.accumulatedMs += deltaMs * state.meta.speedMultiplier;
 
     let progressed = false;
+    let simNow = state.meta.lastUpdatedAt;
 
-    while (this.accumulatedMs >= state.meta.tickDurationMs) {
-      const result = this.pipeline.run(this.currentState!, state.meta.tickDurationMs, now);
+    while (true) {
+      const current = this.currentState;
+      if (!current) {
+        break;
+      }
+
+      const tickDurationMs = Math.max(1, current.meta.tickDurationMs);
+
+      if (this.accumulatedMs < tickDurationMs) {
+        break;
+      }
+
+      // Advance simulated time deterministically even if multiple ticks are processed in a single clock callback.
+      simNow = Math.max(simNow, current.meta.lastUpdatedAt) + tickDurationMs;
+
+      const result = this.pipeline.run(current, tickDurationMs, simNow);
       this.currentState = result.state;
       progressed = true;
       this.ticksSinceAutosave += 1;
@@ -178,7 +196,7 @@ export class GameSession {
         this.runAutosave();
       }
 
-      this.accumulatedMs -= state.meta.tickDurationMs;
+      this.accumulatedMs -= tickDurationMs;
     }
 
     if (!progressed) {
@@ -244,12 +262,12 @@ export class GameSession {
   }
 
   private runOfflineProgression(state: GameState, now: number): { state: GameState; ticks: number } {
-    const lastClosedAt = state.meta.lastClosedAt;
-    if (!lastClosedAt || lastClosedAt >= now) {
+    const lastSnapshotAt = state.meta.lastClosedAt ?? state.meta.lastUpdatedAt;
+    if (!lastSnapshotAt || lastSnapshotAt >= now) {
       return { state, ticks: 0 };
     }
 
-    const elapsedMs = now - lastClosedAt;
+    const elapsedMs = now - lastSnapshotAt;
     const maxTicks = this.deps.maxOfflineTicks ?? 1_200;
     const desiredTicks = Math.floor(elapsedMs / Math.max(1, state.meta.tickDurationMs));
     const ticksToSimulate = Math.max(0, Math.min(desiredTicks, maxTicks));
@@ -257,7 +275,7 @@ export class GameSession {
     let workingState = structuredClone(state);
 
     for (let index = 0; index < ticksToSimulate; index += 1) {
-      const tickNow = lastClosedAt + (index + 1) * workingState.meta.tickDurationMs;
+            const tickNow = lastSnapshotAt + (index + 1) * workingState.meta.tickDurationMs;
       const result = this.pipeline.run(workingState, workingState.meta.tickDurationMs, tickNow);
       workingState = result.state;
     }
@@ -287,8 +305,10 @@ export class GameSession {
   }
 
   private createSessionLog(title: string, details: string, severity: EventLogEntry["severity"], now: number): EventLogEntry {
+    const tick = this.currentState?.meta.tick ?? 0;
+    const seq = this.sessionLogSeq++;
     return {
-      id: `evt_session_${now}_${Math.random().toString(36).slice(2, 7)}`,
+      id: `evt_session_${tick}_${seq}`,
       title,
       details,
       severity,

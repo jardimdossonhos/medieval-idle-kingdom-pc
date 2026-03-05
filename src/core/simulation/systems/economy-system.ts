@@ -67,7 +67,7 @@ export function createEconomySystem(): SimulationSystem {
 
         if (kingdom.economy.stock[ResourceType.Food] < kingdom.population.total / 8_000 && context.nextState.meta.tick % 5 === 0) {
           context.events.push({
-            id: createEventId("evt_food", context.nextState.meta.tick),
+            id: createEventId("evt_food", context.nextState.meta.tick, context.events.length),
             type: "economy.food_shortage",
             actorKingdomId: kingdom.id,
             payload: {

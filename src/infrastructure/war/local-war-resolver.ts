@@ -127,7 +127,7 @@ function addPeaceTreaty(state: GameState, leftId: KingdomId, rightId: KingdomId,
 function findBorderFronts(state: GameState, attackerId: KingdomId, defenderId: KingdomId): WarFront[] {
   const attackerRegions = Object.values(state.world.regions)
     .filter((region) => region.ownerId === attackerId)
-    .map((region) => region.regionId);
+    .map((region) => region.regionId).sort();
 
   const defenderRegionSet = new Set(
     Object.values(state.world.regions)
@@ -191,7 +191,8 @@ function applyConquest(state: GameState, winners: KingdomId[], losers: KingdomId
 
   const winnerRegions = Object.values(state.world.regions)
     .filter((region) => region.ownerId === winnerId)
-    .map((region) => region.regionId);
+    .map((region) => region.regionId)
+    .sort();
 
   const candidates = new Set<string>();
 
@@ -213,9 +214,23 @@ function applyConquest(state: GameState, winners: KingdomId[], losers: KingdomId
   let targetRegionId: string | null = null;
 
   if (candidates.size > 0) {
-    targetRegionId = Array.from(candidates)[0];
+    const sortedCandidates = Array.from(candidates).sort((a, b) => {
+      const va = state.world.definitions[a]?.strategicValue ?? 0;
+      const vb = state.world.definitions[b]?.strategicValue ?? 0;
+      if (vb !== va) {
+        return vb - va;
+      }
+      return a.localeCompare(b);
+    });
+
+    targetRegionId = sortedCandidates[0] ?? null;
   } else {
-    targetRegionId = Object.values(state.world.regions).find((region) => loserSet.has(region.ownerId))?.regionId ?? null;
+    const fallback = Object.values(state.world.regions)
+      .filter((region) => loserSet.has(region.ownerId))
+      .map((region) => region.regionId)
+      .sort()[0];
+
+    targetRegionId = fallback ?? null;
   }
 
   if (!targetRegionId) {

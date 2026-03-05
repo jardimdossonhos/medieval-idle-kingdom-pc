@@ -80,7 +80,7 @@ export function createNpcDecisionSystem(
     run(context): void {
       const state = context.nextState;
 
-      for (const kingdomId of Object.keys(state.kingdoms)) {
+      for (const kingdomId of Object.keys(state.kingdoms).sort()) {
         const kingdom = state.kingdoms[kingdomId];
 
         if (kingdom.isPlayer || !kingdom.npc) {
@@ -113,7 +113,7 @@ export function createNpcDecisionSystem(
                   decisionResult = "war_declared";
 
                   context.events.push({
-                    id: createEventId("evt_war_start", context.nextState.meta.tick),
+                    id: createEventId("evt_war_start", context.nextState.meta.tick, context.events.length),
                     type: "war.started",
                     actorKingdomId: attacker.id,
                     targetKingdomId: defender.id,
@@ -139,7 +139,7 @@ export function createNpcDecisionSystem(
               decisionResult = "peace_accepted";
 
               context.events.push({
-                id: createEventId("evt_war_peace", context.nextState.meta.tick),
+                id: createEventId("evt_war_peace", context.nextState.meta.tick, context.events.length),
                 type: "war.peace",
                 actorKingdomId: decision.actorKingdomId,
                 targetKingdomId: decision.targetKingdomId,
@@ -160,7 +160,7 @@ export function createNpcDecisionSystem(
           kingdom.npc.lastDecisionTick = context.nextState.meta.tick;
 
           context.events.push({
-            id: createEventId("evt_npc", context.nextState.meta.tick),
+            id: createEventId("evt_npc", context.nextState.meta.tick, context.events.length),
             type: "npc.decision",
             actorKingdomId: decision.actorKingdomId,
             targetKingdomId: decision.targetKingdomId,

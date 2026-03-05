@@ -19,7 +19,7 @@ export function createWarSystem(warResolver: WarResolver): SimulationSystem {
 
         if (previousScore !== undefined && Math.abs(previousScore) < 45 && Math.abs(war.warScore) >= 45) {
           context.events.push({
-            id: createEventId("evt_war_escalation", context.nextState.meta.tick),
+            id: createEventId("evt_war_escalation", context.nextState.meta.tick, context.events.length),
             type: "war.escalated",
             actorKingdomId: war.warScore > 0 ? war.attackers[0] : war.defenders[0],
             payload: {
@@ -38,7 +38,7 @@ export function createWarSystem(warResolver: WarResolver): SimulationSystem {
         }
 
         context.events.push({
-          id: createEventId("evt_war_capture", context.nextState.meta.tick),
+          id: createEventId("evt_war_capture", context.nextState.meta.tick, context.events.length),
           type: "war.region_captured",
           actorKingdomId: regionAfter.ownerId,
           targetKingdomId: previousOwnerId,

@@ -78,7 +78,7 @@ export function createReligionSystem(): SimulationSystem {
 
         if (tensionIndex > 0.55 && state.meta.tick % 6 === 0) {
           context.events.push({
-            id: createEventId("evt_religion", state.meta.tick),
+            id: createEventId("evt_religion", state.meta.tick, context.events.length),
             type: "religion.tension",
             actorKingdomId: kingdom.id,
             payload: {

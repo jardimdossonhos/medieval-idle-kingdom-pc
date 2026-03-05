@@ -76,7 +76,7 @@ export function createAdministrationSystem(): SimulationSystem {
 
           if (control.revoltRisk > 0.78 && state.meta.tick % 7 === 0) {
             context.events.push({
-              id: createEventId("evt_revolt", state.meta.tick),
+              id: createEventId("evt_revolt", state.meta.tick, context.events.length),
               type: "administration.revolt_risk",
               actorKingdomId: kingdom.id,
               payload: {

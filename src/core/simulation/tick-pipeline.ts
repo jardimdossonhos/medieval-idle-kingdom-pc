@@ -31,6 +31,10 @@ export class TickPipeline {
       events: []
     };
 
+    // Ensure systems see the correct wall-clock timestamp for this tick.
+    context.nextState.meta.lastUpdatedAt = now;
+
+
     for (const system of this.systems) {
       system.run(context);
     }
