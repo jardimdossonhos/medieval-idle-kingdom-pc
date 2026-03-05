@@ -5,11 +5,13 @@ import { createDefaultSimulationSystems } from "./core/simulation/create-default
 import { ResourceType } from "./core/models/enums";
 import type { SaveSummary } from "./core/contracts/game-ports";
 import type { GameState } from "./core/models/game-state";
+import { LocalDiplomacyResolver } from "./infrastructure/diplomacy/local-diplomacy-resolver";
 import { RuleBasedNpcDecisionService } from "./infrastructure/npc/rule-based-npc-decision-service";
 import { IndexedDbGameStateRepository, IndexedDbSaveRepository } from "./infrastructure/persistence/indexeddb-repositories";
 import { PixiMapRenderer } from "./infrastructure/rendering/pixi-map-renderer";
 import { BrowserClockService } from "./infrastructure/runtime/browser-clock-service";
 import { LocalEventBus } from "./infrastructure/runtime/local-event-bus";
+import { LocalWarResolver } from "./infrastructure/war/local-war-resolver";
 import { createTranslator, getLocale, setLocale } from "./ui/i18n";
 
 interface UiRefs {
@@ -181,12 +183,18 @@ async function bootstrapApp(): Promise<void> {
 
   const eventBus = new LocalEventBus();
   const npcDecisionService = new RuleBasedNpcDecisionService();
+  const diplomacyResolver = new LocalDiplomacyResolver();
+  const warResolver = new LocalWarResolver();
   const session = new GameSession({
     gameStateRepository: new IndexedDbGameStateRepository(),
     saveRepository: new IndexedDbSaveRepository(),
     clock: new BrowserClockService(1_000),
     eventBus,
-    systems: createDefaultSimulationSystems(npcDecisionService),
+    systems: createDefaultSimulationSystems({
+      npcDecisionService,
+      diplomacyResolver,
+      warResolver
+    }),
     autosaveEveryTicks: 5,
     maxOfflineTicks: 1_800
   });

@@ -1,5 +1,11 @@
-﻿import { defineConfig } from "vite";
+﻿import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  base: "./"
+  base: "./",
+  resolve: {
+    extensions: [".ts", ".tsx", ".mjs", ".js", ".mts", ".jsx", ".json"]
+  },
+  test: {
+    include: ["tests/**/*.test.ts"]
+  }
 });

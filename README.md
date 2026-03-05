@@ -5,7 +5,8 @@ Browser-first grand strategy idle game architecture focused on local simulation 
 ## Stage status
 
 - Stage 1 complete: architecture, contracts, domain model, and implementation plan.
-- Stage 2 onward: simulation runtime, persistence adapters, and full gameplay systems.
+- Stage 2 complete: runtime loop, local persistence, autosave slots, and playable HUD/map shell.
+- Stage 3 in progress: economy/population/technology + religion/administration/war/automation + NPC heuristics.
 
 ## Design goals
 
