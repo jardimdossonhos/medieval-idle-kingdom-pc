@@ -1,0 +1,48 @@
+﻿:root {
+  --bg-top: #ece6d8;
+  --bg-bottom: #d8c8aa;
+  --ink: #2a241b;
+  --panel: #f6f0e2;
+  --panel-border: #8a7a5b;
+  --accent: #6b2f1a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Georgia", "Times New Roman", serif;
+  color: var(--ink);
+  background: radial-gradient(circle at top, var(--bg-top), var(--bg-bottom));
+}
+
+.shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.topbar h1 {
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+
+.topbar p {
+  margin: 8px 0 20px;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.panel {
+  padding: 12px;
+  border: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--panel) 90%, white 10%);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
+}

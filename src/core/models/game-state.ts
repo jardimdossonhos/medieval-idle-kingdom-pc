@@ -1,0 +1,77 @@
+﻿import type { AdministrationState } from "./administration";
+import type { DiplomacyState } from "./diplomacy";
+import type { EconomyState } from "./economy";
+import type { EventLogEntry } from "./events";
+import type { MilitaryState } from "./military";
+import type { NpcBehaviorState } from "./npc";
+import type { PopulationState } from "./population";
+import type { ReligionState } from "./religion";
+import type { TechnologyState } from "./technology";
+import type { VictoryState, VictoryTarget } from "./victory";
+import type { CampaignId, KingdomId, TickId, TimestampMs, WarId } from "./types";
+import type { WorldState } from "./world";
+
+export interface KingdomState {
+  id: KingdomId;
+  name: string;
+  adjective: string;
+  isPlayer: boolean;
+  capitalRegionId: string;
+  economy: EconomyState;
+  population: PopulationState;
+  technology: TechnologyState;
+  religion: ReligionState;
+  military: MilitaryState;
+  diplomacy: DiplomacyState;
+  administration: AdministrationState;
+  victoryProgress: Record<string, number>;
+  legitimacy: number;
+  stability: number;
+  npc?: NpcBehaviorState;
+}
+
+export interface WarFront {
+  regionId: string;
+  pressureAttackers: number;
+  pressureDefenders: number;
+}
+
+export interface WarState {
+  id: WarId;
+  attackers: KingdomId[];
+  defenders: KingdomId[];
+  warScore: number;
+  startedAt: TimestampMs;
+  fronts: WarFront[];
+}
+
+export interface CampaignConfig {
+  id: CampaignId;
+  name: string;
+  mapId: string;
+  startDateIso: string;
+  victoryTargets: VictoryTarget[];
+}
+
+export interface GameMeta {
+  schemaVersion: number;
+  sessionId: string;
+  tick: TickId;
+  tickDurationMs: number;
+  speedMultiplier: number;
+  paused: boolean;
+  createdAt: TimestampMs;
+  lastUpdatedAt: TimestampMs;
+  lastClosedAt: TimestampMs | null;
+}
+
+export interface GameState {
+  meta: GameMeta;
+  campaign: CampaignConfig;
+  world: WorldState;
+  kingdoms: Record<KingdomId, KingdomState>;
+  wars: Record<WarId, WarState>;
+  events: EventLogEntry[];
+  victory: VictoryState;
+  randomSeed: number;
+}
