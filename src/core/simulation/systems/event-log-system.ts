@@ -152,6 +152,18 @@ function describeEvent(event: DomainEvent, state: GameState): EventDescriptor {
         severity: "critical",
         suggestedAction: "Prepare-se para crises de superexpansão no pós-vitória."
       };
+    case "world.activity_summary": {
+      const warsStarted = Number(event.payload.warsStarted ?? 0);
+      const peacesSigned = Number(event.payload.peacesSigned ?? 0);
+      const captures = Number(event.payload.captures ?? 0);
+      return {
+        title: "Resumo geopolítico",
+        details: `${warsStarted} guerras iniciadas, ${captures} conquistas e ${peacesSigned} acordos de paz no ciclo recente.`,
+        severity: warsStarted + captures >= 3 ? "warning" : "info",
+        suggestedAction: "Ajuste postura diplomática e monitore fronteiras críticas no mapa.",
+        groupKey: "world.activity_summary"
+      };
+    }
     default:
       return {
         title: "Evento estratégico",
@@ -182,6 +194,7 @@ export function createEventLogSystem(maxEntries = 180, dedupeWindowMs = 45_000):
       for (const event of context.events) {
         const descriptor = describeEvent(event, context.nextState);
         const groupKey = buildGroupKey(event, descriptor.groupKey);
+        const regionId = typeof event.payload.regionId === "string" ? event.payload.regionId : undefined;
 
         const existingIndex = mergedLog.findIndex(
           (entry) => entry.groupKey === groupKey && context.now - entry.occurredAt <= dedupeWindowMs
@@ -201,7 +214,8 @@ export function createEventLogSystem(maxEntries = 180, dedupeWindowMs = 45_000):
             count: nextCount,
             suggestedAction: descriptor.suggestedAction ?? previous.suggestedAction,
             actorKingdomId: event.actorKingdomId,
-            targetKingdomId: event.targetKingdomId
+            targetKingdomId: event.targetKingdomId,
+            regionId: regionId ?? previous.regionId
           });
 
           continue;
@@ -217,7 +231,8 @@ export function createEventLogSystem(maxEntries = 180, dedupeWindowMs = 45_000):
           groupKey,
           suggestedAction: descriptor.suggestedAction,
           actorKingdomId: event.actorKingdomId,
-          targetKingdomId: event.targetKingdomId
+          targetKingdomId: event.targetKingdomId,
+          regionId
         });
       }
 

@@ -10,6 +10,7 @@ export interface MapSelection {
 
 export interface MapRenderContext {
   contestedRegionIds?: readonly string[];
+  recentlyCapturedRegionIds?: readonly string[];
 }
 
 export interface GameMapRenderer {

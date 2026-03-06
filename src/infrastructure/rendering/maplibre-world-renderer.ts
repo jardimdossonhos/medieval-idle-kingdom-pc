@@ -12,6 +12,7 @@ interface CountryFeatureProperties {
   ownerColor?: string;
   unrest?: number;
   contested?: number;
+  recentlyCaptured?: number;
   selected?: number;
 }
 
@@ -62,10 +63,14 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         center: [10, 28],
         zoom: 2.2,
         maxZoom: 7,
-        minZoom: 1.35
+        minZoom: 1.35,
+        dragRotate: false
       });
 
       this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      this.map.scrollZoom.enable();
+      this.map.dragPan.enable();
+      this.map.doubleClickZoom.enable();
       this.map.touchZoomRotate.enable();
     }
 
@@ -98,6 +103,9 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           .sort()
           .filter((regionId) => world.regions[regionId].devastation > 0.22)
       );
+    const recentlyCapturedRegionIds = context?.recentlyCapturedRegionIds?.length
+      ? new Set(context.recentlyCapturedRegionIds)
+      : new Set<string>();
 
     for (const feature of this.geojson.features) {
       const regionId = feature.properties.regionId;
@@ -112,6 +120,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         feature.properties.ownerColor = "#857a67";
         feature.properties.unrest = 0;
         feature.properties.contested = 0;
+        feature.properties.recentlyCaptured = 0;
         feature.properties.selected = this.selectedRegionId === regionId ? 1 : 0;
         continue;
       }
@@ -123,6 +132,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       feature.properties.ownerColor = colorForKingdom(owner?.id ?? region.ownerId);
       feature.properties.unrest = region.unrest;
       feature.properties.contested = contestedRegionIds.has(regionId) ? 1 : 0;
+      feature.properties.recentlyCaptured = recentlyCapturedRegionIds.has(regionId) ? 1 : 0;
       feature.properties.selected = this.selectedRegionId === regionId ? 1 : 0;
     }
 
@@ -178,8 +188,28 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         type: "line",
         source: SOURCE_ID,
         paint: {
-          "line-color": ["case", ["==", ["get", "selected"], 1], "#f2d067", "#4a3722"],
-          "line-width": ["case", ["==", ["get", "selected"], 1], 2.5, 1.2]
+          "line-color": [
+            "case",
+            ["==", ["get", "selected"], 1],
+            "#f2d067",
+            ["==", ["coalesce", ["get", "recentlyCaptured"], 0], 1],
+            "#ef9e2b",
+            "#4a3722"
+          ],
+          "line-width": [
+            "case",
+            ["==", ["get", "selected"], 1],
+            2.8,
+            ["==", ["coalesce", ["get", "recentlyCaptured"], 0], 1],
+            2.2,
+            1.1
+          ],
+          "line-opacity": [
+            "case",
+            ["==", ["coalesce", ["get", "contested"], 0], 1],
+            0.95,
+            0.8
+          ]
         }
       });
     }
@@ -243,6 +273,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
     switch (this.layerMode) {
       case "owner":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", ["coalesce", ["get", "ownerColor"], "#8d816e"]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", 0.8);
         break;
       case "unrest":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
@@ -256,6 +287,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           0.75,
           "#ad2a24"
         ]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", 0.82);
         break;
       case "war":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
@@ -263,6 +295,12 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           ["==", ["coalesce", ["get", "contested"], 0], 1],
           "#a31f1f",
           ["coalesce", ["get", "ownerColor"], "#8d816e"]
+        ]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", [
+          "case",
+          ["==", ["coalesce", ["get", "contested"], 0], 1],
+          0.95,
+          0.55
         ]);
         break;
     }

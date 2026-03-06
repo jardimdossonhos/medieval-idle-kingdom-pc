@@ -285,6 +285,7 @@ async function bootstrapApp(): Promise<void> {
               </select>
             </label>
           </div>
+          <p class="map-hint">Use scroll/pinch para zoom e arraste para mover o mapa.</p>
           <div id="map-canvas" class="map-canvas"></div>
         </article>
 
@@ -1032,6 +1033,8 @@ async function bootstrapApp(): Promise<void> {
 
   function buildMapRenderContext(state: GameState): MapRenderContext {
     const contestedRegionIds = new Set<string>();
+    const recentlyCapturedRegionIds = new Set<string>();
+    const recentCaptureWindowMs = Math.max(30_000, state.meta.tickDurationMs * 24);
 
     for (const warId of Object.keys(state.wars).sort()) {
       const war = state.wars[warId];
@@ -1048,8 +1051,18 @@ async function bootstrapApp(): Promise<void> {
       }
     }
 
+    for (const event of state.events) {
+      if (event.occurredAt < state.meta.lastUpdatedAt - recentCaptureWindowMs) {
+        continue;
+      }
+      if (event.groupKey?.startsWith("war.region_captured") && event.regionId) {
+        recentlyCapturedRegionIds.add(event.regionId);
+      }
+    }
+
     return {
-      contestedRegionIds: Array.from(contestedRegionIds).sort()
+      contestedRegionIds: Array.from(contestedRegionIds).sort(),
+      recentlyCapturedRegionIds: Array.from(recentlyCapturedRegionIds).sort()
     };
   }
 

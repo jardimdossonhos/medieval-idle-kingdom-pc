@@ -143,6 +143,12 @@ p {
   color: var(--accent);
 }
 
+.map-hint {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  opacity: 0.82;
+}
+
 .map-canvas {
   width: 100%;
   min-height: 500px;
@@ -150,6 +156,7 @@ p {
   border-radius: 10px;
   overflow: hidden;
   background: linear-gradient(160deg, #ddc5a1, #c3ab83);
+  touch-action: none;
 }
 
 .side-column {

@@ -11,6 +11,7 @@ import { createReligionSystem } from "./systems/religion-system";
 import { createTechnologySystem } from "./systems/technology-system";
 import { createVictorySystem } from "./systems/victory-system";
 import { createWarSystem } from "./systems/war-system";
+import { createWorldActivitySystem } from "./systems/world-activity-system";
 
 export interface SimulationServices {
   npcDecisionService: INpcDecisionService;
@@ -29,6 +30,7 @@ export function createDefaultSimulationSystems(services: SimulationServices): Si
     createDiplomacySystem(services.diplomacyResolver),
     createNpcDecisionSystem(services.npcDecisionService, services.diplomacyResolver, services.warResolver),
     createWarSystem(services.warResolver),
+    createWorldActivitySystem(),
     createVictorySystem(),
     createEventLogSystem()
   ];

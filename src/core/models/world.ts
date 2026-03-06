@@ -1,9 +1,21 @@
 ﻿import type { KingdomId, Point2D, RegionId } from "./types";
 
+export type RegionZone =
+  | "europe"
+  | "north_africa"
+  | "near_east"
+  | "north_america"
+  | "south_america"
+  | "sub_saharan_africa"
+  | "central_asia"
+  | "south_asia"
+  | "east_asia"
+  | "oceania";
+
 export interface RegionDefinition {
   id: RegionId;
   name: string;
-  zone: "europe" | "north_africa" | "near_east";
+  zone: RegionZone;
   strategicValue: number;
   economyValue: number;
   militaryValue: number;

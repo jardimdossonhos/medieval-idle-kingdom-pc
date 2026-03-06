@@ -4,12 +4,13 @@ import type { RegionDefinition, WorldState } from "../../core/models/world";
 import type { GameMapRenderer, MapLayerMode, MapRenderContext, MapSelection } from "./map-renderer";
 
 interface RegionNode {
+  definition: RegionDefinition;
   shape: Graphics;
   label: Text;
 }
 
-const REGION_WIDTH = 128;
-const REGION_HEIGHT = 62;
+const REGION_WIDTH = 26;
+const REGION_HEIGHT = 16;
 
 export class PixiMapRenderer implements GameMapRenderer {
   private app: Application | null = null;
@@ -57,6 +58,9 @@ export class PixiMapRenderer implements GameMapRenderer {
     const contestedRegionIds = context?.contestedRegionIds?.length
       ? new Set(context.contestedRegionIds)
       : null;
+    const recentlyCapturedRegionIds = context?.recentlyCapturedRegionIds?.length
+      ? new Set(context.recentlyCapturedRegionIds)
+      : null;
 
     for (const [regionId, regionState] of Object.entries(world.regions)) {
       const node = this.regionNodes.get(regionId);
@@ -66,6 +70,7 @@ export class PixiMapRenderer implements GameMapRenderer {
 
       const owner = kingdoms[regionState.ownerId];
       const selected = this.selectedRegionId === regionId;
+      const recentlyCaptured = recentlyCapturedRegionIds?.has(regionId) ?? false;
 
       let fillColor = owner ? colorForKingdom(owner.id) : 0x8d816e;
       if (this.mapLayer === "unrest") {
@@ -78,7 +83,11 @@ export class PixiMapRenderer implements GameMapRenderer {
         );
       }
 
-      redrawRegionShape(node.shape, world.definitions[regionId], fillColor, selected);
+      const projected = this.toCanvasPoint(node.definition);
+      redrawRegionShape(node.shape, projected, fillColor, selected, recentlyCaptured);
+      node.label.x = projected.x;
+      node.label.y = projected.y;
+      node.label.visible = selected;
     }
   }
 
@@ -115,30 +124,63 @@ export class PixiMapRenderer implements GameMapRenderer {
         text: region.name,
         style: {
           fontFamily: "Georgia",
-          fontSize: 12,
+          fontSize: 10,
           fill: "#2a241b",
           align: "center"
         }
       });
       label.anchor.set(0.5);
-      label.x = region.center.x;
-      label.y = region.center.y;
+      const projected = this.toCanvasPoint(region);
+      label.x = projected.x;
+      label.y = projected.y;
+      label.visible = false;
 
-      redrawRegionShape(shape, region, 0x927a61, false);
+      redrawRegionShape(shape, projected, 0x927a61, false, false);
 
       this.layerContainer.addChild(shape);
       this.layerContainer.addChild(label);
-      this.regionNodes.set(region.id, { shape, label });
+      this.regionNodes.set(region.id, { definition: region, shape, label });
     }
+  }
+
+  private toCanvasPoint(region: RegionDefinition): { x: number; y: number } {
+    if (!this.app) {
+      return {
+        x: region.center.x,
+        y: region.center.y
+      };
+    }
+
+    const rawX = region.center.x;
+    const rawY = region.center.y;
+    if (Math.abs(rawX) <= 180 && Math.abs(rawY) <= 90) {
+      const width = Math.max(1, this.app.renderer.width);
+      const height = Math.max(1, this.app.renderer.height);
+      return {
+        x: ((rawX + 180) / 360) * width,
+        y: ((90 - rawY) / 180) * height
+      };
+    }
+
+    return {
+      x: rawX,
+      y: rawY
+    };
   }
 }
 
-function redrawRegionShape(shape: Graphics, region: RegionDefinition, fillColor: number, selected: boolean): void {
-  const x = region.center.x - REGION_WIDTH / 2;
-  const y = region.center.y - REGION_HEIGHT / 2;
+function redrawRegionShape(
+  shape: Graphics,
+  center: { x: number; y: number },
+  fillColor: number,
+  selected: boolean,
+  recentlyCaptured: boolean
+): void {
+  const x = center.x - REGION_WIDTH / 2;
+  const y = center.y - REGION_HEIGHT / 2;
 
   shape.clear();
-  shape.lineStyle(selected ? 3 : 2, selected ? 0xf2d067 : 0x4a3722, 1);
+  shape.lineStyle(selected ? 3 : recentlyCaptured ? 2.5 : 2, selected ? 0xf2d067 : recentlyCaptured ? 0xef9e2b : 0x4a3722, 1);
   shape.beginFill(fillColor, selected ? 0.95 : 0.82);
   shape.drawRoundedRect(x, y, REGION_WIDTH, REGION_HEIGHT, 14);
   shape.endFill();

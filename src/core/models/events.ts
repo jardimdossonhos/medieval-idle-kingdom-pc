@@ -20,4 +20,5 @@ export interface EventLogEntry {
   suggestedAction?: string;
   actorKingdomId?: KingdomId;
   targetKingdomId?: KingdomId;
+  regionId?: string;
 }
