@@ -19,7 +19,14 @@ Browser-first grand strategy idle game architecture focused on local simulation 
 
 ```bash
 npm install
+npm run map:build
 npm run dev
+```
+
+Para testar no celular (mesma rede local):
+
+```bash
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
 ## Structure

@@ -1,7 +1,7 @@
 ﻿import { Application, Container, Graphics, Text } from "pixi.js";
 import type { KingdomState } from "../../core/models/game-state";
 import type { RegionDefinition, WorldState } from "../../core/models/world";
-import type { GameMapRenderer, MapLayerMode } from "./map-renderer";
+import type { GameMapRenderer, MapLayerMode, MapSelection } from "./map-renderer";
 
 interface RegionNode {
   shape: Graphics;
@@ -20,7 +20,7 @@ export class PixiMapRenderer implements GameMapRenderer {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly onRegionSelect?: (regionId: string) => void
+    private readonly onRegionSelect?: (selection: MapSelection) => void
   ) {}
 
   async mount(world: WorldState, kingdoms: Record<string, KingdomState>): Promise<void> {
@@ -102,7 +102,7 @@ export class PixiMapRenderer implements GameMapRenderer {
 
       shape.on("pointertap", () => {
         this.selectedRegionId = region.id;
-        this.onRegionSelect?.(region.id);
+        this.onRegionSelect?.({ regionId: region.id, label: region.name });
       });
 
       const label = new Text({

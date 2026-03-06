@@ -6,7 +6,7 @@ import { TechnologyDomain, type ResourceType } from "./core/models/enums";
 import { createDefaultSimulationSystems } from "./core/simulation/create-default-systems";
 import type { SaveSummary } from "./core/contracts/game-ports";
 import type { GameState, KingdomState } from "./core/models/game-state";
-import type { MapLayerMode } from "./infrastructure/rendering/map-renderer";
+import type { MapLayerMode, MapSelection } from "./infrastructure/rendering/map-renderer";
 import { HybridMapRenderer } from "./infrastructure/rendering/hybrid-map-renderer";
 import { LocalDiplomacyResolver } from "./infrastructure/diplomacy/local-diplomacy-resolver";
 import { RuleBasedNpcDecisionService } from "./infrastructure/npc/rule-based-npc-decision-service";
@@ -319,6 +319,7 @@ async function bootstrapApp(): Promise<void> {
   };
 
   let selectedRegionId: string | null = null;
+  let selectedMapLabel: string | null = null;
   let toastTimeout: number | null = null;
 
   function showToast(message: string): void {
@@ -368,8 +369,9 @@ async function bootstrapApp(): Promise<void> {
     maxSnapshots: 20
   });
 
-  const mapRenderer = new HybridMapRenderer(ui.mapCanvas, (regionId) => {
-    selectedRegionId = regionId;
+  const mapRenderer = new HybridMapRenderer(ui.mapCanvas, (selection: MapSelection) => {
+    selectedRegionId = selection.regionId;
+    selectedMapLabel = selection.label ?? selection.regionId;
     renderRegionInfo(session.getState());
     setActiveTab("mapa");
   });
@@ -454,7 +456,14 @@ async function bootstrapApp(): Promise<void> {
     const regionDef = state.world.definitions[selectedRegionId];
 
     if (!region || !regionDef) {
-      ui.regionInfo.textContent = "Selecione uma região no mapa.";
+      const label = selectedMapLabel ?? selectedRegionId;
+      ui.regionInfo.innerHTML = `
+        <div class="summary-grid">
+          <span>País</span><strong>${label}</strong>
+          <span>Status</span><strong>Fora da campanha inicial</strong>
+          <span>Ações</span><strong>Indisponíveis nesta fase</strong>
+        </div>
+      `;
       ui.regionActions.innerHTML = "";
       return;
     }

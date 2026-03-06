@@ -1,6 +1,6 @@
 ﻿import type { KingdomState } from "../../core/models/game-state";
 import type { WorldState } from "../../core/models/world";
-import type { GameMapRenderer, MapLayerMode } from "./map-renderer";
+import type { GameMapRenderer, MapLayerMode, MapSelection } from "./map-renderer";
 import { MapLibreWorldRenderer } from "./maplibre-world-renderer";
 import { PixiMapRenderer } from "./pixi-map-renderer";
 
@@ -9,7 +9,7 @@ export class HybridMapRenderer implements GameMapRenderer {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly onRegionSelect?: (regionId: string) => void
+    private readonly onRegionSelect?: (selection: MapSelection) => void
   ) {
     this.active = new MapLibreWorldRenderer(container, onRegionSelect);
   }

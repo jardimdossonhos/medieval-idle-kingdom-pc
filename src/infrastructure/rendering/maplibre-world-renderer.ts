@@ -2,10 +2,11 @@
 import type { FeatureCollection, Geometry } from "geojson";
 import type { KingdomState } from "../../core/models/game-state";
 import type { WorldState } from "../../core/models/world";
-import type { GameMapRenderer, MapLayerMode } from "./map-renderer";
+import type { GameMapRenderer, MapLayerMode, MapSelection } from "./map-renderer";
 
 interface CountryFeatureProperties {
   regionId?: string;
+  name?: string;
   ownerId?: string;
   ownerName?: string;
   ownerColor?: string;
@@ -38,7 +39,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly onRegionSelect?: (regionId: string) => void
+    private readonly onRegionSelect?: (selection: MapSelection) => void
   ) {}
 
   async mount(world: WorldState, kingdoms: Record<string, KingdomState>): Promise<void> {
@@ -58,10 +59,10 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
             }
           ]
         },
-        center: [12, 27],
+        center: [10, 28],
         zoom: 2.2,
         maxZoom: 7,
-        minZoom: 1.4
+        minZoom: 1.35
       });
 
       this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
@@ -104,12 +105,12 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
 
       const region = world.regions[regionId];
       if (!region) {
-        feature.properties.ownerId = "unknown";
-        feature.properties.ownerName = "Sem dono";
-        feature.properties.ownerColor = "#7a6f5f";
+        feature.properties.ownerId = "neutral";
+        feature.properties.ownerName = "Fora da campanha";
+        feature.properties.ownerColor = "#857a67";
         feature.properties.unrest = 0;
         feature.properties.contested = 0;
-        feature.properties.selected = 0;
+        feature.properties.selected = this.selectedRegionId === regionId ? 1 : 0;
         continue;
       }
 
@@ -175,18 +176,8 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         type: "line",
         source: SOURCE_ID,
         paint: {
-          "line-color": [
-            "case",
-            ["==", ["get", "selected"], 1],
-            "#f2d067",
-            "#4a3722"
-          ],
-          "line-width": [
-            "case",
-            ["==", ["get", "selected"], 1],
-            2.5,
-            1.2
-          ]
+          "line-color": ["case", ["==", ["get", "selected"], 1], "#f2d067", "#4a3722"],
+          "line-width": ["case", ["==", ["get", "selected"], 1], 2.5, 1.2]
         }
       });
     }
@@ -194,10 +185,14 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
     this.map.on("click", FILL_LAYER_ID, (event) => {
       const feature = event.features?.[0];
       const regionId = feature?.properties?.regionId;
+      const label = feature?.properties?.name;
 
       if (typeof regionId === "string") {
         this.selectedRegionId = regionId;
-        this.onRegionSelect?.(regionId);
+        this.onRegionSelect?.({
+          regionId,
+          label: typeof label === "string" ? label : regionId
+        });
       }
     });
 
@@ -215,18 +210,21 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
   }
 
   private async loadGeoJson(): Promise<CountryFeatureCollection> {
-    const response = await fetch("/assets/maps/world-countries-v0.geojson");
+    const candidates = ["/assets/maps/world-countries-v1.geojson", "/assets/maps/world-countries-v0.geojson"];
 
-    if (!response.ok) {
-      throw new Error("Falha ao carregar GeoJSON inicial do mapa mundial.");
+    for (const file of candidates) {
+      const response = await fetch(file);
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = (await response.json()) as CountryFeatureCollection;
+      if (payload.type === "FeatureCollection" && Array.isArray(payload.features) && payload.features.length > 0) {
+        return payload;
+      }
     }
 
-    const payload = (await response.json()) as CountryFeatureCollection;
-    if (payload.type !== "FeatureCollection" || !Array.isArray(payload.features)) {
-      throw new Error("GeoJSON inválido para camada mundial.");
-    }
-
-    return payload;
+    throw new Error("Falha ao carregar GeoJSON do mapa mundial.");
   }
 
   private applyLayerMode(): void {

@@ -1,26 +1,33 @@
 ﻿# Dados de mapa (Milestone 2)
 
-Arquivo ativo nesta versão:
+Arquivo principal:
+- `public/assets/maps/world-countries-v1.geojson`
+
+Arquivo fallback:
 - `public/assets/maps/world-countries-v0.geojson`
 
 Status atual:
-- É um **placeholder técnico** para validar integração do MapLibre + camada de dono (`owner`).
-- Possui 8 features mapeadas para os `regionId` da campanha inicial.
+- `v1` é gerado automaticamente a partir de `world-atlas/countries-50m.json`.
+- Total atual: **241 países**.
+- Países da campanha inicial são mapeados para `regionId` existentes (`r_iberia_north`, etc.).
+- Países fora da campanha aparecem no mapa com status "Fora da campanha inicial" ao clicar.
 
-Origem/licença para produção:
-1. Natural Earth (Admin 0 Countries) - domínio público.
-2. Conversão para GeoJSON simplificado (TopoJSON opcional) para mobile.
-3. Mapeamento 1:1 entre feature e `regionId` estável.
+## Origem e licença
+- Fonte: pacote `world-atlas` (derivado de Natural Earth, uso aberto para dados geográficos públicos).
+- Uso no projeto: conversão TopoJSON -> GeoJSON para render local-first em MapLibre.
 
-Pipeline recomendado (próxima etapa):
-1. Baixar shapefile Admin 0 Countries do Natural Earth.
-2. Converter para GeoJSON.
-3. Simplificar geometria (2 níveis: desktop/mobile).
-4. Gerar `world-countries-v1.geojson` com propriedades:
-   - `regionId`
-   - `iso_a3`
-   - `name`
-5. Validar integridade: todo `regionId` do estado deve existir no GeoJSON.
+## Pipeline de geração
+1. Instalar dependências (`topojson-client`, `world-atlas`).
+2. Rodar:
+   - `npm run map:build`
+3. O script `scripts/generate-world-geojson.mjs` gera/atualiza `public/assets/maps/world-countries-v1.geojson`.
+
+## Propriedades esperadas por feature
+- `regionId`: ID estável usado pelo jogo
+- `name`: nome do país
+- `isoN3`: código ISO numérico quando disponível
+- `campaignMapped`: `true` quando mapeado para região jogável inicial
+- `source`: origem do dado (`world-atlas-50m`)
 
 Observação:
-- Este projeto roda em hospedagem estática; por isso os assets devem permanecer em `public/assets/maps`.
+- O projeto permanece compatível com hospedagem estática; os assets ficam em `public/assets/maps`.

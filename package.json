@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "map:build": "node scripts/generate-world-geojson.mjs"
   },
   "dependencies": {
     "idb": "^8.0.2",
@@ -16,8 +17,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.9",
+    "topojson-client": "^3.1.0",
     "typescript": "^5.7.3",
     "vite": "^6.2.0",
-    "vitest": "^3.0.8"
+    "vitest": "^3.0.8",
+    "world-atlas": "^2.0.2"
   }
 }
