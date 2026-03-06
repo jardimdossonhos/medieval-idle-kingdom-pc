@@ -25,6 +25,41 @@ npm run map:build
 npm run dev
 ```
 
+## Desktop local (Windows)
+
+O projeto agora pode rodar como aplicativo desktop offline com `Electron`.
+
+Executar localmente:
+
+```bash
+npm install
+npm run build
+npm run desktop
+```
+
+Atalho equivalente:
+
+```bash
+npm run desktop:run
+```
+
+Gerar build Windows:
+
+```bash
+npm run desktop:dist
+```
+
+Saída do pacote:
+
+- `release/Medieval Idle Kingdom Setup *.exe`
+- `release/Medieval Idle Kingdom *.exe` (portable)
+
+Persistência desktop:
+
+- os saves deixam de depender de `IndexedDB`
+- o app grava JSON local em `%APPDATA%/Medieval Idle Kingdom/game-data`
+- isso prepara import/export, backup e futura sincronização LAN/internet
+
 Para testar no celular (mesma rede local):
 
 ```bash
@@ -46,4 +81,5 @@ npm run dev -- --host 0.0.0.0 --port 5173
 - `src/application`: orchestration and use-case boundaries
 - `src/infrastructure`: adapters (save, clock, sync, rendering)
 - `src/ui`: screen/view-model contracts
+- `desktop`: shell Electron, preload bridge e persistência local em arquivo
 - `docs`: architecture and execution plan

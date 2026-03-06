@@ -19,6 +19,14 @@ export interface CurrentStateEnvelope {
   state: GameState;
 }
 
+export function createCurrentStateEnvelope(state: GameState): CurrentStateEnvelope {
+  return {
+    schemaVersion: SAVE_SCHEMA_VERSION,
+    storedAt: Date.now(),
+    state
+  };
+}
+
 export function toSaveEnvelope(snapshot: SaveSnapshot): SaveEnvelope {
   return {
     schemaVersion: SAVE_SCHEMA_VERSION,

@@ -18,12 +18,7 @@ import type { MapLayerMode, MapRenderContext, MapSelection } from "./infrastruct
 import { HybridMapRenderer } from "./infrastructure/rendering/hybrid-map-renderer";
 import { LocalDiplomacyResolver } from "./infrastructure/diplomacy/local-diplomacy-resolver";
 import { RuleBasedNpcDecisionService } from "./infrastructure/npc/rule-based-npc-decision-service";
-import {
-  IndexedDbCommandLogRepository,
-  IndexedDbGameStateRepository,
-  IndexedDbSaveRepository,
-  IndexedDbSnapshotRepository
-} from "./infrastructure/persistence/indexeddb-repositories";
+import { createRuntimePersistenceBundle } from "./infrastructure/persistence/runtime-persistence";
 import { BrowserClockService } from "./infrastructure/runtime/browser-clock-service";
 import { LocalEventBus } from "./infrastructure/runtime/local-event-bus";
 import { LocalWarResolver } from "./infrastructure/war/local-war-resolver";
@@ -568,12 +563,13 @@ async function bootstrapApp(): Promise<void> {
   const npcDecisionService = new RuleBasedNpcDecisionService();
   const diplomacyResolver = new LocalDiplomacyResolver();
   const warResolver = new LocalWarResolver(staticWorldData);
+  const persistence = createRuntimePersistenceBundle();
   const session = new GameSession({
-    gameStateRepository: new IndexedDbGameStateRepository(),
-    saveRepository: new IndexedDbSaveRepository(),
+    gameStateRepository: persistence.gameStateRepository,
+    saveRepository: persistence.saveRepository,
     staticWorldData,
-    commandLogRepository: new IndexedDbCommandLogRepository(),
-    snapshotRepository: new IndexedDbSnapshotRepository(),
+    commandLogRepository: persistence.commandLogRepository,
+    snapshotRepository: persistence.snapshotRepository,
     clock: new BrowserClockService(1_000),
     eventBus,
     diplomacyResolver,

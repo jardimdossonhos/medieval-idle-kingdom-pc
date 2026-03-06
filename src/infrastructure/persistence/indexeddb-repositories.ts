@@ -11,159 +11,39 @@ import type {
 import type { CommandLogEntry, SnapshotSummary, StateSnapshot } from "../../core/models/commands";
 import type { GameState } from "../../core/models/game-state";
 import {
-  SAVE_SCHEMA_VERSION,
-  isValidGameStateShape,
+  createCurrentStateEnvelope,
   normalizeCurrentStateEnvelope,
   normalizeSaveEnvelope,
-  toSaveEnvelope,
-  type CurrentStateEnvelope,
-  type SaveEnvelope
+  toSaveEnvelope
 } from "./save-schema";
+import {
+  createCommandEnvelope,
+  createSnapshotEnvelope,
+  normalizeCommandEnvelope,
+  normalizeSnapshotEnvelope
+} from "./command-snapshot-schema";
 
 const DB_NAME = "medieval-idle-kingdom";
 const DB_VERSION = 2;
 const CURRENT_STATE_KEY = "current";
 
-type CommandIssuerType = CommandLogEntry["issuerType"];
-
-type SnapshotReason = StateSnapshot["reason"];
-
-interface CommandLogEnvelope {
-  schemaVersion: number;
-  storedAt: number;
-  entry: CommandLogEntry;
-}
-
-interface StateSnapshotEnvelope {
-  schemaVersion: number;
-  storedAt: number;
-  snapshot: StateSnapshot;
-}
-
 interface MedievalDbSchema extends DBSchema {
   current_state: {
     key: string;
-    value: CurrentStateEnvelope;
+    value: import("./save-schema").CurrentStateEnvelope;
   };
   save_slots: {
     key: SaveSlotId;
-    value: SaveEnvelope;
+    value: import("./save-schema").SaveEnvelope;
   };
   command_log: {
     key: number;
-    value: CommandLogEnvelope;
+    value: import("./command-snapshot-schema").CommandLogEnvelope;
   };
   state_snapshots: {
     key: string;
-    value: StateSnapshotEnvelope;
+    value: import("./command-snapshot-schema").StateSnapshotEnvelope;
   };
-}
-
-function createCurrentEnvelope(state: GameState): CurrentStateEnvelope {
-  return {
-    schemaVersion: SAVE_SCHEMA_VERSION,
-    storedAt: Date.now(),
-    state
-  };
-}
-
-function createCommandEnvelope(entry: CommandLogEntry): CommandLogEnvelope {
-  return {
-    schemaVersion: SAVE_SCHEMA_VERSION,
-    storedAt: Date.now(),
-    entry
-  };
-}
-
-function createSnapshotEnvelope(snapshot: StateSnapshot): StateSnapshotEnvelope {
-  return {
-    schemaVersion: SAVE_SCHEMA_VERSION,
-    storedAt: Date.now(),
-    snapshot
-  };
-}
-
-function isValidIssuerType(value: unknown): value is CommandIssuerType {
-  return value === "player" || value === "npc" || value === "system";
-}
-
-function isValidCommandEntry(input: unknown): input is CommandLogEntry {
-  if (!input || typeof input !== "object") {
-    return false;
-  }
-
-  const entry = input as Partial<CommandLogEntry>;
-
-  return (
-    typeof entry.sequence === "number" &&
-    Number.isInteger(entry.sequence) &&
-    entry.sequence > 0 &&
-    typeof entry.id === "string" &&
-    isValidIssuerType(entry.issuerType) &&
-    typeof entry.issuerId === "string" &&
-    typeof entry.tick === "number" &&
-    Number.isInteger(entry.tick) &&
-    typeof entry.commandType === "string" &&
-    !!entry.payload &&
-    typeof entry.payload === "object" &&
-    typeof entry.createdAt === "number" &&
-    typeof entry.previousHash === "string" &&
-    typeof entry.hash === "string"
-  );
-}
-
-function isValidSnapshotReason(value: unknown): value is SnapshotReason {
-  return value === "bootstrap" || value === "periodic" || value === "manual" || value === "safety" || value === "autosave";
-}
-
-function isValidStateSnapshot(input: unknown): input is StateSnapshot {
-  if (!input || typeof input !== "object") {
-    return false;
-  }
-
-  const snapshot = input as Partial<StateSnapshot>;
-
-  return (
-    typeof snapshot.id === "string" &&
-    typeof snapshot.tick === "number" &&
-    Number.isInteger(snapshot.tick) &&
-    typeof snapshot.savedAt === "number" &&
-    isValidSnapshotReason(snapshot.reason) &&
-    typeof snapshot.commandSequence === "number" &&
-    Number.isInteger(snapshot.commandSequence) &&
-    snapshot.commandSequence >= 0 &&
-    typeof snapshot.commandHash === "string" &&
-    (typeof snapshot.stateHash === "undefined" || typeof snapshot.stateHash === "string") &&
-    isValidGameStateShape(snapshot.state)
-  );
-}
-
-function normalizeCommandEnvelope(input: unknown): CommandLogEnvelope | null {
-  if (!input || typeof input !== "object") {
-    return null;
-  }
-
-  const envelope = input as Partial<CommandLogEnvelope>;
-
-  if (envelope.schemaVersion !== SAVE_SCHEMA_VERSION || typeof envelope.storedAt !== "number" || !isValidCommandEntry(envelope.entry)) {
-    return null;
-  }
-
-  return envelope as CommandLogEnvelope;
-}
-
-function normalizeSnapshotEnvelope(input: unknown): StateSnapshotEnvelope | null {
-  if (!input || typeof input !== "object") {
-    return null;
-  }
-
-  const envelope = input as Partial<StateSnapshotEnvelope>;
-
-  if (envelope.schemaVersion !== SAVE_SCHEMA_VERSION || typeof envelope.storedAt !== "number" || !isValidStateSnapshot(envelope.snapshot)) {
-    return null;
-  }
-
-  return envelope as StateSnapshotEnvelope;
 }
 
 async function openGameDb(): Promise<IDBPDatabase<MedievalDbSchema>> {
@@ -215,7 +95,7 @@ export class IndexedDbGameStateRepository implements GameStateRepository {
 
   async saveCurrent(state: GameState): Promise<void> {
     const db = await this.dbPromise;
-    await db.put("current_state", createCurrentEnvelope(state), CURRENT_STATE_KEY);
+    await db.put("current_state", createCurrentStateEnvelope(state), CURRENT_STATE_KEY);
   }
 
   async clearCurrent(): Promise<void> {
