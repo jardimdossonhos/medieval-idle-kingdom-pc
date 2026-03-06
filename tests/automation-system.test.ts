@@ -14,6 +14,7 @@ function createContext(): TickContext {
     nextState: structuredClone(state),
     staticData,
     deltaMs: state.meta.tickDurationMs,
+    tickScale: 1,
     now: state.meta.lastUpdatedAt,
     events: []
   };

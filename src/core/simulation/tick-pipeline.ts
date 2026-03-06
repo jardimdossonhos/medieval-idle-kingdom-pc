@@ -8,6 +8,7 @@ export interface TickContext {
   nextState: GameState;
   staticData: StaticWorldData;
   deltaMs: number;
+  tickScale: number;
   now: number;
   events: DomainEvent[];
 }
@@ -25,6 +26,7 @@ export interface TickResult {
 export interface TickBatchOptions {
   collectEvents?: boolean;
   maxCollectedEvents?: number;
+  coarseStepTicks?: number;
 }
 
 export class TickPipeline {
@@ -35,7 +37,7 @@ export class TickPipeline {
 
   run(previousState: GameState, deltaMs: number, now: number): TickResult {
     const nextState = cloneGameStateForSimulation(previousState);
-    const events = this.runInPlace(nextState, deltaMs, now);
+    const events = this.runInPlace(nextState, deltaMs, now, 1);
 
     return {
       state: nextState,
@@ -54,12 +56,17 @@ export class TickPipeline {
 
     const collectEvents = options.collectEvents ?? false;
     const maxCollectedEvents = Math.max(1, options.maxCollectedEvents ?? 120);
+    const coarseStepTicks = Math.max(1, Math.trunc(options.coarseStepTicks ?? 1));
     const nextState = cloneGameStateForSimulation(previousState);
     const collectedEvents: DomainEvent[] = [];
+    let processedTicks = 0;
 
-    for (let index = 0; index < ticks; index += 1) {
-      const now = startNow + (index + 1) * deltaMs;
-      const events = this.runInPlace(nextState, deltaMs, now);
+    while (processedTicks < ticks) {
+      const remainingTicks = ticks - processedTicks;
+      const tickScale = collectEvents ? 1 : Math.min(coarseStepTicks, remainingTicks);
+      const now = startNow + (processedTicks + tickScale) * deltaMs;
+      const events = this.runInPlace(nextState, deltaMs * tickScale, now, tickScale);
+      processedTicks += tickScale;
 
       if (!collectEvents || events.length === 0) {
         continue;
@@ -77,12 +84,13 @@ export class TickPipeline {
     };
   }
 
-  private runInPlace(nextState: GameState, deltaMs: number, now: number): DomainEvent[] {
+  private runInPlace(nextState: GameState, deltaMs: number, now: number, tickScale: number): DomainEvent[] {
     const context: TickContext = {
       previousState: nextState,
       nextState,
       staticData: this.staticData,
       deltaMs,
+      tickScale,
       now,
       events: []
     };
@@ -93,7 +101,7 @@ export class TickPipeline {
       system.run(context);
     }
 
-    context.nextState.meta.tick += 1;
+    context.nextState.meta.tick += tickScale;
     context.nextState.meta.lastUpdatedAt = now;
 
     return context.events;

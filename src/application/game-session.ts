@@ -1079,9 +1079,11 @@ export class GameSession {
     }
 
     const tickDurationMs = Math.max(1, state.meta.tickDurationMs);
+    const coarseStepTicks = this.selectOfflineCoarseStep(ticksToSimulate);
     const startedAt = this.monotonicNow();
     const batchResult = this.pipeline.runBatch(state, ticksToSimulate, tickDurationMs, lastSnapshotAt, {
-      collectEvents: false
+      collectEvents: false,
+      coarseStepTicks
     });
 
     return {
@@ -1089,6 +1091,26 @@ export class GameSession {
       ticks: ticksToSimulate,
       elapsedMs: this.monotonicNow() - startedAt
     };
+  }
+
+  private selectOfflineCoarseStep(ticks: number): number {
+    if (ticks >= 10_000) {
+      return 8;
+    }
+
+    if (ticks >= 6_000) {
+      return 6;
+    }
+
+    if (ticks >= 3_000) {
+      return 4;
+    }
+
+    if (ticks >= 1_500) {
+      return 2;
+    }
+
+    return 1;
   }
 
   private emitState(): void {
