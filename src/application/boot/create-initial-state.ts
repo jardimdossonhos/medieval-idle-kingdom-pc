@@ -81,6 +81,7 @@ function createKingdom(id: string, name: string, adjective: string, capitalRegio
     technology: {
       unlocked: ["agri_basics", "militia_drill"],
       activeResearchId: "ledger_admin",
+      researchGoalId: null,
       accumulatedResearch: 0,
       researchRate: 1,
       researchFocus: TechnologyDomain.Administration,

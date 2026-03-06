@@ -260,6 +260,18 @@ p {
   margin-bottom: 10px;
 }
 
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.inline-check input {
+  width: 16px;
+  height: 16px;
+}
+
 .list {
   margin: 0;
   padding: 0;
@@ -324,6 +336,16 @@ p {
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
 }
 
+.hint-text {
+  margin-top: 8px;
+  font-size: 0.86rem;
+  opacity: 0.84;
+}
+
+.saves-toolbar {
+  margin-bottom: 10px;
+}
+
 .tech-tree-list {
   display: grid;
   gap: 12px;
@@ -378,8 +400,27 @@ p {
   font-size: 0.85rem;
 }
 
+.tech-node-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
 .tech-action-btn {
   width: 100%;
+}
+
+.tech-goal {
+  box-shadow: inset 0 0 0 1px rgb(176 110 30 / 0.5);
+}
+
+.tech-goal-badge {
+  display: inline-block;
+  width: fit-content;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgb(176 110 30 / 0.7);
+  font-size: 0.78rem;
 }
 
 .tech-active {

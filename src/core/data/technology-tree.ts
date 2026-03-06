@@ -272,3 +272,41 @@ export function selectDefaultResearchNode(state: TechnologyState, focus: Technol
   const fallback = listAvailableTechnologyNodes(state);
   return fallback[0] ?? null;
 }
+
+function selectPendingPrerequisite(state: TechnologyState, nodeId: string, visited: Set<string>): TechnologyNode | null {
+  if (visited.has(nodeId)) {
+    return null;
+  }
+
+  visited.add(nodeId);
+
+  if (isTechnologyUnlocked(state, nodeId)) {
+    return null;
+  }
+
+  const node = getTechnologyNode(nodeId);
+  if (!node) {
+    return null;
+  }
+
+  for (const requiredId of [...node.required].sort()) {
+    const pending = selectPendingPrerequisite(state, requiredId, visited);
+    if (pending) {
+      return pending;
+    }
+  }
+
+  if (isTechnologyAvailable(state, nodeId)) {
+    return node;
+  }
+
+  return null;
+}
+
+export function selectResearchNodeTowardsTarget(state: TechnologyState, targetId: string): TechnologyNode | null {
+  if (isTechnologyUnlocked(state, targetId)) {
+    return null;
+  }
+
+  return selectPendingPrerequisite(state, targetId, new Set<string>());
+}

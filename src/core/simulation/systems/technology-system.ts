@@ -1,7 +1,7 @@
 ﻿import { TechnologyDomain } from "../../models/enums";
 import type { KingdomState } from "../../models/game-state";
 import type { TechnologyNode } from "../../models/technology";
-import { getTechnologyNode, selectDefaultResearchNode } from "../../data/technology-tree";
+import { getTechnologyNode, selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../../data/technology-tree";
 import type { SimulationSystem } from "../tick-pipeline";
 import { clamp, createEventId, roundTo } from "./utils";
 
@@ -61,6 +61,20 @@ function applyResearchEffects(kingdom: KingdomState, node: TechnologyNode): void
 }
 
 function ensureActiveResearch(kingdom: KingdomState): TechnologyNode | null {
+  const goalId = kingdom.technology.researchGoalId;
+  if (goalId) {
+    if (kingdom.technology.unlocked.includes(goalId)) {
+      kingdom.technology.researchGoalId = null;
+    } else {
+      const goalNode = selectResearchNodeTowardsTarget(kingdom.technology, goalId);
+      if (goalNode) {
+        kingdom.technology.activeResearchId = goalNode.id;
+        kingdom.technology.researchFocus = goalNode.domain;
+        return goalNode;
+      }
+    }
+  }
+
   const activeId = kingdom.technology.activeResearchId;
   const activeNode = activeId ? getTechnologyNode(activeId) : undefined;
   const isUnlocked = activeId ? kingdom.technology.unlocked.includes(activeId) : false;
@@ -72,6 +86,22 @@ function ensureActiveResearch(kingdom: KingdomState): TechnologyNode | null {
   const next = selectDefaultResearchNode(kingdom.technology, kingdom.technology.researchFocus);
   kingdom.technology.activeResearchId = next?.id ?? null;
   return next;
+}
+
+function selectNextResearchNode(kingdom: KingdomState): TechnologyNode | null {
+  const goalId = kingdom.technology.researchGoalId;
+  if (goalId) {
+    if (kingdom.technology.unlocked.includes(goalId)) {
+      kingdom.technology.researchGoalId = null;
+    } else {
+      const goalNode = selectResearchNodeTowardsTarget(kingdom.technology, goalId);
+      if (goalNode) {
+        return goalNode;
+      }
+    }
+  }
+
+  return selectDefaultResearchNode(kingdom.technology, kingdom.technology.researchFocus);
 }
 
 export function createTechnologySystem(): SimulationSystem {
@@ -102,7 +132,7 @@ export function createTechnologySystem(): SimulationSystem {
         }
 
         applyResearchEffects(kingdom, activeNode);
-        const next = selectDefaultResearchNode(kingdom.technology, kingdom.technology.researchFocus);
+        const next = selectNextResearchNode(kingdom);
         kingdom.technology.activeResearchId = next?.id ?? null;
 
         context.events.push({
@@ -114,7 +144,8 @@ export function createTechnologySystem(): SimulationSystem {
             technologyName: activeNode.name,
             domain: activeNode.domain,
             unlockedCount: kingdom.technology.unlocked.length,
-            focus: kingdom.technology.researchFocus
+            focus: kingdom.technology.researchFocus,
+            goalId: kingdom.technology.researchGoalId
           },
           occurredAt: context.now
         });

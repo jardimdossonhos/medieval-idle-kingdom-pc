@@ -8,7 +8,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
   "pt-BR": {
     "app.title": "Reino Idle Medieval",
     "app.subtitle": "Simulação local-first com mapa estratégico e saves persistentes.",
-    "hud.tick": "Tick",
+    "hud.tick": "Ciclo",
     "hud.date": "Atualizado",
     "hud.status": "Estado",
     "hud.statusRunning": "Executando",

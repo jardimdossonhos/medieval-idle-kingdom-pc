@@ -12,6 +12,7 @@ export interface TechnologyNode {
 export interface TechnologyState {
   unlocked: string[];
   activeResearchId: string | null;
+  researchGoalId: string | null;
   accumulatedResearch: number;
   researchRate: number;
   researchFocus: TechnologyDomain;

@@ -1,5 +1,5 @@
 ﻿import { ArmyPosture, AutomationLevel, TechnologyDomain } from "../../models/enums";
-import { selectDefaultResearchNode } from "../../data/technology-tree";
+import { selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../../data/technology-tree";
 import type { BudgetPriority } from "../../models/economy";
 import type { GameState, KingdomState } from "../../models/game-state";
 import type { SimulationSystem } from "../tick-pipeline";
@@ -174,11 +174,17 @@ export function createAutomationSystem(): SimulationSystem {
         }
 
         if (isEnabled(kingdom.administration.automation.technology)) {
-          const domain = selectResearchDomain(kingdom, threat, warCount);
-          kingdom.technology.researchFocus = domain;
+          const goalId = kingdom.technology.researchGoalId;
+          if (!goalId || kingdom.technology.unlocked.includes(goalId)) {
+            const domain = selectResearchDomain(kingdom, threat, warCount);
+            kingdom.technology.researchFocus = domain;
+          }
 
           if (kingdom.technology.activeResearchId === null || state.meta.tick % 28 === 0) {
-            const target = selectDefaultResearchNode(kingdom.technology, domain);
+            const target = kingdom.technology.researchGoalId
+              ? selectResearchNodeTowardsTarget(kingdom.technology, kingdom.technology.researchGoalId) ??
+                selectDefaultResearchNode(kingdom.technology, kingdom.technology.researchFocus)
+              : selectDefaultResearchNode(kingdom.technology, kingdom.technology.researchFocus);
             kingdom.technology.activeResearchId = target?.id ?? null;
           }
 

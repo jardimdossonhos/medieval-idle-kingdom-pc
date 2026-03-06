@@ -106,19 +106,25 @@ function migrateStateToCurrent(state: GameState): GameState {
   migrateWars(migrated);
   migrateTreaties(migrated);
 
-  for (const kingdom of Object.values(migrated.kingdoms)) {
+  for (const kingdomId of Object.keys(migrated.kingdoms).sort()) {
+    const kingdom = migrated.kingdoms[kingdomId];
     if (!kingdom.technology.researchFocus) {
       kingdom.technology.researchFocus = TechnologyDomain.Administration;
     }
+    if (typeof kingdom.technology.researchGoalId === "undefined") {
+      kingdom.technology.researchGoalId = null;
+    }
 
-    for (const relation of Object.values(kingdom.diplomacy.relations)) {
+    for (const relationId of Object.keys(kingdom.diplomacy.relations).sort()) {
+      const relation = kingdom.diplomacy.relations[relationId];
       if (!relation.actionCooldowns) {
         relation.actionCooldowns = {};
       }
     }
   }
 
-  for (const region of Object.values(migrated.world.regions)) {
+  for (const regionId of Object.keys(migrated.world.regions).sort()) {
+    const region = migrated.world.regions[regionId];
     if (!region.actionCooldowns) {
       region.actionCooldowns = {};
     }

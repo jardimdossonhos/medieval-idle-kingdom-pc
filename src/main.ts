@@ -2,7 +2,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { createInitialState } from "./application/boot/create-initial-state";
 import { GameSession, type DiplomaticActionType, type RegionActionType, type TechnologyChoice } from "./application/game-session";
-import { TechnologyDomain, type ResourceType } from "./core/models/enums";
+import { AutomationLevel, TechnologyDomain, type ResourceType } from "./core/models/enums";
 import { createDefaultSimulationSystems } from "./core/simulation/create-default-systems";
 import type { SaveSummary } from "./core/contracts/game-ports";
 import type { GameState, KingdomState } from "./core/models/game-state";
@@ -21,6 +21,7 @@ import { LocalEventBus } from "./infrastructure/runtime/local-event-bus";
 import { LocalWarResolver } from "./infrastructure/war/local-war-resolver";
 
 interface UiRefs {
+  playerValue: HTMLElement;
   tickValue: HTMLElement;
   updatedValue: HTMLElement;
   statusValue: HTMLElement;
@@ -28,6 +29,7 @@ interface UiRefs {
   postVictoryValue: HTMLElement;
   pauseButton: HTMLButtonElement;
   speedSelect: HTMLSelectElement;
+  openSavesButton: HTMLButtonElement;
   manualSaveButton: HTMLButtonElement;
   safetySaveButton: HTMLButtonElement;
   refreshSavesButton: HTMLButtonElement;
@@ -43,6 +45,9 @@ interface UiRefs {
   budgetInputs: Record<string, HTMLInputElement>;
   taxInputs: Record<string, HTMLInputElement>;
   techFocusSelect: HTMLSelectElement;
+  techAutomationSelect: HTMLSelectElement;
+  techHideCompletedToggle: HTMLInputElement;
+  techClearGoalButton: HTMLButtonElement;
   techApplyButton: HTMLButtonElement;
   techSummary: HTMLElement;
   techTreeList: HTMLElement;
@@ -50,11 +55,23 @@ interface UiRefs {
   militarySummary: HTMLElement;
   saveList: HTMLElement;
   eventList: HTMLElement;
+  profileNameInput: HTMLInputElement;
+  profileEmailInput: HTMLInputElement;
+  profileIdValue: HTMLElement;
+  profileSaveButton: HTMLButtonElement;
   tabButtons: HTMLButtonElement[];
   tabPanels: HTMLElement[];
 }
 
-type TabId = "mapa" | "governo" | "diplomacia" | "tecnologia" | "militar" | "eventos" | "saves";
+type TabId = "mapa" | "governo" | "diplomacia" | "tecnologia" | "militar" | "eventos" | "saves" | "configuracoes";
+
+interface LocalPlayerProfile {
+  id: string;
+  name: string;
+  email: string;
+}
+
+const PROFILE_STORAGE_KEY = "midk.profile.v1";
 
 const TECH_DOMAIN_ORDER: TechnologyDomain[] = [
   TechnologyDomain.Economy,
@@ -116,7 +133,7 @@ function riskClass(value: number): string {
 }
 
 function normalizePercentage(value: string): number {
-  const parsed = Number.parseFloat(value);
+  const parsed = Number.parseFloat(value.replace(",", "."));
   if (!Number.isFinite(parsed)) {
     return 0;
   }
@@ -154,6 +171,65 @@ function techStatusLabel(status: TechnologyChoice["status"]): string {
   }
 }
 
+function automationLevelLabel(level: AutomationLevel): string {
+  switch (level) {
+    case AutomationLevel.Manual:
+      return "Manual";
+    case AutomationLevel.Assisted:
+      return "Assistido";
+    case AutomationLevel.NearlyAutomatic:
+      return "Quase automático";
+  }
+}
+
+function generateProfileId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `local-${crypto.randomUUID()}`;
+  }
+
+  return `local-${Date.now().toString(36)}`;
+}
+
+function createDefaultProfile(): LocalPlayerProfile {
+  return {
+    id: generateProfileId(),
+    name: "Monarca Local",
+    email: ""
+  };
+}
+
+function loadLocalProfile(): LocalPlayerProfile {
+  try {
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) {
+      const fallback = createDefaultProfile();
+      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(fallback));
+      return fallback;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<LocalPlayerProfile>;
+    if (typeof parsed.id !== "string" || typeof parsed.name !== "string" || typeof parsed.email !== "string") {
+      const fallback = createDefaultProfile();
+      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(fallback));
+      return fallback;
+    }
+
+    return {
+      id: parsed.id,
+      name: parsed.name,
+      email: parsed.email
+    };
+  } catch {
+    const fallback = createDefaultProfile();
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(fallback));
+    return fallback;
+  }
+}
+
+function saveLocalProfile(profile: LocalPlayerProfile): void {
+  localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+}
+
 async function bootstrapApp(): Promise<void> {
   const appRoot = document.getElementById("app");
 
@@ -172,7 +248,8 @@ async function bootstrapApp(): Promise<void> {
           <p>Grand strategy idle local-first com foco em decisões de alto nível.</p>
         </div>
         <div class="status-grid">
-          <div><span>Tick</span><strong id="tick-value">0</strong></div>
+          <div><span>Jogador</span><strong id="player-value">-</strong></div>
+          <div><span>Ciclo</span><strong id="tick-value">0</strong></div>
           <div><span>Atualizado</span><strong id="updated-value">-</strong></div>
           <div><span>Estado</span><strong id="status-value">Pausado</strong></div>
           <div><span>Vitória</span><strong id="victory-value">Ainda não alcançada</strong></div>
@@ -191,9 +268,7 @@ async function bootstrapApp(): Promise<void> {
             <option value="4">4x</option>
           </select>
         </label>
-        <button id="manual-save-btn">Salvar manual</button>
-        <button id="safety-save-btn">Save de segurança</button>
-        <button id="refresh-saves-btn">Atualizar saves</button>
+        <button id="open-saves-btn">Menu de saves</button>
         <span id="toast-area" class="toast"></span>
       </section>
 
@@ -240,6 +315,7 @@ async function bootstrapApp(): Promise<void> {
         <button class="tab-btn" data-tab="militar">Militar</button>
         <button class="tab-btn" data-tab="eventos">Eventos</button>
         <button class="tab-btn" data-tab="saves">Saves</button>
+        <button class="tab-btn" data-tab="configuracoes">Configurações</button>
       </section>
 
       <section class="panel-grid">
@@ -286,6 +362,19 @@ async function bootstrapApp(): Promise<void> {
                 <option value="engineering">Engenharia</option>
               </select>
             </label>
+            <label>
+              Automação de pesquisa
+              <select id="tech-automation-select">
+                <option value="manual">Manual</option>
+                <option value="assisted">Assistido</option>
+                <option value="nearly_automatic">Quase automático</option>
+              </select>
+            </label>
+            <label class="inline-check">
+              <input id="tech-hide-completed-toggle" type="checkbox" checked>
+              Ocultar concluídas
+            </label>
+            <button id="tech-clear-goal-btn">Limpar meta</button>
             <button id="tech-apply-btn">Aplicar foco</button>
           </div>
           <div id="tech-summary" class="summary-grid"></div>
@@ -304,14 +393,35 @@ async function bootstrapApp(): Promise<void> {
         </article>
 
         <article class="card tab-panel is-hidden" data-tab-panel="saves">
-          <h2>Slots de save</h2>
+          <h2>Gestão de saves</h2>
+          <div class="inline-form saves-toolbar">
+            <button id="manual-save-btn">Salvar manual</button>
+            <button id="safety-save-btn">Save de segurança</button>
+            <button id="refresh-saves-btn">Atualizar lista</button>
+          </div>
           <div id="save-list" class="save-list"></div>
+        </article>
+
+        <article class="card tab-panel is-hidden" data-tab-panel="configuracoes">
+          <h2>Configurações e perfil local</h2>
+          <div class="form-grid">
+            <label>Nome do jogador <input id="profile-name-input" type="text" maxlength="40"></label>
+            <label>Email (multiplayer futuro) <input id="profile-email-input" type="email" maxlength="100"></label>
+          </div>
+          <div class="summary-grid">
+            <span>ID local</span><strong id="profile-id-value">-</strong>
+            <span>Ciclo da simulação</span><strong>1 ciclo = 1 tick do reino</strong>
+            <span>Observação multiplayer</span><strong>Conta ainda local-first (sem login online)</strong>
+          </div>
+          <button id="profile-save-btn">Salvar perfil local</button>
+          <p class="hint-text">Este perfil local prepara o caminho para autenticação e sincronização entre dispositivos no multiplayer futuro.</p>
         </article>
       </section>
     </main>
   `;
 
   const ui: UiRefs = {
+    playerValue: queryElement(appRoot, "#player-value"),
     tickValue: queryElement(appRoot, "#tick-value"),
     updatedValue: queryElement(appRoot, "#updated-value"),
     statusValue: queryElement(appRoot, "#status-value"),
@@ -319,6 +429,7 @@ async function bootstrapApp(): Promise<void> {
     postVictoryValue: queryElement(appRoot, "#post-victory-value"),
     pauseButton: queryElement(appRoot, "#toggle-pause-btn"),
     speedSelect: queryElement(appRoot, "#speed-select"),
+    openSavesButton: queryElement(appRoot, "#open-saves-btn"),
     manualSaveButton: queryElement(appRoot, "#manual-save-btn"),
     safetySaveButton: queryElement(appRoot, "#safety-save-btn"),
     refreshSavesButton: queryElement(appRoot, "#refresh-saves-btn"),
@@ -345,6 +456,9 @@ async function bootstrapApp(): Promise<void> {
       tariffRate: queryElement(appRoot, "#tax-tariff")
     },
     techFocusSelect: queryElement(appRoot, "#tech-focus-select"),
+    techAutomationSelect: queryElement(appRoot, "#tech-automation-select"),
+    techHideCompletedToggle: queryElement(appRoot, "#tech-hide-completed-toggle"),
+    techClearGoalButton: queryElement(appRoot, "#tech-clear-goal-btn"),
     techApplyButton: queryElement(appRoot, "#tech-apply-btn"),
     techSummary: queryElement(appRoot, "#tech-summary"),
     techTreeList: queryElement(appRoot, "#tech-tree-list"),
@@ -352,6 +466,10 @@ async function bootstrapApp(): Promise<void> {
     militarySummary: queryElement(appRoot, "#military-summary"),
     saveList: queryElement(appRoot, "#save-list"),
     eventList: queryElement(appRoot, "#event-list"),
+    profileNameInput: queryElement(appRoot, "#profile-name-input"),
+    profileEmailInput: queryElement(appRoot, "#profile-email-input"),
+    profileIdValue: queryElement(appRoot, "#profile-id-value"),
+    profileSaveButton: queryElement(appRoot, "#profile-save-btn"),
     tabButtons: Array.from(appRoot.querySelectorAll<HTMLButtonElement>(".tab-btn")),
     tabPanels: Array.from(appRoot.querySelectorAll<HTMLElement>(".tab-panel"))
   };
@@ -365,9 +483,17 @@ async function bootstrapApp(): Promise<void> {
     legitimacy: "Legitimidade"
   };
 
+  const governmentInputs = [
+    ...Object.values(ui.taxInputs),
+    ...Object.values(ui.budgetInputs)
+  ];
+
   let selectedRegionId: string | null = null;
   let selectedMapLabel: string | null = null;
   let toastTimeout: number | null = null;
+  let isGovernmentFormDirty = false;
+  let hideCompletedTechnologies = true;
+  let profile = loadLocalProfile();
 
   function showToast(message: string): void {
     ui.toastArea.textContent = message;
@@ -390,6 +516,18 @@ async function bootstrapApp(): Promise<void> {
     for (const panel of ui.tabPanels) {
       panel.classList.toggle("is-hidden", panel.dataset.tabPanel !== tabId);
     }
+  }
+
+  function syncProfileUi(): void {
+    ui.playerValue.textContent = profile.name;
+    ui.profileNameInput.value = profile.name;
+    ui.profileEmailInput.value = profile.email;
+    ui.profileIdValue.textContent = profile.id;
+  }
+
+  function isGovernmentInputFocused(): boolean {
+    const active = document.activeElement;
+    return governmentInputs.includes(active as HTMLInputElement);
   }
 
   const eventBus = new LocalEventBus();
@@ -428,6 +566,7 @@ async function bootstrapApp(): Promise<void> {
   });
 
   function renderHeader(state: GameState): void {
+    ui.playerValue.textContent = profile.name;
     ui.tickValue.textContent = String(state.meta.tick);
     ui.updatedValue.textContent = formatDate(state.meta.lastUpdatedAt);
     ui.statusValue.textContent = state.meta.paused ? "Pausado" : "Executando";
@@ -624,6 +763,10 @@ async function bootstrapApp(): Promise<void> {
   }
 
   function renderGovernmentInputs(state: GameState): void {
+    if (isGovernmentFormDirty || isGovernmentInputFocused()) {
+      return;
+    }
+
     const player = getPlayerKingdom(state);
 
     ui.taxInputs.baseRate.value = String(round(player.economy.taxPolicy.baseRate));
@@ -643,7 +786,11 @@ async function bootstrapApp(): Promise<void> {
     ui.techTreeList.innerHTML = "";
 
     for (const domain of TECH_DOMAIN_ORDER) {
-      const domainNodes = choices.filter((choice) => choice.domain === domain);
+      const rawDomainNodes = choices.filter((choice) => choice.domain === domain);
+      const domainNodes = hideCompletedTechnologies
+        ? rawDomainNodes.filter((choice) => choice.status !== "unlocked")
+        : rawDomainNodes;
+
       if (domainNodes.length === 0) {
         continue;
       }
@@ -652,7 +799,8 @@ async function bootstrapApp(): Promise<void> {
       section.className = "tech-domain-group";
 
       const heading = document.createElement("h4");
-      heading.textContent = techDomainLabel(domain);
+      const completedCount = rawDomainNodes.filter((choice) => choice.status === "unlocked").length;
+      heading.textContent = `${techDomainLabel(domain)} (${domainNodes.length} ativos, ${completedCount} concluídas)`;
       section.appendChild(heading);
 
       const grid = document.createElement("div");
@@ -660,11 +808,12 @@ async function bootstrapApp(): Promise<void> {
 
       for (const node of domainNodes) {
         const nodeElement = document.createElement("article");
-        nodeElement.className = `tech-node tech-${node.status}`;
+        nodeElement.className = `tech-node tech-${node.status}${node.isGoal ? " tech-goal" : ""}`;
         const requiredText = node.required.length === 0
           ? "Sem pré-requisitos"
           : node.required.map((requiredId) => nameById.get(requiredId) ?? requiredId).join(", ");
 
+        const goalBadge = node.isGoal ? `<span class="tech-goal-badge">Meta</span>` : "";
         nodeElement.innerHTML = `
           <header class="tech-node-header">
             <strong>${node.name}</strong>
@@ -673,35 +822,63 @@ async function bootstrapApp(): Promise<void> {
           <div class="tech-node-meta">
             <span>Pesquisa necessária: ${formatNumber(node.cost)}</span>
             <span>Pré-requisitos: ${requiredText}</span>
+            ${goalBadge}
           </div>
         `;
 
-        const action = document.createElement("button");
-        action.className = "tech-action-btn";
+        const actions = document.createElement("div");
+        actions.className = "tech-node-actions";
 
+        const researchAction = document.createElement("button");
+        researchAction.className = "tech-action-btn";
         if (node.status === "available") {
-          action.textContent = "Pesquisar";
-          action.addEventListener("click", () => {
+          researchAction.textContent = "Pesquisar agora";
+          researchAction.addEventListener("click", () => {
             const result = session.setResearchTarget(node.id);
             showToast(result.message);
           });
         } else if (node.status === "active") {
-          action.textContent = "Pesquisa ativa";
-          action.disabled = true;
+          researchAction.textContent = "Pesquisa ativa";
+          researchAction.disabled = true;
         } else if (node.status === "unlocked") {
-          action.textContent = "Concluída";
-          action.disabled = true;
+          researchAction.textContent = "Concluída";
+          researchAction.disabled = true;
         } else {
-          action.textContent = "Bloqueada";
-          action.disabled = true;
+          researchAction.textContent = "Bloqueada";
+          researchAction.disabled = true;
         }
 
-        nodeElement.appendChild(action);
+        const goalAction = document.createElement("button");
+        goalAction.className = "tech-action-btn";
+        if (node.status === "unlocked") {
+          goalAction.textContent = "Meta indisponível";
+          goalAction.disabled = true;
+        } else if (node.isGoal) {
+          goalAction.textContent = "Meta ativa";
+          goalAction.disabled = true;
+        } else {
+          goalAction.textContent = "Definir meta";
+          goalAction.addEventListener("click", () => {
+            const result = session.setResearchGoal(node.id);
+            showToast(result.message);
+          });
+        }
+
+        actions.appendChild(researchAction);
+        actions.appendChild(goalAction);
+        nodeElement.appendChild(actions);
         grid.appendChild(nodeElement);
       }
 
       section.appendChild(grid);
       ui.techTreeList.appendChild(section);
+    }
+
+    if (ui.techTreeList.childElementCount === 0) {
+      const empty = document.createElement("p");
+      empty.className = "hint-text";
+      empty.textContent = "Nenhuma tecnologia pendente visível com o filtro atual.";
+      ui.techTreeList.appendChild(empty);
     }
   }
 
@@ -709,11 +886,16 @@ async function bootstrapApp(): Promise<void> {
     const player = getPlayerKingdom(state);
     const choices = session.listTechnologyChoices();
     const activeChoice = choices.find((choice) => choice.id === player.technology.activeResearchId);
+    const goalChoice = choices.find((choice) => choice.isGoal);
 
     ui.techFocusSelect.value = player.technology.researchFocus;
+    ui.techAutomationSelect.value = player.administration.automation.technology;
+    ui.techHideCompletedToggle.checked = hideCompletedTechnologies;
 
     ui.techSummary.innerHTML = `
       <span>Pesquisa ativa</span><strong>${activeChoice?.name ?? "-"}</strong>
+      <span>Meta tecnológica</span><strong>${goalChoice?.name ?? "-"}</strong>
+      <span>Automação</span><strong>${automationLevelLabel(player.administration.automation.technology)}</strong>
       <span>Acúmulo</span><strong>${formatNumber(player.technology.accumulatedResearch)}</strong>
       <span>Taxa</span><strong>${formatNumber(player.technology.researchRate)}</strong>
       <span>Tecnologias desbloqueadas</span><strong>${player.technology.unlocked.length}</strong>
@@ -895,7 +1077,7 @@ async function bootstrapApp(): Promise<void> {
     metadata.className = "save-meta";
     metadata.innerHTML = `
       <strong>${slot.slotId}</strong>
-      <span>${slot.playerKingdomName} • Tick ${slot.tick}</span>
+      <span>${slot.playerKingdomName} • Ciclo ${slot.tick}</span>
       <span>${formatDate(slot.savedAt)}</span>
       <span>Territórios: ${slot.territoryCount} | Militar: ${formatNumber(slot.militaryPower)}</span>
     `;
@@ -949,6 +1131,10 @@ async function bootstrapApp(): Promise<void> {
     session.setSpeed(Number.isFinite(speed) ? speed : 1);
   });
 
+  ui.openSavesButton.addEventListener("click", () => {
+    setActiveTab("saves");
+  });
+
   ui.manualSaveButton.addEventListener("click", async () => {
     try {
       await session.saveManual();
@@ -981,6 +1167,12 @@ async function bootstrapApp(): Promise<void> {
     mapRenderer.render(state.world, state.kingdoms, buildMapRenderContext(state));
   });
 
+  for (const input of governmentInputs) {
+    input.addEventListener("input", () => {
+      isGovernmentFormDirty = true;
+    });
+  }
+
   ui.governmentApplyButton.addEventListener("click", () => {
     session.updateTaxPolicy({
       baseRate: normalizePercentage(ui.taxInputs.baseRate.value),
@@ -997,6 +1189,8 @@ async function bootstrapApp(): Promise<void> {
       technology: normalizePercentage(ui.budgetInputs.technology.value)
     });
 
+    isGovernmentFormDirty = false;
+    renderGovernmentInputs(session.getState());
     showToast("Políticas de governo aplicadas.");
   });
 
@@ -1005,6 +1199,43 @@ async function bootstrapApp(): Promise<void> {
     session.setResearchFocus(focus);
     showToast(`Foco de pesquisa atualizado para ${focus}.`);
   });
+
+  ui.techAutomationSelect.addEventListener("change", () => {
+    const level = ui.techAutomationSelect.value as AutomationLevel;
+    session.setTechnologyAutomation(level);
+    showToast(`Automação tecnológica: ${automationLevelLabel(level)}.`);
+  });
+
+  ui.techHideCompletedToggle.addEventListener("change", () => {
+    hideCompletedTechnologies = ui.techHideCompletedToggle.checked;
+    renderTechnology(session.getState());
+  });
+
+  ui.techClearGoalButton.addEventListener("click", () => {
+    const result = session.setResearchGoal(null);
+    showToast(result.message);
+  });
+
+  ui.profileSaveButton.addEventListener("click", () => {
+    const nextName = ui.profileNameInput.value.trim();
+    const nextEmail = ui.profileEmailInput.value.trim();
+
+    if (nextName.length < 2) {
+      showToast("Informe um nome de jogador com pelo menos 2 caracteres.");
+      return;
+    }
+
+    profile = {
+      ...profile,
+      name: nextName,
+      email: nextEmail
+    };
+    saveLocalProfile(profile);
+    syncProfileUi();
+    showToast("Perfil local salvo.");
+  });
+
+  syncProfileUi();
 
   const initialState = await session.bootstrap(createInitialState());
   mapRenderer.setLayer("owner");

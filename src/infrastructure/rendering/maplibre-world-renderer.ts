@@ -212,10 +212,16 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
   }
 
   private async loadGeoJson(): Promise<CountryFeatureCollection> {
-    const candidates = ["/assets/maps/world-countries-v1.geojson", "/assets/maps/world-countries-v0.geojson"];
+    const relativeCandidates = ["assets/maps/world-countries-v1.geojson", "assets/maps/world-countries-v0.geojson"];
+    const resolvedUrls = new Set<string>();
 
-    for (const file of candidates) {
-      const response = await fetch(file);
+    for (const relativePath of relativeCandidates) {
+      resolvedUrls.add(new URL(relativePath, document.baseURI).toString());
+      resolvedUrls.add(new URL(`./${relativePath}`, window.location.href).toString());
+    }
+
+    for (const url of resolvedUrls) {
+      const response = await fetch(url);
       if (!response.ok) {
         continue;
       }

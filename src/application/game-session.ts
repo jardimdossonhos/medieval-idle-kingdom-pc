@@ -8,8 +8,8 @@ import type {
   SaveSummary,
   SnapshotRepository
 } from "../core/contracts/game-ports";
-import { getTechnologyNode, isTechnologyAvailable, listAvailableTechnologyNodes, listTechnologyNodes, selectDefaultResearchNode } from "../core/data/technology-tree";
-import { DiplomaticRelation, ResourceType, TechnologyDomain, TreatyType } from "../core/models/enums";
+import { getTechnologyNode, isTechnologyAvailable, listAvailableTechnologyNodes, listTechnologyNodes, selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../core/data/technology-tree";
+import { AutomationLevel, DiplomaticRelation, ResourceType, TechnologyDomain, TreatyType } from "../core/models/enums";
 import type { BudgetPriority, TaxPolicy } from "../core/models/economy";
 import type { ClockService, DiplomacyResolver, EventBus, WarResolver } from "../core/contracts/services";
 import type { CommandLogEntry, SnapshotReason, StateSnapshot } from "../core/models/commands";
@@ -57,6 +57,7 @@ export interface TechnologyChoice {
   cost: number;
   required: string[];
   status: "unlocked" | "available" | "locked" | "active";
+  isGoal: boolean;
 }
 
 export class GameSession {
@@ -242,11 +243,25 @@ export class GameSession {
     const state = this.requireState();
     const player = this.getPlayerKingdom(state);
     player.technology.researchFocus = focus;
-    const preferred = selectDefaultResearchNode(player.technology, focus);
+    const preferred = player.technology.researchGoalId
+      ? selectResearchNodeTowardsTarget(player.technology, player.technology.researchGoalId) ??
+        selectDefaultResearchNode(player.technology, focus)
+      : selectDefaultResearchNode(player.technology, focus);
     player.technology.activeResearchId = preferred?.id ?? null;
 
     this.appendActionLog("Foco de pesquisa alterado", `A coroa direcionou os estudiosos para ${focus}.`, "info");
     this.recordPlayerCommand("technology.focus", { focus });
+    this.persistCurrent();
+    this.emitState();
+  }
+
+  setTechnologyAutomation(level: AutomationLevel): void {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    player.administration.automation.technology = level;
+
+    this.appendActionLog("Automação tecnológica atualizada", `Nível definido para ${level}.`, "info");
+    this.recordPlayerCommand("technology.automation", { level });
     this.persistCurrent();
     this.emitState();
   }
@@ -272,6 +287,50 @@ export class GameSession {
     this.emitState();
 
     return { ok: true, message: `${node.name} definida como pesquisa ativa.` };
+  }
+
+  setResearchGoal(technologyId: string | null): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+
+    if (!technologyId) {
+      player.technology.researchGoalId = null;
+      this.appendActionLog("Meta tecnológica removida", "O conselho real limpou a meta de longo prazo.", "info");
+      this.recordPlayerCommand("technology.goal_clear", {});
+      this.persistCurrent();
+      this.emitState();
+      return { ok: true, message: "Meta tecnológica removida." };
+    }
+
+    const node = getTechnologyNode(technologyId);
+    if (!node) {
+      return { ok: false, message: "Tecnologia inválida para meta." };
+    }
+
+    if (player.technology.unlocked.includes(technologyId)) {
+      return { ok: false, message: "Essa tecnologia já foi concluída." };
+    }
+
+    player.technology.researchGoalId = technologyId;
+    const nextStep = selectResearchNodeTowardsTarget(player.technology, technologyId);
+
+    if (nextStep) {
+      player.technology.activeResearchId = nextStep.id;
+      player.technology.researchFocus = nextStep.domain;
+    }
+
+    const details = nextStep && nextStep.id !== technologyId
+      ? `Meta definida: ${node.name}. Próxima pesquisa necessária: ${nextStep.name}.`
+      : `Meta definida: ${node.name}.`;
+    this.appendActionLog("Meta tecnológica definida", details, "info");
+    this.recordPlayerCommand("technology.goal_set", {
+      technologyId,
+      nextStepId: nextStep?.id ?? null
+    });
+    this.persistCurrent();
+    this.emitState();
+
+    return { ok: true, message: details };
   }
 
   listTechnologyChoices(): TechnologyChoice[] {
@@ -300,7 +359,8 @@ export class GameSession {
         domain: node.domain,
         cost: node.cost,
         required: node.required,
-        status
+        status,
+        isGoal: player.technology.researchGoalId === node.id
       };
     });
   }
