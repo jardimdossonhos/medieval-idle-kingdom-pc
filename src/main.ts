@@ -1,4 +1,4 @@
-﻿import "./styles/global.css";
+import "./styles/global.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { createInitialState } from "./application/boot/create-initial-state";
 import { createStaticWorldData } from "./application/boot/static-world-data";
@@ -501,6 +501,20 @@ async function bootstrapApp(): Promise<void> {
     tabButtons: Array.from(appRoot.querySelectorAll<HTMLButtonElement>(".tab-btn")),
     tabPanels: Array.from(appRoot.querySelectorAll<HTMLElement>(".tab-panel"))
   };
+
+  const simulationWorker = new Worker(
+    new URL("./infrastructure/worker/simulation.worker.ts", import.meta.url),
+    { type: "module" }
+  );
+
+  simulationWorker.onmessage = (event: MessageEvent) => {
+    const data = event.data as { type?: string; payload?: { timestamp?: number } };
+    if (data?.type === "TICK") {
+      console.log("[SimulationWorker] TICK", data.payload?.timestamp);
+    }
+  };
+
+  simulationWorker.postMessage({ type: "START" as const });
 
   const resourceLabels: Record<ResourceType, string> = {
     gold: "Ouro",
