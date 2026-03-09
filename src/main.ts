@@ -508,9 +508,10 @@ async function bootstrapApp(): Promise<void> {
   );
 
   simulationWorker.onmessage = (event: MessageEvent) => {
-    const data = event.data as { type?: string; payload?: { timestamp?: number } };
+    const data = event.data as { type?: string; payload?: { timestamp?: number; goldData?: Float64Array } };
     if (data?.type === "TICK") {
-      console.log("[SimulationWorker] TICK", data.payload?.timestamp);
+      const gold0 = data.payload?.goldData?.[0];
+      console.log("[SimulationWorker] TICK", data.payload?.timestamp, "gold[0]=", gold0);
     }
   };
 
