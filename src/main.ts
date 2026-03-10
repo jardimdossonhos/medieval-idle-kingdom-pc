@@ -2,6 +2,7 @@ import "./styles/global.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { createInitialState } from "./application/boot/create-initial-state";
 import { createStaticWorldData } from "./application/boot/static-world-data";
+import { WORLD_DEFINITIONS_V1 } from "./application/boot/generated/world-definitions-v1";
 import {
   GameSession,
   type DiplomaticActionType,
@@ -510,11 +511,17 @@ async function bootstrapApp(): Promise<void> {
   simulationWorker.onmessage = (event: MessageEvent) => {
     const data = event.data as { type?: string; payload?: { timestamp?: number; goldData?: Float64Array } };
     if (data?.type === "TICK") {
-      const gold0 = data.payload?.goldData?.[0];
-      console.log("[SimulationWorker] TICK", data.payload?.timestamp, "gold[0]=", gold0);
+      const timestamp = data.payload?.timestamp;
+      const goldData = data.payload?.goldData;
+      if (goldData instanceof Float64Array) {
+        currentSimulationState.goldData = goldData;
+        updateUIPanel();
+      }
     }
   };
 
+  const totalCountries = WORLD_DEFINITIONS_V1.length;
+  simulationWorker.postMessage({ type: "INIT" as const, payload: { entityCount: totalCountries } });
   simulationWorker.postMessage({ type: "START" as const });
 
   const resourceLabels: Record<ResourceType, string> = {
@@ -537,6 +544,9 @@ async function bootstrapApp(): Promise<void> {
   let isGovernmentFormDirty = false;
   let hideCompletedTechnologies = true;
   let profile = loadLocalProfile();
+  let selectedCountryIndex: number | null = null;
+  let currentSimulationState: { goldData: Float64Array } = { goldData: new Float64Array(0) };
+  let resourcesInitialized = false;
 
   function showToast(message: string): void {
     ui.toastArea.textContent = message;
@@ -603,8 +613,18 @@ async function bootstrapApp(): Promise<void> {
   const mapRenderer = new HybridMapRenderer(ui.mapCanvas, staticWorldData, (selection: MapSelection) => {
     selectedRegionId = selection.regionId;
     selectedMapLabel = selection.label ?? selection.regionId;
+
+    const regionId = selectedRegionId;
+    if (regionId) {
+      const index = WORLD_DEFINITIONS_V1.findIndex((def) => def.id === regionId);
+      selectedCountryIndex = index >= 0 ? index : null;
+    } else {
+      selectedCountryIndex = null;
+    }
+
     renderRegionInfo(session.getState());
     setActiveTab("mapa");
+    updateUIPanel();
   });
 
   eventBus.subscribe("victory.achieved", () => {
@@ -637,13 +657,58 @@ async function bootstrapApp(): Promise<void> {
 
   function renderResources(state: GameState): void {
     const player = getPlayerKingdom(state);
-    ui.resourceList.innerHTML = "";
 
-    for (const resource of Object.keys(resourceLabels) as ResourceType[]) {
-      const item = document.createElement("li");
-      item.textContent = `${resourceLabels[resource]}: ${formatNumber(player.economy.stock[resource])}`;
-      ui.resourceList.appendChild(item);
+    if (!resourcesInitialized) {
+      ui.resourceList.innerHTML = "";
+
+      for (const resource of Object.keys(resourceLabels) as ResourceType[]) {
+        const item = document.createElement("li");
+        item.dataset.resource = resource;
+        // Inicializa com o valor legado; ouro será sobreposto por updateUIPanel() depois
+        item.textContent = `${resourceLabels[resource]}: ${formatNumber(player.economy.stock[resource])}`;
+        ui.resourceList.appendChild(item);
+      }
+
+      resourcesInitialized = true;
+      return;
     }
+
+    // Atualiza apenas recursos não-ouro; ouro é controlado exclusivamente pelo ECS/worker
+    for (const resource of Object.keys(resourceLabels) as ResourceType[]) {
+      if (resource === "gold") {
+        continue;
+      }
+
+      const item = ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="${resource}"]`);
+      if (!item) {
+        continue;
+      }
+
+      item.textContent = `${resourceLabels[resource]}: ${formatNumber(player.economy.stock[resource])}`;
+    }
+  }
+
+  function updateUIPanel(): void {
+    if (selectedCountryIndex === null) {
+      return;
+    }
+
+    const goldData = currentSimulationState.goldData;
+    if (!goldData || selectedCountryIndex < 0 || selectedCountryIndex >= goldData.length) {
+      return;
+    }
+
+    const value = goldData[selectedCountryIndex];
+    if (!Number.isFinite(value)) {
+      return;
+    }
+
+    const goldItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="gold"]');
+    if (!goldItem) {
+      return;
+    }
+
+    goldItem.textContent = `${resourceLabels.gold}: ${value.toFixed(2)}`;
   }
 
   function renderRiskIndicators(state: GameState): void {

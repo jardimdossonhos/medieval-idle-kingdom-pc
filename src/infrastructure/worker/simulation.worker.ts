@@ -4,16 +4,16 @@ import { EconomySystem } from "../../core/systems/EconomySystem";
 
 let intervalId: number | null = null;
 
-const world = new World();
-const economy = new EconomyComponent(1_000);
+let world: World | null = null;
+let economy: EconomyComponent | null = null;
 const economySystem = new EconomySystem(1.5);
 
 const activeEntities: number[] = [];
-activeEntities.push(world.createEntity());
 
 type WorkerCommand =
   | { type: "START" }
-  | { type: "STOP" };
+  | { type: "STOP" }
+  | { type: "INIT"; payload: { entityCount: number } };
 
 interface TickMessage {
   type: "TICK";
@@ -28,6 +28,11 @@ function startClock(): void {
     return;
   }
 
+  if (!world || !economy || activeEntities.length === 0) {
+    // Ainda não inicializado via INIT; não inicia o relógio.
+    return;
+  }
+
   let lastTickMs = typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
     : Date.now();
@@ -39,11 +44,13 @@ function startClock(): void {
     const deltaTimeSeconds = Math.max(0, (nowMs - lastTickMs) / 1_000);
     lastTickMs = nowMs;
 
-    economySystem.update(deltaTimeSeconds, economy, activeEntities);
+    if (economy) {
+      economySystem.update(deltaTimeSeconds, economy, activeEntities);
+    }
 
     const message: TickMessage = {
       type: "TICK",
-      payload: { timestamp: Date.now(), goldData: economy.gold }
+      payload: { timestamp: Date.now(), goldData: economy ? economy.gold : new Float64Array(0) }
     };
     self.postMessage(message);
   }, 1_000);
@@ -64,6 +71,22 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
   }
 
   switch (command.type) {
+    case "INIT": {
+      const count = command.payload?.entityCount ?? 0;
+      world = new World();
+      economy = new EconomyComponent(count > 0 ? count : 1);
+      activeEntities.length = 0;
+
+      for (let i = 0; i < count; i += 1) {
+        const entityId = world.createEntity();
+        activeEntities.push(entityId);
+        if (economy) {
+          // Ouro inicial aleatório entre 100 e 500
+          economy.gold[entityId] = 100 + Math.random() * 400;
+        }
+      }
+      break;
+    }
     case "START":
       startClock();
       break;
