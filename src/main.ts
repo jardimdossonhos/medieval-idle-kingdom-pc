@@ -509,14 +509,32 @@ async function bootstrapApp(): Promise<void> {
   );
 
   simulationWorker.onmessage = (event: MessageEvent) => {
-    const data = event.data as { type?: string; payload?: { timestamp?: number; goldData?: Float64Array } };
+    const data = event.data as {
+      type?: string;
+      payload?: {
+        timestamp?: number;
+        goldData?: Float64Array;
+        foodData?: Float64Array;
+        woodData?: Float64Array;
+        ironData?: Float64Array;
+      };
+    };
     if (data?.type === "TICK") {
-      const timestamp = data.payload?.timestamp;
-      const goldData = data.payload?.goldData;
-      if (goldData instanceof Float64Array) {
-        currentSimulationState.goldData = goldData;
-        updateUIPanel();
+      const payload = data.payload;
+      if (payload?.goldData instanceof Float64Array) {
+        currentSimulationState.goldData = payload.goldData;
       }
+      if (payload?.foodData instanceof Float64Array) {
+        currentSimulationState.foodData = payload.foodData;
+      }
+      if (payload?.woodData instanceof Float64Array) {
+        currentSimulationState.woodData = payload.woodData;
+      }
+      if (payload?.ironData instanceof Float64Array) {
+        currentSimulationState.ironData = payload.ironData;
+      }
+
+      updateUIPanel();
     }
   };
 
@@ -545,7 +563,17 @@ async function bootstrapApp(): Promise<void> {
   let hideCompletedTechnologies = true;
   let profile = loadLocalProfile();
   let selectedCountryIndex: number | null = null;
-  let currentSimulationState: { goldData: Float64Array } = { goldData: new Float64Array(0) };
+  let currentSimulationState: {
+    goldData: Float64Array;
+    foodData: Float64Array;
+    woodData: Float64Array;
+    ironData: Float64Array;
+  } = {
+    goldData: new Float64Array(0),
+    foodData: new Float64Array(0),
+    woodData: new Float64Array(0),
+    ironData: new Float64Array(0)
+  };
   let resourcesInitialized = false;
 
   function showToast(message: string): void {
@@ -673,9 +701,9 @@ async function bootstrapApp(): Promise<void> {
       return;
     }
 
-    // Atualiza apenas recursos não-ouro; ouro é controlado exclusivamente pelo ECS/worker
+    // Atualiza apenas recursos que NÃO são controlados pelo ECS/worker
     for (const resource of Object.keys(resourceLabels) as ResourceType[]) {
-      if (resource === "gold") {
+      if (["gold", "food", "wood", "iron", "faith", "legitimacy"].includes(resource)) {
         continue;
       }
 
@@ -693,22 +721,42 @@ async function bootstrapApp(): Promise<void> {
       return;
     }
 
-    const goldData = currentSimulationState.goldData;
-    if (!goldData || selectedCountryIndex < 0 || selectedCountryIndex >= goldData.length) {
-      return;
-    }
+    const index = selectedCountryIndex;
 
-    const value = goldData[selectedCountryIndex];
-    if (!Number.isFinite(value)) {
-      return;
-    }
+    const { goldData, foodData, woodData, ironData } = currentSimulationState;
+
+    const safeRead = (array: Float64Array, i: number): number | null => {
+      if (!array || i < 0 || i >= array.length) {
+        return null;
+      }
+      const value = array[i];
+      return Number.isFinite(value) ? value : null;
+    };
+
+    const goldValue = safeRead(goldData, index);
+    const foodValue = safeRead(foodData, index);
+    const woodValue = safeRead(woodData, index);
+    const ironValue = safeRead(ironData, index);
 
     const goldItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="gold"]');
-    if (!goldItem) {
-      return;
+    if (goldItem && goldValue !== null) {
+      goldItem.textContent = `${resourceLabels.gold}: ${goldValue.toFixed(2)}`;
     }
 
-    goldItem.textContent = `${resourceLabels.gold}: ${value.toFixed(2)}`;
+    const foodItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="food"]');
+    if (foodItem && foodValue !== null) {
+      foodItem.textContent = `${resourceLabels.food}: ${foodValue.toFixed(2)}`;
+    }
+
+    const woodItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="wood"]');
+    if (woodItem && woodValue !== null) {
+      woodItem.textContent = `${resourceLabels.wood}: ${woodValue.toFixed(2)}`;
+    }
+
+    const ironItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="iron"]');
+    if (ironItem && ironValue !== null) {
+      ironItem.textContent = `${resourceLabels.iron}: ${ironValue.toFixed(2)}`;
+    }
   }
 
   function renderRiskIndicators(state: GameState): void {

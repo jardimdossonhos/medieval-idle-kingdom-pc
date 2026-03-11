@@ -20,6 +20,9 @@ interface TickMessage {
   payload: {
     timestamp: number;
     goldData: Float64Array;
+    foodData: Float64Array;
+    woodData: Float64Array;
+    ironData: Float64Array;
   };
 }
 
@@ -46,13 +49,19 @@ function startClock(): void {
 
     if (economy) {
       economySystem.update(deltaTimeSeconds, economy, activeEntities);
-    }
 
-    const message: TickMessage = {
-      type: "TICK",
-      payload: { timestamp: Date.now(), goldData: economy ? economy.gold : new Float64Array(0) }
-    };
-    self.postMessage(message);
+      const message: TickMessage = {
+        type: "TICK",
+        payload: {
+          timestamp: Date.now(),
+          goldData: economy.gold,
+          foodData: economy.food,
+          woodData: economy.wood,
+          ironData: economy.iron
+        }
+      };
+      self.postMessage(message);
+    }
   }, 1_000);
 }
 
@@ -81,8 +90,13 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
         const entityId = world.createEntity();
         activeEntities.push(entityId);
         if (economy) {
-          // Ouro inicial aleatório entre 100 e 500
+          // Valores iniciais aleatórios para teste
           economy.gold[entityId] = 100 + Math.random() * 400;
+          economy.food[entityId] = 50 + Math.random() * 150;
+          economy.wood[entityId] = 50 + Math.random() * 150;
+          economy.iron[entityId] = 50 + Math.random() * 150;
+          economy.faith[entityId] = 50 + Math.random() * 150;
+          economy.legitimacy[entityId] = 50 + Math.random() * 150;
         }
       }
       break;
