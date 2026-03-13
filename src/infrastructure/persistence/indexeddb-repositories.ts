@@ -1,4 +1,4 @@
-﻿import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+﻿﻿import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type {
   CommandLogRepository,
   GameStateRepository,
@@ -69,11 +69,15 @@ async function openGameDb(): Promise<IDBPDatabase<MedievalDbSchema>> {
 }
 
 export class IndexedDbGameStateRepository implements GameStateRepository {
-  constructor(private readonly dbPromise: Promise<IDBPDatabase<MedievalDbSchema>> = openGameDb()) {}
+  private readonly key: string;
+
+  constructor(campaignId: string, private readonly dbPromise: Promise<IDBPDatabase<MedievalDbSchema>> = openGameDb()) {
+    this.key = `campaign:${campaignId}:current`;
+  }
 
   async loadCurrent(): Promise<GameState | null> {
     const db = await this.dbPromise;
-    const envelope = await db.get("current_state", CURRENT_STATE_KEY);
+    const envelope = await db.get("current_state", this.key);
 
     if (!envelope) {
       return null;
@@ -82,12 +86,12 @@ export class IndexedDbGameStateRepository implements GameStateRepository {
     const normalized = normalizeCurrentStateEnvelope(envelope);
 
     if (!normalized) {
-      await db.delete("current_state", CURRENT_STATE_KEY);
+      await db.delete("current_state", this.key);
       return null;
     }
 
     if (envelope.schemaVersion !== normalized.schemaVersion) {
-      await db.put("current_state", normalized, CURRENT_STATE_KEY);
+      await db.put("current_state", normalized, this.key);
     }
 
     return normalized.state;
@@ -95,27 +99,36 @@ export class IndexedDbGameStateRepository implements GameStateRepository {
 
   async saveCurrent(state: GameState): Promise<void> {
     const db = await this.dbPromise;
-    await db.put("current_state", createCurrentStateEnvelope(state), CURRENT_STATE_KEY);
+    await db.put("current_state", createCurrentStateEnvelope(state), this.key);
   }
 
   async clearCurrent(): Promise<void> {
     const db = await this.dbPromise;
-    await db.delete("current_state", CURRENT_STATE_KEY);
+    await db.delete("current_state", this.key);
   }
 }
 
 export class IndexedDbSaveRepository implements SaveRepository {
-  constructor(private readonly dbPromise: Promise<IDBPDatabase<MedievalDbSchema>> = openGameDb()) {}
+  private readonly prefix: string;
+
+  constructor(campaignId: string, private readonly dbPromise: Promise<IDBPDatabase<MedievalDbSchema>> = openGameDb()) {
+    this.prefix = `campaign:${campaignId}:`;
+  }
+
+  private toPrefixedKey(slotId: SaveSlotId): string {
+    return `${this.prefix}${slotId}`;
+  }
 
   async saveToSlot(snapshot: SaveSnapshot): Promise<void> {
     const db = await this.dbPromise;
     const envelope = toSaveEnvelope(snapshot);
-    await db.put("save_slots", envelope, snapshot.summary.slotId);
+    await db.put("save_slots", envelope, this.toPrefixedKey(snapshot.summary.slotId));
   }
 
   async loadFromSlot(slotId: SaveSlotId): Promise<SaveSnapshot | null> {
     const db = await this.dbPromise;
-    const envelope = await db.get("save_slots", slotId);
+    const prefixedKey = this.toPrefixedKey(slotId);
+    const envelope = await db.get("save_slots", prefixedKey);
 
     if (!envelope) {
       return null;
@@ -124,12 +137,12 @@ export class IndexedDbSaveRepository implements SaveRepository {
     const normalized = normalizeSaveEnvelope(envelope);
 
     if (!normalized) {
-      await db.delete("save_slots", slotId);
+      await db.delete("save_slots", prefixedKey);
       return null;
     }
 
     if (envelope.schemaVersion !== normalized.schemaVersion) {
-      await db.put("save_slots", normalized, slotId);
+      await db.put("save_slots", normalized, prefixedKey);
     }
 
     return normalized.snapshot;
@@ -139,12 +152,13 @@ export class IndexedDbSaveRepository implements SaveRepository {
     const db = await this.dbPromise;
     const transaction = db.transaction("save_slots", "readonly");
     const store = transaction.objectStore("save_slots");
-    const keys = await store.getAllKeys();
+    const range = IDBKeyRange.bound(this.prefix, `${this.prefix}\uffff`, false, true);
+    const keys = await store.getAllKeys(range);
 
     const summaries: SaveSummary[] = [];
 
     for (const key of keys) {
-      const envelope = await store.get(key as SaveSlotId);
+      const envelope = await store.get(key);
       const normalized = normalizeSaveEnvelope(envelope);
 
       if (!normalized) {
@@ -161,12 +175,24 @@ export class IndexedDbSaveRepository implements SaveRepository {
 
   async deleteSlot(slotId: SaveSlotId): Promise<void> {
     const db = await this.dbPromise;
-    await db.delete("save_slots", slotId);
+    await db.delete("save_slots", this.toPrefixedKey(slotId));
+  }
+
+  async clearAll(): Promise<void> {
+    const db = await this.dbPromise;
+    const range = IDBKeyRange.bound(this.prefix, `${this.prefix}\uffff`, false, true);
+    const tx = db.transaction("save_slots", "readwrite");
+    await tx.store.delete(range);
+    await tx.done;
   }
 }
 
 export class IndexedDbCommandLogRepository implements CommandLogRepository {
-  constructor(private readonly dbPromise: Promise<IDBPDatabase<MedievalDbSchema>> = openGameDb()) {}
+  private readonly prefix: string;
+
+  constructor(campaignId: string, private readonly dbPromise: Promise<IDBPDatabase<MedievalDbSchema>> = openGameDb()) {
+    this.prefix = `campaign:${campaignId}:`;
+  }
 
   async append(entries: CommandLogEntry[]): Promise<void> {
     if (entries.length === 0) {
@@ -178,38 +204,49 @@ export class IndexedDbCommandLogRepository implements CommandLogRepository {
     const store = tx.objectStore("command_log");
 
     for (const entry of entries) {
-      await store.put(createCommandEnvelope(entry), entry.sequence);
+      await store.put(createCommandEnvelope(entry), `${this.prefix}${entry.sequence}`);
     }
 
     await tx.done;
   }
 
   async latest(): Promise<CommandLogEntry | null> {
-    const db = await this.dbPromise;
-    const tx = db.transaction("command_log", "readonly");
-    const store = tx.objectStore("command_log");
-    const keys = await store.getAllKeys();
+    try {
+      const db = await this.dbPromise;
+      const tx = db.transaction("command_log", "readonly");
+      const store = tx.objectStore("command_log");
 
-    if (keys.length === 0) {
+      // Abrir um cursor com direção 'prev' é a forma mais eficiente de pegar o último item.
+      const range = IDBKeyRange.bound(this.prefix, `${this.prefix}\uffff`, false, true);
+      const cursor = await store.openCursor(range, "prev");
+
+      // O cursor é nulo se a store estiver vazia.
+      if (!cursor) {
+        await tx.done;
+        return null;
+      }
+
+      // O valor do cursor é o envelope. Normalizamos para obter a entrada.
+      const envelope = cursor.value;
       await tx.done;
+
+      return normalizeCommandEnvelope(envelope)?.entry ?? null;
+    } catch (error) {
+      console.error("Erro ao buscar o último registro do log de comandos:", error);
+      // Em caso de erro, também é seguro retornar null para não quebrar a inicialização.
       return null;
     }
-
-    const latestSequence = Math.max(...keys.map((item) => Number(item)));
-    const envelope = await store.get(latestSequence);
-    await tx.done;
-
-    return normalizeCommandEnvelope(envelope)?.entry ?? null;
   }
 
   async listAfter(sequence: number, limit = 200): Promise<CommandLogEntry[]> {
     const db = await this.dbPromise;
     const tx = db.transaction("command_log", "readonly");
     const store = tx.objectStore("command_log");
-    const keys = await store.getAllKeys();
+    const range = IDBKeyRange.bound(this.prefix, `${this.prefix}\uffff`, false, true);
+    const allKeys = await store.getAllKeys(range);
 
-    const sortedKeys = keys
-      .map((item) => Number(item))
+    const sortedKeys = allKeys
+      .map((item) => Number(String(item).substring(this.prefix.length)))
       .filter((item) => Number.isFinite(item) && item > sequence)
       .sort((left, right) => left - right)
       .slice(0, Math.max(1, limit));
@@ -217,7 +254,7 @@ export class IndexedDbCommandLogRepository implements CommandLogRepository {
     const entries: CommandLogEntry[] = [];
 
     for (const key of sortedKeys) {
-      const envelope = await store.get(key);
+      const envelope = await store.get(`${this.prefix}${key}`);
       const normalized = normalizeCommandEnvelope(envelope);
       if (normalized) {
         entries.push(normalized.entry);
@@ -230,16 +267,24 @@ export class IndexedDbCommandLogRepository implements CommandLogRepository {
 
   async clear(): Promise<void> {
     const db = await this.dbPromise;
-    await db.clear("command_log");
+    const range = IDBKeyRange.bound(this.prefix, `${this.prefix}\uffff`, false, true);
+    const tx = db.transaction("command_log", "readwrite");
+    await tx.store.delete(range);
+    await tx.done;
   }
 }
 
 export class IndexedDbSnapshotRepository implements SnapshotRepository {
-  constructor(private readonly dbPromise: Promise<IDBPDatabase<MedievalDbSchema>> = openGameDb()) {}
+  private readonly prefix: string;
+
+  constructor(campaignId: string, private readonly dbPromise: Promise<IDBPDatabase<MedievalDbSchema>> = openGameDb()) {
+    this.prefix = `campaign:${campaignId}:`;
+  }
 
   async save(snapshot: StateSnapshot): Promise<void> {
     const db = await this.dbPromise;
-    await db.put("state_snapshots", createSnapshotEnvelope(snapshot), snapshot.id);
+    const prefixedId = `${this.prefix}${snapshot.id}`;
+    await db.put("state_snapshots", createSnapshotEnvelope(snapshot), prefixedId);
   }
 
   async latest(): Promise<StateSnapshot | null> {
@@ -254,7 +299,8 @@ export class IndexedDbSnapshotRepository implements SnapshotRepository {
 
   async load(snapshotId: string): Promise<StateSnapshot | null> {
     const db = await this.dbPromise;
-    const envelope = await db.get("state_snapshots", snapshotId);
+    const prefixedId = `${this.prefix}${snapshotId}`;
+    const envelope = await db.get("state_snapshots", prefixedId);
     return normalizeSnapshotEnvelope(envelope)?.snapshot ?? null;
   }
 
@@ -262,12 +308,13 @@ export class IndexedDbSnapshotRepository implements SnapshotRepository {
     const db = await this.dbPromise;
     const tx = db.transaction("state_snapshots", "readonly");
     const store = tx.objectStore("state_snapshots");
-    const keys = await store.getAllKeys();
+    const range = IDBKeyRange.bound(this.prefix, `${this.prefix}\uffff`, false, true);
+    const keys = await store.getAllKeys(range);
 
     const summaries: SnapshotSummary[] = [];
 
     for (const key of keys) {
-      const envelope = await store.get(String(key));
+      const envelope = await store.get(key);
       const normalized = normalizeSnapshotEnvelope(envelope);
 
       if (!normalized) {
@@ -301,6 +348,7 @@ export class IndexedDbSnapshotRepository implements SnapshotRepository {
 
   async delete(snapshotId: string): Promise<void> {
     const db = await this.dbPromise;
-    await db.delete("state_snapshots", snapshotId);
+    const prefixedId = `${this.prefix}${snapshotId}`;
+    await db.delete("state_snapshots", prefixedId);
   }
 }

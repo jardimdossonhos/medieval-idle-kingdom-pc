@@ -1,4 +1,4 @@
-﻿import { buildSaveSummary } from "./save/build-save-summary";
+﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
 import type {
   CommandLogRepository,
   GameStateRepository,
@@ -9,18 +9,19 @@ import type {
   SnapshotRepository
 } from "../core/contracts/game-ports";
 import { getTechnologyNode, isTechnologyAvailable, listAvailableTechnologyNodes, listTechnologyNodes, selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../core/data/technology-tree";
+import { createEmptyStock } from "../core/models/economy";
 import { AutomationLevel, DiplomaticRelation, ResourceType, TechnologyDomain, TreatyType } from "../core/models/enums";
 import type { BudgetPriority, TaxPolicy } from "../core/models/economy";
 import type { ClockService, DiplomacyResolver, EventBus, WarResolver } from "../core/contracts/services";
 import type { CommandLogEntry, SnapshotReason, StateSnapshot } from "../core/models/commands";
 import type { DomainEvent, EventLogEntry } from "../core/models/events";
-import type { GameState } from "../core/models/game-state";
+import type { EcsState, GameState } from "../core/models/game-state";
 import { buildTreatyId, sortUniqueIds } from "../core/models/identifiers";
 import type { StaticWorldData } from "../core/models/static-world-data";
 import { buildStateHash } from "../core/utils/state-fingerprint";
 import { hashDeterministic } from "../core/utils/stable-hash";
 import { TickPipeline, type SimulationSystem } from "../core/simulation/tick-pipeline";
-import { createAutoSlotId, MANUAL_SLOT_ID, nextAutoSlot, SAFETY_SLOT_ID } from "../infrastructure/persistence/save-slots";
+import { AUTOSAVE_SLOT_ID, MANUAL_SLOT_ID } from "../infrastructure/persistence/save-slots";
 
 export interface GameSessionDeps {
   gameStateRepository: GameStateRepository;
@@ -77,7 +78,6 @@ export class GameSession {
   private accumulatedMs = 0;
   private ticksSinceAutosave = 0;
   private ticksSinceSnapshot = 0;
-  private autoSlotIndex = 0;
   private ioQueue: Promise<void> = Promise.resolve();
   private sessionLogSeq = 0;
   private commandSequence = 0;
@@ -126,6 +126,9 @@ export class GameSession {
         to: now
       });
     }
+
+    // Notifica o sistema que um estado de jogo está pronto (seja novo ou recuperado)
+    this.deps.eventBus.publish("game.loaded", this.currentState);
 
     await this.deps.gameStateRepository.saveCurrent(this.currentState);
 
@@ -408,11 +411,14 @@ export class GameSession {
 
     const { cost, chance, cooldownMs, actionPt } = this.getDiplomaticConfig(state, player.id, target.id, actionType);
 
-    if (!this.canAfford(player.economy.stock, cost)) {
+    // A verificação de custo agora usa o estado do ECS como fonte da verdade.
+    if (!this.canAfford(player.economy.stock, cost)) { // O primeiro parâmetro é ignorado
       return { ok: false, message: "Recursos insuficientes para executar esta ação." };
     }
 
-    this.applyCost(player.economy.stock, cost);
+    // A aplicação do custo agora modifica o estado do ECS (atualização otimista).
+    this.applyCost(player.economy.stock, cost); // O primeiro parâmetro é ignorado
+
     const roll = this.nextRandom(state);
     const success = roll <= chance;
 
@@ -445,9 +451,24 @@ export class GameSession {
       }
 
       if (actionType === "tribute") {
-        const tribute = this.round(target.economy.stock.gold * 0.08);
-        target.economy.stock.gold = Math.max(0, target.economy.stock.gold - tribute);
-        player.economy.stock.gold = this.round(player.economy.stock.gold + tribute);
+        // Lógica de tributo agora lê e escreve no estado do ECS.
+        if (state.ecs) {
+          const targetStock = this.getKingdomTotalEcsStock(state, target.id);
+          const tribute = this.round(targetStock.gold * 0.08);
+
+          const playerCapitalIndex = this.getKingdomCapitalIndex(state, player.id);
+          const targetCapitalIndex = this.getKingdomCapitalIndex(state, target.id);
+
+          if (playerCapitalIndex !== -1 && targetCapitalIndex !== -1) {
+            state.ecs.gold[targetCapitalIndex] = Math.max(0, state.ecs.gold[targetCapitalIndex] - tribute);
+            state.ecs.gold[playerCapitalIndex] = this.round(state.ecs.gold[playerCapitalIndex] + tribute);
+          }
+        } else {
+          // Fallback para a lógica antiga se o ECS não estiver presente
+          const tribute = this.round(target.economy.stock.gold * 0.08);
+          target.economy.stock.gold = Math.max(0, target.economy.stock.gold - tribute);
+          player.economy.stock.gold = this.round(player.economy.stock.gold + tribute);
+        }
       }
 
       this.appendActionLog(
@@ -504,11 +525,11 @@ export class GameSession {
     }
 
     const config = this.getRegionActionConfig(actionType);
-    if (!this.canAfford(player.economy.stock, config.cost)) {
+    if (!this.canAfford(player.economy.stock, config.cost)) { // O primeiro parâmetro é ignorado
       return { ok: false, message: "Recursos insuficientes para esta ação regional." };
     }
 
-    this.applyCost(player.economy.stock, config.cost);
+    this.applyCost(player.economy.stock, config.cost); // O primeiro parâmetro é ignorado
     region.actionCooldowns[actionType] = now + config.cooldownMs;
 
     switch (actionType) {
@@ -557,21 +578,6 @@ export class GameSession {
     this.captureSnapshot("manual");
   }
 
-  async saveSafety(reason: string): Promise<void> {
-    const state = this.requireState();
-    state.events = [
-      this.createSessionLog("Save de segurança", `Registro criado antes de: ${reason}`, "warning", this.deps.clock.now()),
-      ...state.events
-    ].slice(0, 180);
-
-    const snapshot = this.buildSaveSlotSnapshot(SAFETY_SLOT_ID);
-    await this.deps.saveRepository.saveToSlot(snapshot);
-    await this.deps.gameStateRepository.saveCurrent(state);
-    this.recordPlayerCommand("save.safety", { slotId: SAFETY_SLOT_ID, reason });
-    this.captureSnapshot("safety");
-    this.emitState();
-  }
-
   async listSaveSlots(): Promise<SaveSummary[]> {
     return this.deps.saveRepository.listSlots();
   }
@@ -590,8 +596,24 @@ export class GameSession {
     await this.deps.gameStateRepository.saveCurrent(this.currentState);
     this.recordPlayerCommand("save.load_slot", { slotId });
     this.captureSnapshot("bootstrap");
+
+    // Notifica o sistema que um estado de jogo foi carregado
+    this.deps.eventBus.publish("game.loaded", this.currentState);
+
     this.emitState();
     return this.currentState;
+  }
+
+  async deleteSlot(slotId: SaveSlotId): Promise<void> {
+    await this.deps.saveRepository.deleteSlot(slotId);
+  }
+
+  async clearCurrentState(): Promise<void> {
+    await this.deps.gameStateRepository.clearCurrent();
+  }
+
+  async clearAllSaves(): Promise<void> {
+    await this.deps.saveRepository.clearAll();
   }
 
   getState(): GameState {
@@ -620,11 +642,11 @@ export class GameSession {
       return { ok: false, message: "Ação religiosa em cooldown.", cooldownUntil };
     }
 
-    if (!this.canAfford(player.economy.stock, config.cost)) {
+    if (!this.canAfford(player.economy.stock, config.cost)) { // O primeiro parâmetro é ignorado
       return { ok: false, message: "Recursos insuficientes para enviar missionários." };
     }
 
-    this.applyCost(player.economy.stock, config.cost);
+    this.applyCost(player.economy.stock, config.cost); // O primeiro parâmetro é ignorado
     const roll = this.nextRandom(state);
     const success = roll <= config.chance;
 
@@ -685,6 +707,15 @@ export class GameSession {
     await this.ioQueue;
   }
 
+  public updateEcsState(ecsState: EcsState): void {
+    const state = this.currentState;
+    if (state) {
+      // Anexa o estado mais recente do ECS ao estado principal do jogo.
+      // Isso garante que o próximo autosave ou save manual inclua esses dados.
+      state.ecs = ecsState;
+    }
+  }
+
   private getPlayerKingdom(state: GameState): GameState["kingdoms"][string] {
     const player = Object.keys(state.kingdoms)
       .sort()
@@ -734,19 +765,79 @@ export class GameSession {
     return state.randomSeed / 0x100000000;
   }
 
+  private getKingdomCapitalIndex(state: GameState, kingdomId: string): number {
+    const kingdom = state.kingdoms[kingdomId];
+    if (!kingdom) {
+      return -1;
+    }
+
+    const definitions = Object.values(this.deps.staticWorldData.definitions).sort((a, b) => a.id.localeCompare(b.id));
+    return definitions.findIndex((def) => def.id === kingdom.capitalRegionId);
+  }
+
+  private getKingdomTotalEcsStock(state: GameState, kingdomId: string): Record<ResourceType, number> {
+    const emptyStock = createEmptyStock();
+    if (!state.ecs) {
+      return emptyStock;
+    }
+
+    const definitions = Object.values(this.deps.staticWorldData.definitions).sort((a, b) => a.id.localeCompare(b.id));
+
+    const kingdomRegionIndices = Object.values(state.world.regions)
+      .filter((r) => r.ownerId === kingdomId)
+      .map((r) => definitions.findIndex((def) => def.id === r.regionId))
+      .filter((index) => index !== -1);
+
+    const totals = emptyStock;
+    const ecs = state.ecs;
+
+    for (const index of kingdomRegionIndices) {
+      totals.gold += ecs.gold[index] ?? 0;
+      totals.food += ecs.food[index] ?? 0;
+      totals.wood += ecs.wood[index] ?? 0;
+      totals.iron += ecs.iron[index] ?? 0;
+      totals.faith += ecs.faith[index] ?? 0;
+      totals.legitimacy += ecs.legitimacy[index] ?? 0;
+    }
+    return totals;
+  }
+
   private canAfford(stock: Record<ResourceType, number>, cost: Partial<Record<ResourceType, number>>): boolean {
+    // O parâmetro 'stock' é legado. A verificação agora usa o estado do ECS.
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const playerEcsStock = this.getKingdomTotalEcsStock(state, player.id);
+
     return Object.entries(cost).every(([resource, value]) => {
       const key = resource as ResourceType;
       const required = value ?? 0;
-      return stock[key] >= required;
+      return playerEcsStock[key] >= required;
     });
   }
 
   private applyCost(stock: Record<ResourceType, number>, cost: Partial<Record<ResourceType, number>>): void {
+    // O parâmetro 'stock' é legado. O custo é aplicado na cópia local do estado do ECS.
+    // Esta é uma atualização otimista que será reconciliada pelo worker no próximo tick.
+    const state = this.requireState();
+    if (!state.ecs) {
+      return;
+    }
+
+    const player = this.getPlayerKingdom(state);
+    const capitalIndex = this.getKingdomCapitalIndex(state, player.id);
+
+    if (capitalIndex === -1) {
+      console.error(`[applyCost] Não foi possível encontrar o índice da capital para o jogador ${player.id}`);
+      return;
+    }
+
     for (const [resource, value] of Object.entries(cost)) {
       const key = resource as ResourceType;
       const required = value ?? 0;
-      stock[key] = this.round(Math.max(0, stock[key] - required));
+      const resourceArray = state.ecs[key];
+      if (resourceArray && capitalIndex < resourceArray.length) {
+        resourceArray[capitalIndex] = this.round(Math.max(0, resourceArray[capitalIndex] - required));
+      }
     }
   }
 
@@ -1009,16 +1100,13 @@ export class GameSession {
       return;
     }
 
-    const slotId = createAutoSlotId(this.autoSlotIndex);
-    const snapshot = this.buildSaveSlotSnapshot(slotId);
-
-    this.autoSlotIndex = nextAutoSlot(this.autoSlotIndex);
+    const snapshot = this.buildSaveSlotSnapshot(AUTOSAVE_SLOT_ID);
 
     this.enqueueIo(async () => {
       await this.deps.saveRepository.saveToSlot(snapshot);
     });
 
-    this.recordSystemCommand("save.autosave", { slotId });
+    this.recordSystemCommand("save.autosave", { slotId: AUTOSAVE_SLOT_ID });
     this.captureSnapshot("autosave");
   }
 

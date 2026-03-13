@@ -3,6 +3,7 @@ import { createInitialState } from "../src/application/boot/create-initial-state
 import { buildSaveSummary } from "../src/application/save/build-save-summary";
 import { TreatyType } from "../src/core/models/enums";
 import { buildTreatyId } from "../src/core/models/identifiers";
+import { MANUAL_SLOT_ID } from "../src/infrastructure/persistence/save-slots";
 import { normalizeSaveEnvelope, SAVE_SCHEMA_VERSION } from "../src/infrastructure/persistence/save-schema";
 
 describe("save schema migration", () => {
@@ -47,7 +48,7 @@ describe("save schema migration", () => {
       schemaVersion: 1,
       storedAt: 90_000,
       snapshot: {
-        summary: buildSaveSummary("manual-1", state, 90_000),
+        summary: buildSaveSummary(MANUAL_SLOT_ID, state, 90_000),
         state
       }
     });

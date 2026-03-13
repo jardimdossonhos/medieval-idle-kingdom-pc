@@ -11,7 +11,7 @@ import {
   type RuntimeMetrics,
   type TechnologyChoice
 } from "./application/game-session";
-import { AutomationLevel, TechnologyDomain, type ResourceType } from "./core/models/enums";
+import { AutomationLevel, ResourceType, TechnologyDomain } from "./core/models/enums";
 import { createDefaultSimulationSystems } from "./core/simulation/create-default-systems";
 import type { SaveSummary } from "./core/contracts/game-ports";
 import type { GameState, KingdomState } from "./core/models/game-state";
@@ -35,8 +35,6 @@ interface UiRefs {
   speedSelect: HTMLSelectElement;
   openSavesButton: HTMLButtonElement;
   manualSaveButton: HTMLButtonElement;
-  safetySaveButton: HTMLButtonElement;
-  refreshSavesButton: HTMLButtonElement;
   toastArea: HTMLElement;
   devTickLastValue: HTMLElement | null;
   devTickAvgValue: HTMLElement | null;
@@ -410,9 +408,8 @@ async function bootstrapApp(): Promise<void> {
         <article class="card tab-panel is-hidden" data-tab-panel="saves">
           <h2>Gestão de saves</h2>
           <div class="inline-form saves-toolbar">
-            <button id="manual-save-btn">Salvar manual</button>
-            <button id="safety-save-btn">Save de segurança</button>
-            <button id="refresh-saves-btn">Atualizar lista</button>
+            <button id="manual-save-btn">Salvar Jogo</button>
+            <button id="refresh-saves-btn">Atualizar Lista</button>
           </div>
           <div id="save-list" class="save-list"></div>
         </article>
@@ -457,7 +454,6 @@ async function bootstrapApp(): Promise<void> {
     speedSelect: queryElement(appRoot, "#speed-select"),
     openSavesButton: queryElement(appRoot, "#open-saves-btn"),
     manualSaveButton: queryElement(appRoot, "#manual-save-btn"),
-    safetySaveButton: queryElement(appRoot, "#safety-save-btn"),
     refreshSavesButton: queryElement(appRoot, "#refresh-saves-btn"),
     toastArea: queryElement(appRoot, "#toast-area"),
     devTickLastValue: queryOptionalElement(appRoot, "#dev-tick-last"),
@@ -517,6 +513,10 @@ async function bootstrapApp(): Promise<void> {
         foodData?: Float64Array;
         woodData?: Float64Array;
         ironData?: Float64Array;
+        faithData?: Float64Array;
+        legitimacyData?: Float64Array;
+        populationTotalData?: Float64Array;
+        populationGrowthRateData?: Float64Array;
       };
     };
     if (data?.type === "TICK") {
@@ -532,6 +532,33 @@ async function bootstrapApp(): Promise<void> {
       }
       if (payload?.ironData instanceof Float64Array) {
         currentSimulationState.ironData = payload.ironData;
+      }
+      if (payload?.faithData instanceof Float64Array) {
+        currentSimulationState.faithData = payload.faithData;
+      }
+      if (payload?.legitimacyData instanceof Float64Array) {
+        currentSimulationState.legitimacyData = payload.legitimacyData;
+      }
+      if (payload?.populationTotalData instanceof Float64Array) {
+        currentSimulationState.populationTotalData = payload.populationTotalData;
+      }
+      if (payload?.populationGrowthRateData instanceof Float64Array) {
+        currentSimulationState.populationGrowthRateData = payload.populationGrowthRateData;
+      }
+
+      // Atualiza o GameState na sessão com os dados mais recentes do worker.
+      // Isso é crucial para que as decisões lógicas (como canAfford) usem dados frescos.
+      if (payload) {
+        session.updateEcsState({
+          gold: Array.from(payload.goldData ?? []),
+          food: Array.from(payload.foodData ?? []),
+          wood: Array.from(payload.woodData ?? []),
+          iron: Array.from(payload.ironData ?? []),
+          faith: Array.from(payload.faithData ?? []),
+          legitimacy: Array.from(payload.legitimacyData ?? []),
+          populationTotal: Array.from(payload.populationTotalData ?? []),
+          populationGrowthRate: Array.from(payload.populationGrowthRateData ?? [])
+        });
       }
 
       updateUIPanel();
@@ -568,11 +595,19 @@ async function bootstrapApp(): Promise<void> {
     foodData: Float64Array;
     woodData: Float64Array;
     ironData: Float64Array;
+    faithData: Float64Array;
+    legitimacyData: Float64Array;
+    populationTotalData: Float64Array;
+    populationGrowthRateData: Float64Array;
   } = {
     goldData: new Float64Array(0),
     foodData: new Float64Array(0),
     woodData: new Float64Array(0),
-    ironData: new Float64Array(0)
+    ironData: new Float64Array(0),
+    faithData: new Float64Array(0),
+    legitimacyData: new Float64Array(0),
+    populationTotalData: new Float64Array(0),
+    populationGrowthRateData: new Float64Array(0)
   };
   let resourcesInitialized = false;
 
@@ -616,7 +651,12 @@ async function bootstrapApp(): Promise<void> {
   const npcDecisionService = new RuleBasedNpcDecisionService();
   const diplomacyResolver = new LocalDiplomacyResolver();
   const warResolver = new LocalWarResolver(staticWorldData);
-  const persistence = createRuntimePersistenceBundle();
+
+  // Esta será a base para o gerenciamento de múltiplas campanhas.
+  // Por enquanto, usamos um ID fixo. No futuro, este ID virá de uma tela de seleção.
+  const activeCampaignId = "default_campaign_v1";
+  const persistence = createRuntimePersistenceBundle(activeCampaignId);
+
   const session = new GameSession({
     gameStateRepository: persistence.gameStateRepository,
     saveRepository: persistence.saveRepository,
@@ -637,7 +677,14 @@ async function bootstrapApp(): Promise<void> {
     snapshotEveryTicks: 25,
     maxSnapshots: 20
   });
-
+  // highlight-start
+  // Envia o estado do ECS para o worker quando um jogo é carregado
+  eventBus.subscribe("game.loaded", (state) => {
+    if (state.ecs) {
+      simulationWorker.postMessage({ type: "RESTORE_ECS_STATE", payload: state.ecs });
+    }
+  });
+  // highlight-end
   const mapRenderer = new HybridMapRenderer(ui.mapCanvas, staticWorldData, (selection: MapSelection) => {
     selectedRegionId = selection.regionId;
     selectedMapLabel = selection.label ?? selection.regionId;
@@ -684,79 +731,100 @@ async function bootstrapApp(): Promise<void> {
   }
 
   function renderResources(state: GameState): void {
-    const player = getPlayerKingdom(state);
-
     if (!resourcesInitialized) {
       ui.resourceList.innerHTML = "";
 
       for (const resource of Object.keys(resourceLabels) as ResourceType[]) {
         const item = document.createElement("li");
         item.dataset.resource = resource;
-        // Inicializa com o valor legado; ouro será sobreposto por updateUIPanel() depois
-        item.textContent = `${resourceLabels[resource]}: ${formatNumber(player.economy.stock[resource])}`;
+        // Inicializa com 0; updateUIPanel irá preencher com os dados do worker.
+        item.textContent = `${resourceLabels[resource]}: 0`;
         ui.resourceList.appendChild(item);
       }
 
       resourcesInitialized = true;
-      return;
     }
-
-    // Atualiza apenas recursos que NÃO são controlados pelo ECS/worker
-    for (const resource of Object.keys(resourceLabels) as ResourceType[]) {
-      if (["gold", "food", "wood", "iron", "faith", "legitimacy"].includes(resource)) {
-        continue;
-      }
-
-      const item = ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="${resource}"]`);
-      if (!item) {
-        continue;
-      }
-
-      item.textContent = `${resourceLabels[resource]}: ${formatNumber(player.economy.stock[resource])}`;
-    }
+    // A atualização agora é feita exclusivamente pela função updateUIPanel
+    // para garantir que os dados venham sempre do worker (ECS).
   }
 
   function updateUIPanel(): void {
-    if (selectedCountryIndex === null) {
+    const state = session.getState();
+    if (!state) {
       return;
     }
 
-    const index = selectedCountryIndex;
+    const player = getPlayerKingdom(state);
+    const playerRegionIds = Object.keys(state.world.regions).filter(
+      (regionId) => state.world.regions[regionId].ownerId === player.id
+    );
 
-    const { goldData, foodData, woodData, ironData } = currentSimulationState;
+    const playerRegionIndices = playerRegionIds
+      .map((regionId) => WORLD_DEFINITIONS_V1.findIndex((def) => def.id === regionId))
+      .filter((index) => index !== -1);
 
-    const safeRead = (array: Float64Array, i: number): number | null => {
-      if (!array || i < 0 || i >= array.length) {
-        return null;
+    const totals: Record<string, number> = {};
+    const allResources = currentSimulationState;
+
+    for (const resource of Object.keys(resourceLabels) as ResourceType[]) {
+      const dataArray = allResources[`${resource}Data` as keyof typeof allResources];
+      let total = 0;
+      if (dataArray) {
+        for (const index of playerRegionIndices) {
+          if (index < dataArray.length) {
+            total += dataArray[index];
+          }
+        }
       }
-      const value = array[i];
-      return Number.isFinite(value) ? value : null;
-    };
+      totals[resource] = total;
 
-    const goldValue = safeRead(goldData, index);
-    const foodValue = safeRead(foodData, index);
-    const woodValue = safeRead(woodData, index);
-    const ironValue = safeRead(ironData, index);
-
-    const goldItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="gold"]');
-    if (goldItem && goldValue !== null) {
-      goldItem.textContent = `${resourceLabels.gold}: ${goldValue.toFixed(2)}`;
+      const item = ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="${resource}"]`);
+      if (item) {
+        item.textContent = `${resourceLabels[resource]}: ${formatNumber(totals[resource])}`;
+      }
     }
+  }
 
-    const foodItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="food"]');
-    if (foodItem && foodValue !== null) {
-      foodItem.textContent = `${resourceLabels.food}: ${foodValue.toFixed(2)}`;
-    }
+  function getPlayerTotalPopulation(state: GameState): number {
+    const player = getPlayerKingdom(state);
+    const playerRegionIds = Object.keys(state.world.regions).filter(
+      (regionId) => state.world.regions[regionId].ownerId === player.id
+    );
 
-    const woodItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="wood"]');
-    if (woodItem && woodValue !== null) {
-      woodItem.textContent = `${resourceLabels.wood}: ${woodValue.toFixed(2)}`;
-    }
+    const playerRegionIndices = playerRegionIds
+      .map((regionId) => WORLD_DEFINITIONS_V1.findIndex((def) => def.id === regionId))
+      .filter((index) => index !== -1);
 
-    const ironItem = ui.resourceList.querySelector<HTMLLIElement>('li[data-resource="iron"]');
-    if (ironItem && ironValue !== null) {
-      ironItem.textContent = `${resourceLabels.iron}: ${ironValue.toFixed(2)}`;
+    let total = 0;
+    const popData = currentSimulationState.populationTotalData;
+    if (popData) {
+      for (const index of playerRegionIndices) {
+        if (index < popData.length) {
+          total += popData[index];
+        }
+      }
     }
+    return total;
+  }
+
+  function getPlayerTotalResource(state: GameState, resource: ResourceType): number {
+    const player = getPlayerKingdom(state);
+    const playerRegionIds = Object.keys(state.world.regions).filter(
+      (regionId) => state.world.regions[regionId].ownerId === player.id
+    );
+    const playerRegionIndices = playerRegionIds
+      .map((regionId) => WORLD_DEFINITIONS_V1.findIndex((def) => def.id === regionId))
+      .filter((index) => index !== -1);
+    let total = 0;
+    const dataArray = currentSimulationState[`${resource}Data` as keyof typeof currentSimulationState];
+    if (dataArray) {
+      for (const index of playerRegionIndices) {
+        if (index < dataArray.length) {
+          total += dataArray[index];
+        }
+      }
+    }
+    return total;
   }
 
   function renderRiskIndicators(state: GameState): void {
@@ -766,8 +834,10 @@ async function bootstrapApp(): Promise<void> {
       .filter((regionId) => state.world.regions[regionId].ownerId === player.id)
       .map((regionId) => state.world.regions[regionId]);
 
-    const foodNeed = player.population.total / 8_000;
-    const famine = foodNeed <= 0 ? 0 : Math.max(0, (foodNeed - player.economy.stock.food) / foodNeed);
+    // A necessidade de comida e o estoque agora são baseados nos dados do ECS.
+    const totalFood = getPlayerTotalResource(state, ResourceType.Food);
+    const foodNeed = getPlayerTotalPopulation(state) / 8_000;
+    const famine = foodNeed <= 0 ? 0 : Math.max(0, (foodNeed - totalFood) / foodNeed);
     const revolt = ownedRegions.length === 0 ? 0 : Math.max(...ownedRegions.map((region) => region.unrest));
 
     const atWar = Object.keys(state.wars)
@@ -804,9 +874,12 @@ async function bootstrapApp(): Promise<void> {
     const player = getPlayerKingdom(state);
     const explainers: Array<{ label: string; reason: string; suggestion: string; level: "low" | "medium" | "high" }> = [];
 
-    const foodReserveTarget = player.population.total / 8_000;
-    const foodGap = foodReserveTarget <= 0 ? 0 : (foodReserveTarget - player.economy.stock.food) / foodReserveTarget;
-    if (foodGap > 0.35 || player.population.pressure.famineRisk > 0.3) {
+    // A reserva de comida e a população agora são baseadas nos dados do ECS.
+    const totalPopulation = getPlayerTotalPopulation(state);
+    const totalFood = getPlayerTotalResource(state, ResourceType.Food);
+    const foodReserveTarget = totalPopulation / 8_000;
+    const foodGap = foodReserveTarget <= 0 ? 0 : (foodReserveTarget - totalFood) / foodReserveTarget;
+    if (foodGap > 0.35) {
       explainers.push({
         label: "Pressão alimentar",
         reason: "A reserva de comida está abaixo da necessidade da população.",
@@ -1304,8 +1377,26 @@ async function bootstrapApp(): Promise<void> {
       }
     });
 
+    const deleteButton = document.createElement("button");
+    deleteButton.textContent = "Excluir";
+    deleteButton.className = "danger";
+    deleteButton.addEventListener("click", async () => {
+      if (!confirm(`Tem certeza que deseja excluir o save "${slot.slotId}"? Esta ação é irreversível.`)) {
+        return;
+      }
+      try {
+        await session.deleteSlot(slot.slotId);
+        await renderSaveSlots();
+        showToast("Save excluído.");
+      } catch (e) {
+        console.error("Falha ao excluir save", e);
+        showToast("Falha ao excluir o save.");
+      }
+    });
+
     item.appendChild(metadata);
     item.appendChild(loadButton);
+    item.appendChild(deleteButton);
     return item;
   }
 
@@ -1351,16 +1442,6 @@ async function bootstrapApp(): Promise<void> {
       await session.saveManual();
       await renderSaveSlots();
       showToast("Save manual concluído.");
-    } catch {
-      showToast("Falha ao salvar.");
-    }
-  });
-
-  ui.safetySaveButton.addEventListener("click", async () => {
-    try {
-      await session.saveSafety("ação crítica manual");
-      await renderSaveSlots();
-      showToast("Save de segurança concluído.");
     } catch {
       showToast("Falha ao salvar.");
     }
@@ -1480,5 +1561,3 @@ void bootstrapApp().catch((error: unknown) => {
     `;
   }
 });
-
-

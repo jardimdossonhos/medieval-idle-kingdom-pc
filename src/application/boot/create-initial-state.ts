@@ -1,4 +1,4 @@
-﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
+﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
 import {
   ArmyPosture,
   AutomationLevel,
@@ -11,7 +11,7 @@ import {
   TreatyType,
   VictoryPath
 } from "../../core/models/enums";
-import type { GameState, KingdomState } from "../../core/models/game-state";
+import type { EcsState, GameState, KingdomState } from "../../core/models/game-state";
 import { buildTreatyId, sortUniqueIds } from "../../core/models/identifiers";
 import type { NpcBehaviorState } from "../../core/models/npc";
 import type { PopulationState } from "../../core/models/population";
@@ -695,6 +695,20 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
       .map((kingdomId) => [kingdomId, kingdoms[kingdomId].religion.stateFaith] as const)
   );
 
+  const totalEntities = definitions.length;
+
+  // Define os valores iniciais para a simulação do ECS no Worker
+  const ecsState: EcsState = {
+    gold: new Array(totalEntities).fill(0).map(() => 100 + Math.random() * 400),
+    food: new Array(totalEntities).fill(0).map(() => 50 + Math.random() * 150),
+    wood: new Array(totalEntities).fill(0).map(() => 50 + Math.random() * 150),
+    iron: new Array(totalEntities).fill(0).map(() => 20 + Math.random() * 80),
+    faith: new Array(totalEntities).fill(0).map(() => 50 + Math.random() * 100),
+    legitimacy: new Array(totalEntities).fill(0).map(() => 50 + Math.random() * 100),
+    populationTotal: new Array(totalEntities).fill(0).map(() => 150000 + Math.random() * 300000),
+    populationGrowthRate: new Array(totalEntities).fill(0).map(() => 0.0001 + Math.random() * 0.0001)
+  };
+
   const state: GameState = {
     meta: {
       schemaVersion: 4,
@@ -738,7 +752,8 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
       postVictoryMode: false,
       crisisPressure: 0
     },
-    randomSeed: now
+    randomSeed: now,
+    ecs: ecsState
   };
 
   createSeedRelations(state);

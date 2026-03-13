@@ -26,7 +26,7 @@ export interface RuntimePersistenceBundle {
   snapshotRepository: SnapshotRepository;
 }
 
-export function createRuntimePersistenceBundle(): RuntimePersistenceBundle {
+export function createRuntimePersistenceBundle(campaignId: string): RuntimePersistenceBundle {
   const bridge = getDesktopBridge();
 
   if (bridge) {
@@ -41,9 +41,9 @@ export function createRuntimePersistenceBundle(): RuntimePersistenceBundle {
 
   return {
     mode: "browser",
-    gameStateRepository: new IndexedDbGameStateRepository(),
-    saveRepository: new IndexedDbSaveRepository(),
-    commandLogRepository: new IndexedDbCommandLogRepository(),
-    snapshotRepository: new IndexedDbSnapshotRepository()
+    gameStateRepository: new IndexedDbGameStateRepository(campaignId),
+    saveRepository: new IndexedDbSaveRepository(campaignId),
+    commandLogRepository: new IndexedDbCommandLogRepository(campaignId),
+    snapshotRepository: new IndexedDbSnapshotRepository(campaignId)
   };
 }

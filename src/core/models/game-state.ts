@@ -1,4 +1,4 @@
-﻿import type { AdministrationState } from "./administration";
+﻿﻿import type { AdministrationState } from "./administration";
 import type { DiplomacyState } from "./diplomacy";
 import type { EconomyState } from "./economy";
 import type { EventLogEntry } from "./events";
@@ -10,6 +10,17 @@ import type { TechnologyState } from "./technology";
 import type { VictoryState, VictoryTarget } from "./victory";
 import type { CampaignId, KingdomId, TickId, TimestampMs, WarId } from "./types";
 import type { WorldState } from "./world";
+
+export interface EcsState {
+  gold: number[];
+  food: number[];
+  wood: number[];
+  iron: number[];
+  faith: number[];
+  legitimacy: number[];
+  populationTotal: number[];
+  populationGrowthRate: number[];
+}
 
 export interface KingdomState {
   id: KingdomId;
@@ -74,4 +85,5 @@ export interface GameState {
   events: EventLogEntry[];
   victory: VictoryState;
   randomSeed: number;
+  ecs?: EcsState;
 }
