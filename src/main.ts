@@ -66,6 +66,8 @@ interface UiRefs {
   profileEmailInput: HTMLInputElement;
   profileIdValue: HTMLElement;
   profileSaveButton: HTMLButtonElement;
+  debugLogStateButton: HTMLButtonElement | null;
+  debugAddGoldButton: HTMLButtonElement | null;
   tabButtons: HTMLButtonElement[];
   tabPanels: HTMLElement[];
 }
@@ -474,6 +476,15 @@ async function bootstrapApp(): Promise<void> {
           <p class="hint-text">Este perfil local prepara o caminho para autenticação e sincronização entre dispositivos no multiplayer futuro.</p>
         </article>
       </section>
+
+      ${showDevMetrics ? `
+      <section class="dev-overlay card">
+        <h3>Painel de Depuração</h3>
+        <div class="action-grid">
+          <button id="debug-log-state">Log GameState</button>
+          <button id="debug-add-gold">Adicionar 1000 Ouro</button>
+        </div>
+      </section>` : ""}
     </main>
   `;
 
@@ -529,6 +540,8 @@ async function bootstrapApp(): Promise<void> {
     profileEmailInput: queryElement(appRoot, "#profile-email-input"),
     profileIdValue: queryElement(appRoot, "#profile-id-value"),
     profileSaveButton: queryElement(appRoot, "#profile-save-btn"),
+    debugLogStateButton: queryOptionalElement(appRoot, "#debug-log-state"),
+    debugAddGoldButton: queryOptionalElement(appRoot, "#debug-add-gold"),
     tabButtons: Array.from(appRoot.querySelectorAll<HTMLButtonElement>(".tab-btn")),
     tabPanels: Array.from(appRoot.querySelectorAll<HTMLElement>(".tab-panel"))
   };
@@ -1560,6 +1573,21 @@ async function bootstrapApp(): Promise<void> {
     syncProfileUi();
     showToast("Perfil local salvo.");
   });
+
+  if (ui.debugLogStateButton) {
+    ui.debugLogStateButton.addEventListener("click", () => {
+      console.log("DEBUG: Current GameState", session.getState());
+      showToast("GameState atual logado no console.");
+    });
+  }
+
+  if (ui.debugAddGoldButton) {
+    ui.debugAddGoldButton.addEventListener("click", () => {
+      const player = getPlayerKingdom(session.getState());
+      player.economy.stock.gold += 1000;
+      showToast("+1000 de ouro adicionado para depuração.");
+    });
+  }
 
   syncProfileUi();
 
