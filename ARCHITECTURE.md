@@ -1,4 +1,4 @@
-﻿# Arquitetura - Medieval Idle Kingdom
+﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -71,6 +71,18 @@ A organização do projeto reflete os princípios da Arquitetura Limpa.
     2.  **Exclusão de Saves:** Cada slot de save na UI agora possui um botão "Excluir", protegido por uma caixa de diálogo de confirmação, permitindo ao jogador gerenciar seus saves de forma limpa.
     3.  **Preparação para Múltiplas Campanhas:** O botão "Novo Jogo" foi temporariamente removido. A funcionalidade de reiniciar a campanha atual foi removida para dar lugar a um futuro sistema de gerenciamento de campanhas, onde o jogador poderá criar, carregar e excluir campanhas inteiras de forma independente.
 
+### Fase 6: Correções de Usabilidade e Sincronização Inicial (Em Andamento)
+*   **Problema Identificado (Feedback do Usuário):**
+    1.  **Visibilidade do Jogador:** Não havia uma indicação visual clara no mapa para diferenciar os territórios do jogador dos territórios controlados por NPCs.
+    2.  **Sincronização de UI:** Os valores de recursos na UI "saltavam" na inicialização, pois a UI era renderizada antes de receber o primeiro estado completo do Web Worker.
+*   **Solução Estratégica:** Pausar a implementação de novos sistemas de simulação para corrigir problemas fundamentais de usabilidade e experiência do usuário.
+*   **Plano de Implementação:**
+    1.  **Implementar a Camada Diplomática no Mapa:** A camada do mapa será atualizada para colorir os territórios do jogador com uma cor distinta (ex: azul), os de reinos em guerra de vermelho e os neutros de cinza. Isso resolve o problema de visibilidade.
+    2.  **Refatorar o Fluxo de Inicialização do Worker:**
+        *   O Web Worker será modificado para enviar uma mensagem com o estado inicial completo (`INITIAL_STATE`) para a thread principal assim que terminar de carregar um save.
+        *   A UI (`main.ts`) aguardará o recebimento deste estado inicial antes de renderizar os painéis de recursos, eliminando o "salto" de valores e garantindo uma inicialização suave.
+    3.  **Confirmar Status de Recursos:** A análise confirmou que os recursos de `Fé` e `Legitimidade` estão corretamente em zero, pois os sistemas que os geram (`ReligionSystem`, etc.) ainda não foram implementados conforme o plano de desenvolvimento.
+
 ## 4. Planejamento Futuro
 
 Esta seção descreve as próximas grandes funcionalidades e suas diretrizes arquiteturais.
@@ -111,6 +123,7 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     2.  **Integração com a Simulação (Impacto Real):**
         *   Refatorar os sistemas de simulação (`EconomySystem`, `WarSystem`, etc.) para que eles consultem as tecnologias desbloqueadas do jogador e apliquem os modificadores correspondentes. Por exemplo, o `EconomySystem` deve calcular um bônus de produção de comida com base nas tecnologias relevantes.
     3.  **Apresentação na UI:**
+        *   **Modo de Exploração:** Adicionar um modo opcional na UI que permita ao jogador visualizar toda a árvore tecnológica, incluindo tecnologias bloqueadas, para planejamento de longo prazo.
         *   Atualizar a UI da árvore tecnológica (`main.ts`) para exibir a nova `description` de cada tecnologia, permitindo que o jogador tome decisões informadas.
     4.  **Balanceamento e Pacing (Longo Prazo):**
         *   Revisar e aumentar drasticamente o `cost` de todas as tecnologias, implementando uma curva de custo exponencial para garantir uma progressão mais lenta e recompensadora.
@@ -188,3 +201,13 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
         *   O `DiplomacySystem` será aprimorado para gerenciar "cascatas de reputação".
         *   **Agressão a Aliados:** Declarar guerra a um reino aplicará um modificador de opinião negativo severo ("Atacou nosso aliado") a todos os seus aliados.
         *   **Chamado às Armas:** Os aliados do reino atacado terão uma alta probabilidade de entrar na guerra contra o jogador, tornando as alianças pactos defensivos significativos e perigosos de se provocar.
+
+## 5. Log de Falhas e Lições Aprendidas
+
+Esta seção registra falhas de engenharia significativas para garantir que não sejam repetidas.
+
+*   **Falha 001: Instabilidade em Massa na UI e Persistência (Fases 7-8)**
+    *   **Sintomas:** Falha na inicialização do jogo, saves não carregavam, recursos zeravam ao atualizar a página.
+    *   **Causa Raiz:** Múltiplas alterações grandes e interconectadas foram feitas no arquivo `main.ts` simultaneamente, tentando refatorar o fluxo de dados, a lógica de saves e a renderização da UI de uma só vez. Isso violou o princípio de mudanças atômicas.
+    *   **Lição Aprendida:** O arquivo `main.ts` é um ponto de alta complexidade e acoplamento. Alterações nele devem ser mínimas, cirúrgicas e isoladas. O fluxo de dados deve ter uma única fonte da verdade (o evento `state:updated` da `GameSession`), e qualquer desvio desse padrão deve ser evitado.
+    *   **Ação Corretiva:** Adotar uma estratégia de "Documentação Primeiro" e "Mudanças Atômicas". Cada alteração deve ser a menor possível para atingir um objetivo e ser verificada antes de prosseguir.

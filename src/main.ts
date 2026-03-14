@@ -1,5 +1,7 @@
 import "./styles/global.css";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { TechnologyEffect } from "./core/models/technology";
+import { isTechnologyAvailable, isTechnologyUnlocked } from "./core/data/technology-tree";
 import { createInitialState } from "./application/boot/create-initial-state";
 import { createStaticWorldData } from "./application/boot/static-world-data";
 import { WORLD_DEFINITIONS_V1 } from "./application/boot/generated/world-definitions-v1";
@@ -140,6 +142,38 @@ function riskClass(value: number): string {
   }
 
   return "risk-low";
+}
+
+function formatTechEffect(effect: TechnologyEffect): string {
+  const isMultiplier = effect.type === "multiplier";
+  const sign = effect.value > 0 ? "+" : "";
+  const value = isMultiplier ? `${sign}${effect.value * 100}%` : `${sign}${effect.value}`;
+
+  // Mapeamento para nomes mais amigáveis na UI
+  const targetMap: Record<string, string> = {
+    "economy.food_production_multiplier": "Produção de Comida",
+    "population.growth_rate_multiplier": "Crescimento Populacional",
+    "economy.tax_income_multiplier": "Renda de Impostos",
+    "economy.trade_income_multiplier": "Renda de Comércio",
+    "stability_additive": "Estabilidade",
+    "military.manpower_recovery_multiplier": "Recuperação de Mão de Obra",
+    "military.army_maintenance_multiplier": "Manutenção de Exércitos",
+    "military.infantry_quality_multiplier": "Qualidade da Infantaria",
+    "economy.iron_production_multiplier": "Produção de Ferro",
+    "military.siege_ability_multiplier": "Habilidade de Cerco",
+    "administration.capacity_additive": "Capacidade Administrativa",
+    "administration.corruption_multiplier": "Corrupção",
+    "legitimacy_additive": "Legitimidade",
+    "religion.authority_multiplier": "Autoridade Religiosa",
+    "religion.faith_production_multiplier": "Produção de Fé",
+    "technology.research_points_multiplier": "Pontos de Pesquisa",
+    "military.movement_speed_multiplier": "Velocidade de Movimento",
+    "economy.wood_production_multiplier": "Produção de Madeira",
+    "military.fort_defense_multiplier": "Defesa de Forte"
+  };
+
+  const targetLabel = targetMap[effect.target] || effect.target;
+  return `${value} ${targetLabel}`;
 }
 
 function normalizePercentage(value: string): number {
@@ -1151,7 +1185,7 @@ async function bootstrapApp(): Promise<void> {
       <span>Tecnologias desbloqueadas</span><strong>${player.technology.unlocked.length}</strong>
     `;
 
-    renderTechnologyTree(choices);
+    renderTechnologyTree(choices, state);
   }
 
   function createDiplomacyActionButton(targetId: string, actionType: DiplomaticActionType, label: string): HTMLButtonElement {
