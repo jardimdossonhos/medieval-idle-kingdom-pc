@@ -14,6 +14,7 @@ export default defineConfig({
     target: "es2022"
   },
   test: {
-    include: ["tests/**/*.test.ts"]
+    // Point Vitest to unit tests inside the `src` folder ONLY.
+    include: ["src/**/*.test.ts"]
   }
 });

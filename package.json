@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "map:build": "node scripts/generate-world-geojson.mjs",
     "desktop": "electron .",
     "desktop:run": "npm run build && electron .",
@@ -23,6 +24,7 @@
     "pixi.js": "^8.8.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.13.9",
     "electron": "^35.7.5",
     "electron-builder": "^26.8.1",

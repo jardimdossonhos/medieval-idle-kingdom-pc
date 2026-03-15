@@ -1,4 +1,4 @@
-﻿# Estratégia de Testes - Medieval Idle Kingdom
+﻿﻿# Estratégia de Testes - Medieval Idle Kingdom
 
 Este documento descreve os procedimentos e ferramentas de teste para garantir a estabilidade e a qualidade do jogo.
 
@@ -8,6 +8,13 @@ Este documento descreve os procedimentos e ferramentas de teste para garantir a 
     *   **Ferramenta:** `vitest`.
     *   **Objetivo:** Validar pequenas unidades de lógica pura, principalmente dentro do diretório `src/core`.
     *   **Exemplo:** `technology-effects-service.test.ts` verifica se o cálculo de bônus de tecnologia está correto.
+
+*   **Testes Automatizados de Ponta a Ponta (E2E - End-to-End):**
+    *   **Ferramenta:** Playwright.
+    *   **Objetivo:** Automatizar o "Checklist de Teste Manual". Simula um usuário real interagindo com o jogo para garantir que os fluxos principais (carregar, salvar, interagir com a UI) não sejam quebrados.
+    *   **Localização:** `tests/e2e/`.
+    *   **Exemplos:** `smoke.spec.ts`, `debug-panel.spec.ts`.
+    *   **Comando para executar:** `npm run test:e2e`
 
 *   **Testes Manuais Guiados (Checklist):**
     *   **Ferramenta:** O próprio jogo, utilizando o Painel de Depuração.

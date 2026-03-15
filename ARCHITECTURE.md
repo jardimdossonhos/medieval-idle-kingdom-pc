@@ -1,6 +1,8 @@
-﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
+﻿﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
+
+> **Nota de Diagnóstico:** Testando a aplicação automática de diffs em arquivos existentes.
 
 ## 1. Visão Geral e Princípios Fundamentais
 
@@ -86,6 +88,18 @@ A organização do projeto reflete os princípios da Arquitetura Limpa.
 ## 4. Planejamento Futuro
 
 Esta seção descreve as próximas grandes funcionalidades e suas diretrizes arquiteturais.
+
+### Fase 9: Estratégia de Testes e Modo de Depuração (Fundação Concluída)
+*   **Problema Identificado:** A falta de um processo de teste formal e de ferramentas de depuração leva à introdução de bugs críticos que quebram funcionalidades essenciais, como a persistência.
+*   **Solução Estratégica:** Implementar um conjunto de ferramentas e processos para garantir a estabilidade do código.
+*   **Plano de Implementação:**
+    1.  **Criação de um Plano de Testes (`testing-strategy.md`) (Concluído):** Arquivo de estratégia criado, dividindo entre testes unitários, E2E e checklist manual.
+    2.  **Implementação de um Painel de Depuração na UI (Concluído):** Adicionado um painel flutuante, visível apenas em modo de desenvolvimento, que permite:
+        *   Inspecionar o `GameState` em tempo real.
+        *   Disparar ações de depuração (ex: adicionar recursos, iniciar uma guerra).
+        *   Monitorar métricas de performance.
+    3.  **Implementação de Testes Automatizados (E2E) (Concluído):** Playwright configurado e isolado com sucesso. Primeiros testes funcionais rodando de forma confiável no ambiente local.
+    4.  **Expansão dos Testes Unitários:** Continuar a prática de escrever testes unitários com `vitest` para toda nova lógica de negócio no `core`.
 
 ### 4.1 Camadas do Mapa Estratégico
 
