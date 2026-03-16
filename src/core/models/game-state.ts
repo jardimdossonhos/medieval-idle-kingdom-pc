@@ -1,4 +1,4 @@
-﻿﻿import type { AdministrationState } from "./administration";
+﻿﻿﻿﻿import type { AdministrationState } from "./administration";
 import type { DiplomacyState } from "./diplomacy";
 import type { EconomyState } from "./economy";
 import type { EventLogEntry } from "./events";
@@ -12,14 +12,14 @@ import type { CampaignId, KingdomId, TickId, TimestampMs, WarId } from "./types"
 import type { WorldState } from "./world";
 
 export interface EcsState {
-  gold: number[];
-  food: number[];
-  wood: number[];
-  iron: number[];
-  faith: number[];
-  legitimacy: number[];
-  populationTotal: number[];
-  populationGrowthRate: number[];
+  gold: number[] | Float64Array;
+  food: number[] | Float64Array;
+  wood: number[] | Float64Array;
+  iron: number[] | Float64Array;
+  faith: number[] | Float64Array;
+  legitimacy: number[] | Float64Array;
+  populationTotal: number[] | Float64Array;
+  populationGrowthRate: number[] | Float64Array;
 }
 
 export interface KingdomState {

@@ -1,4 +1,4 @@
-﻿# Medieval Idle Kingdom
+﻿﻿# Medieval Idle Kingdom
 
 Browser-first grand strategy idle game architecture focused on local simulation depth.
 
@@ -83,3 +83,11 @@ npm run dev -- --host 0.0.0.0 --port 5173
 - `src/ui`: screen/view-model contracts
 - `desktop`: shell Electron, preload bridge e persistência local em arquivo
 - `docs`: architecture and execution plan
+
+## Mapa Mental e Arquitetura
+
+Este repositório possui regras estritas de Clean Architecture e separação de Threads (UI e Web Workers). 
+Antes de contribuir ou alterar mecânicas do jogo, é **altamente recomendável** que você consulte os guias oficiais:
+
+- 📄 Mapa Mental da Base de Código (CODEBASE_MAP.md): Descubra a dependência entre todos os arquivos e saiba exatamente quais arquivos editar (Cheat Sheets de impacto) ao adicionar recursos, sistemas e telas.
+- 📄 Arquitetura Central (ARCHITECTURE.md): Detalhamento do princípio Local-First, ECS e persistência.

@@ -1,4 +1,4 @@
-﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
+﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
 import type {
   CommandLogRepository,
   GameStateRepository,
@@ -1059,10 +1059,16 @@ export class GameSession {
 
       const previousTick = current.meta.tick;
       const tickStartedAt = this.monotonicNow();
+      
+      const ecsBackup = current.ecs;
+
       const result = this.pipeline.run(current, tickDurationMs, simNow);
       const tickElapsedMs = this.monotonicNow() - tickStartedAt;
       this.registerTickTiming(tickElapsedMs);
       this.currentState = result.state;
+      if (ecsBackup) {
+        this.currentState.ecs = ecsBackup;
+      }
       progressed = true;
       this.ticksSinceAutosave += 1;
       this.ticksSinceSnapshot += 1;
@@ -1276,10 +1282,17 @@ export class GameSession {
     const tickDurationMs = Math.max(1, state.meta.tickDurationMs);
     const coarseStepTicks = this.selectOfflineCoarseStep(ticksToSimulate);
     const startedAt = this.monotonicNow();
+    
+    const ecsBackup = state.ecs;
+
     const batchResult = this.pipeline.runBatch(state, ticksToSimulate, tickDurationMs, lastSnapshotAt, {
       collectEvents: false,
       coarseStepTicks
     });
+    
+    if (ecsBackup) {
+      batchResult.state.ecs = ecsBackup;
+    }
 
     return {
       state: batchResult.state,

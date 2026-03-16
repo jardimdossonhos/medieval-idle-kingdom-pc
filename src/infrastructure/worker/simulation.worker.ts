@@ -23,7 +23,7 @@ type WorkerCommand =
   | { type: "EXTRACT_SAVE_STATE" };
 
 interface TickMessage {
-  type: "TICK" | "INITIAL_STATE";
+  type: "TICK";
   payload: {
     timestamp: number;
     goldData: Float64Array;
@@ -35,29 +35,6 @@ interface TickMessage {
     populationTotalData: Float64Array;
     populationGrowthRateData: Float64Array;
   };
-}
-
-/**
- * Encapsula o envio do estado atual do ECS para a thread principal,
- * evitando duplicação de código entre o loop do relógio e a inicialização.
- */
-function broadcastState(type: "TICK" | "INITIAL_STATE"): void {
-  if (!economy || !population) return;
-  const message: TickMessage = {
-    type,
-    payload: {
-      timestamp: Date.now(),
-      goldData: economy.gold,
-      foodData: economy.food,
-      woodData: economy.wood,
-      ironData: economy.iron,
-      faithData: economy.faith,
-      legitimacyData: economy.legitimacy,
-      populationTotalData: population.total,
-      populationGrowthRateData: population.growthRate
-    }
-  };
-  self.postMessage(message);
 }
 
 function startClock(): void {
@@ -85,7 +62,21 @@ function startClock(): void {
       economySystem.update(deltaTimeSeconds, economy, activeEntities);
       populationSystem.update(deltaTimeSeconds, population, activeEntities);
 
-      broadcastState("TICK");
+      const message: TickMessage = {
+        type: "TICK",
+        payload: {
+          timestamp: Date.now(),
+          goldData: economy.gold,
+          foodData: economy.food,
+          woodData: economy.wood,
+          ironData: economy.iron,
+          faithData: economy.faith,
+          legitimacyData: economy.legitimacy,
+          populationTotalData: population.total,
+          populationGrowthRateData: population.growthRate
+        }
+      };
+      self.postMessage(message);
     }
   }, 1_000);
 }
@@ -142,30 +133,30 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
         return;
       }
       const state = command.payload;
-      // Garante que os arrays existem e têm o tamanho correto antes de copiar.
-      if (state.gold?.length === economy.gold.length) {
-        economy.gold.set(state.gold);
-        economy.food.set(state.food);
-        economy.wood.set(state.wood);
-        economy.iron.set(state.iron);
-        // Garante que os componentes opcionais também sejam restaurados se existirem
-        if (economy.faith && state.faith) {
-          economy.faith.set(state.faith);
-        }
-        if (economy.legitimacy && state.legitimacy) {
-          economy.legitimacy.set(state.legitimacy);
-        }
-        if (population.total && state.populationTotal) {
-          population.total.set(state.populationTotal);
-        }
-        if (population.growthRate && state.populationGrowthRate) {
-          population.growthRate.set(state.populationGrowthRate);
+      
+      // Helper para obter o length real, seja Array, Float64Array ou Object (JSON parseado)
+      const getLength = (data: any) => {
+        if (!data) return 0;
+        if (typeof data.length === 'number') return data.length;
+        if (typeof data === 'object') return Object.keys(data).length;
+        return 0;
+      };
+
+      // Copia de forma resiliente até o limite dos dados disponíveis.
+      // Resolve o erro de carregamento vazio caso o tamanho do mapa mude entre saves.
+      if (state.gold) {
+        const len = Math.min(getLength(state.gold), economy.gold.length);
+        for (let i = 0; i < len; i++) {
+          economy.gold[i] = state.gold[i] || 0;
+          economy.food[i] = state.food[i] || 0;
+          economy.wood[i] = state.wood[i] || 0;
+          economy.iron[i] = state.iron[i] || 0;
+          if (economy.faith && state.faith) economy.faith[i] = state.faith[i] || 0;
+          if (economy.legitimacy && state.legitimacy) economy.legitimacy[i] = state.legitimacy[i] || 0;
+          if (population.total && state.populationTotal) population.total[i] = state.populationTotal[i] || 0;
+          if (population.growthRate && state.populationGrowthRate) population.growthRate[i] = state.populationGrowthRate[i] || 0;
         }
       }
-      
-      // Garante que a interface do usuário (UI) receba os dados assim que 
-      // a persistência é restaurada, eliminando atrasos de renderização visual.
-      broadcastState("INITIAL_STATE");
       break;
     }
     case "START":

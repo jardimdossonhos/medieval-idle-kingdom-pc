@@ -55,6 +55,8 @@ O jogo foi projetado para rodar localmente no seu navegador.
 *   **Save Manual:** A qualquer momento, na aba "Saves", você pode clicar em "Salvar Jogo". Isso cria um marco definitivo que não será apagado pelo Autosave.
 *   **Fechamento:** Ao fechar a aba, o jogo fará um "Catch-up" na próxima vez que você abrir (tentará simular o que aconteceu enquanto você esteve fora, até um limite de tempo).
 
+> ⚠️ **Aviso de Refatoração:** Ao trabalhar em refatorações neste jogo, a fonte central de segurança anti-quebra é o `CODEBASE_MAP.md`. Devido à ponte de mensagens constante entre `GameSession`, `main.ts` e o Web Worker de Simulação, propriedades esquecidas (especialmente Arrays de recursos do ECS) resultam na "falha do recarregamento F5". Consulte o mapa mental sempre que os modelos de domínio ou persistência mudarem.
+
 ---
 
 ## 5. Guia para o Criador / Testador (Uso do Painel Dev)

@@ -105,8 +105,12 @@ function queryOptionalElement<T extends Element>(root: ParentNode, selector: str
   return element ? (element as T) : null;
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value);
+function formatNumber(value: number, decimals = 0): string {
+  const safeValue = decimals === 0 ? Math.floor(value) : value;
+  return new Intl.NumberFormat("pt-BR", { 
+    minimumFractionDigits: decimals, 
+    maximumFractionDigits: decimals 
+  }).format(safeValue);
 }
 
 function formatDate(value: number): string {
@@ -599,14 +603,14 @@ async function bootstrapApp(): Promise<void> {
       // Isso é crucial para que as decisões lógicas (como canAfford) usem dados frescos.
       if (payload) {
         session.updateEcsState({
-          gold: Array.from(payload.goldData ?? []),
-          food: Array.from(payload.foodData ?? []),
-          wood: Array.from(payload.woodData ?? []),
-          iron: Array.from(payload.ironData ?? []),
-          faith: Array.from(payload.faithData ?? []),
-          legitimacy: Array.from(payload.legitimacyData ?? []),
-          populationTotal: Array.from(payload.populationTotalData ?? []),
-          populationGrowthRate: Array.from(payload.populationGrowthRateData ?? [])
+          gold: payload.goldData ?? new Float64Array(),
+          food: payload.foodData ?? new Float64Array(),
+          wood: payload.woodData ?? new Float64Array(),
+          iron: payload.ironData ?? new Float64Array(),
+          faith: payload.faithData ?? new Float64Array(),
+          legitimacy: payload.legitimacyData ?? new Float64Array(),
+          populationTotal: payload.populationTotalData ?? new Float64Array(),
+          populationGrowthRate: payload.populationGrowthRateData ?? new Float64Array()
         });
       }
 
@@ -616,7 +620,6 @@ async function bootstrapApp(): Promise<void> {
 
   const totalCountries = WORLD_DEFINITIONS_V1.length;
   simulationWorker.postMessage({ type: "INIT" as const, payload: { entityCount: totalCountries } });
-  simulationWorker.postMessage({ type: "START" as const });
 
   const resourceLabels: Record<ResourceType, string> = {
     gold: "Ouro",
@@ -730,7 +733,35 @@ async function bootstrapApp(): Promise<void> {
   // Envia o estado do ECS para o worker quando um jogo é carregado
   eventBus.subscribe("game.loaded", (state) => {
     if (state.ecs) {
+      // Evita race conditions pausando o worker durante a restauração
+      simulationWorker.postMessage({ type: "STOP" });
       simulationWorker.postMessage({ type: "RESTORE_ECS_STATE", payload: state.ecs });
+      simulationWorker.postMessage({ type: "START" });
+
+      // Força a atualização local e da UI imediatamente após carregar o save
+      const expectedLength = WORLD_DEFINITIONS_V1.length;
+      const toFloat = (data: any) => {
+        if (data instanceof Float64Array) return data;
+        if (Array.isArray(data)) return new Float64Array(data);
+        const arr = new Float64Array(expectedLength);
+        if (data && typeof data === 'object') {
+          for (let i = 0; i < expectedLength; i++) {
+            arr[i] = data[i] || 0;
+          }
+        }
+        return arr;
+      };
+      
+      currentSimulationState.goldData = toFloat(state.ecs.gold);
+      currentSimulationState.foodData = toFloat(state.ecs.food);
+      currentSimulationState.woodData = toFloat(state.ecs.wood);
+      currentSimulationState.ironData = toFloat(state.ecs.iron);
+      currentSimulationState.faithData = toFloat(state.ecs.faith);
+      currentSimulationState.legitimacyData = toFloat(state.ecs.legitimacy);
+      currentSimulationState.populationTotalData = toFloat(state.ecs.populationTotal);
+      currentSimulationState.populationGrowthRateData = toFloat(state.ecs.populationGrowthRate);
+      
+      updateUIPanel();
     }
   });
   // highlight-end
@@ -774,9 +805,9 @@ async function bootstrapApp(): Promise<void> {
       return;
     }
 
-    ui.devTickLastValue.textContent = formatNumber(metrics.tickMsLast);
-    ui.devTickAvgValue.textContent = formatNumber(metrics.tickMsAverage);
-    ui.devOfflineValue.textContent = `${formatNumber(metrics.offlineCatchUpMs)} ms / ${metrics.offlineTicks} ticks`;
+    ui.devTickLastValue.textContent = formatNumber(metrics.tickMsLast, 2);
+    ui.devTickAvgValue.textContent = formatNumber(metrics.tickMsAverage, 2);
+    ui.devOfflineValue.textContent = `${formatNumber(metrics.offlineCatchUpMs, 2)} ms / ${metrics.offlineTicks} ticks`;
   }
 
   function renderResources(state: GameState): void {
@@ -1196,7 +1227,7 @@ async function bootstrapApp(): Promise<void> {
       <span>Meta tecnológica</span><strong>${goalChoice?.name ?? "-"}</strong>
       <span>Automação</span><strong>${automationLevelLabel(player.administration.automation.technology)}</strong>
       <span>Acúmulo</span><strong>${formatNumber(player.technology.accumulatedResearch)}</strong>
-      <span>Taxa</span><strong>${formatNumber(player.technology.researchRate)}</strong>
+      <span>Taxa</span><strong>${formatNumber(player.technology.researchRate, 2)}</strong>
       <span>Tecnologias desbloqueadas</span><strong>${player.technology.unlocked.length}</strong>
     `;
 
@@ -1674,6 +1705,7 @@ async function bootstrapApp(): Promise<void> {
 
   await renderSaveSlots();
   session.start();
+  simulationWorker.postMessage({ type: "START" as const });
 
   window.addEventListener("beforeunload", () => {
     session.stop();
