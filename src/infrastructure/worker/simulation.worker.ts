@@ -23,7 +23,7 @@ type WorkerCommand =
   | { type: "EXTRACT_SAVE_STATE" };
 
 interface TickMessage {
-  type: "TICK";
+  type: "TICK" | "INITIAL_STATE";
   payload: {
     timestamp: number;
     goldData: Float64Array;
@@ -35,6 +35,29 @@ interface TickMessage {
     populationTotalData: Float64Array;
     populationGrowthRateData: Float64Array;
   };
+}
+
+/**
+ * Encapsula o envio do estado atual do ECS para a thread principal,
+ * evitando duplicação de código entre o loop do relógio e a inicialização.
+ */
+function broadcastState(type: "TICK" | "INITIAL_STATE"): void {
+  if (!economy || !population) return;
+  const message: TickMessage = {
+    type,
+    payload: {
+      timestamp: Date.now(),
+      goldData: economy.gold,
+      foodData: economy.food,
+      woodData: economy.wood,
+      ironData: economy.iron,
+      faithData: economy.faith,
+      legitimacyData: economy.legitimacy,
+      populationTotalData: population.total,
+      populationGrowthRateData: population.growthRate
+    }
+  };
+  self.postMessage(message);
 }
 
 function startClock(): void {
@@ -62,21 +85,7 @@ function startClock(): void {
       economySystem.update(deltaTimeSeconds, economy, activeEntities);
       populationSystem.update(deltaTimeSeconds, population, activeEntities);
 
-      const message: TickMessage = {
-        type: "TICK",
-        payload: {
-          timestamp: Date.now(),
-          goldData: economy.gold,
-          foodData: economy.food,
-          woodData: economy.wood,
-          ironData: economy.iron,
-          faithData: economy.faith,
-          legitimacyData: economy.legitimacy,
-          populationTotalData: population.total,
-          populationGrowthRateData: population.growthRate
-        }
-      };
-      self.postMessage(message);
+      broadcastState("TICK");
     }
   }, 1_000);
 }
@@ -153,6 +162,10 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
           population.growthRate.set(state.populationGrowthRate);
         }
       }
+      
+      // Garante que a interface do usuário (UI) receba os dados assim que 
+      // a persistência é restaurada, eliminando atrasos de renderização visual.
+      broadcastState("INITIAL_STATE");
       break;
     }
     case "START":

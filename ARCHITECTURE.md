@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -79,11 +79,24 @@ A organização do projeto reflete os princípios da Arquitetura Limpa.
     2.  **Sincronização de UI:** Os valores de recursos na UI "saltavam" na inicialização, pois a UI era renderizada antes de receber o primeiro estado completo do Web Worker.
 *   **Solução Estratégica:** Pausar a implementação de novos sistemas de simulação para corrigir problemas fundamentais de usabilidade e experiência do usuário.
 *   **Plano de Implementação:**
-    1.  **Implementar a Camada Diplomática no Mapa:** A camada do mapa será atualizada para colorir os territórios do jogador com uma cor distinta (ex: azul), os de reinos em guerra de vermelho e os neutros de cinza. Isso resolve o problema de visibilidade.
+    1.  **Implementar a Camada Diplomática no Mapa (Concluído):** O contexto de renderização agora processa, em tempo real, quais reinos são aliados/inimigos do jogador, injetando uma nova visualização colorida no WebGL via `MapLibreWorldRenderer` e fallback `PixiMapRenderer`.
     2.  **Refatorar o Fluxo de Inicialização do Worker:**
         *   O Web Worker será modificado para enviar uma mensagem com o estado inicial completo (`INITIAL_STATE`) para a thread principal assim que terminar de carregar um save.
         *   A UI (`main.ts`) aguardará o recebimento deste estado inicial antes de renderizar os painéis de recursos, eliminando o "salto" de valores e garantindo uma inicialização suave.
-    3.  **Confirmar Status de Recursos:** A análise confirmou que os recursos de `Fé` e `Legitimidade` estão corretamente em zero, pois os sistemas que os geram (`ReligionSystem`, etc.) ainda não foram implementados conforme o plano de desenvolvimento.
+    3.  **Confirmar Status de Recursos:** (Concluído) A análise confirmou que os recursos de `Fé` e `Legitimidade` estão corretamente em zero neste estágio.
+    4.  **Refatoração do Fluxo Inicial (Aplicada):** (Concluído) O `simulation.worker.ts` agora utiliza um método centralizado de `broadcastState` para enviar o `INITIAL_STATE` após injetar a persistência.
+    5.  **Garantia de Qualidade Contínua:** (Concluído) Adicionado teste E2E (`worker-sync-smoke.spec.ts`) para validar a inicialização do Worker de forma automatizada.
+    6.  **Camada Diplomática no Mapa:** (Concluído) Adicionada lógica de renderização para destacar reinos Aliados (Azul), Neutros (Padrão) e Inimigos (Vermelho). A UI permite focar esta camada explicitamente no "Select" de Visão Estratégica.
+
+### Fase 7: Estabilidade Crítica e UX (Prioridade Atual - Em Planejamento)
+*   **Problema Identificado (Feedback M3):** O jogo carece de usabilidade básica e sofre de perda de dados.
+    1. **Bug Crítico de Persistência (F5):** Atualizar a página zera os recursos do jogador. Suspeita-se de uma *race condition* onde o Worker inicia zerado e sobrescreve a UI antes que o `RESTORE_ECS_STATE` do autosave seja aplicado corretamente.
+    2. **Falta de Clareza Visual:** O mapa não possui legendas. O jogador não sabe o que as cores significam nem quais são os seus próprios territórios.
+    3. **Falta de Feedback (Tooltips):** Limites de jogo (como Taxa Base máxima de 0.6) não são informados ao jogador. O significado de "Pontuação Militar" é obscuro.
+*   **Plano de Ação para a próxima sessão:**
+    1. Criar o `docs/manual.md` (Concluído) para servir de guia de Game Design e Testes.
+    2. Investigar e corrigir o fluxo de inicialização (`bootstrap` -> `Worker`) para garantir retenção perfeita em *Reloads* (F5).
+    3. Adicionar legendas dinâmicas abaixo do mapa e *tooltips* informativos nos painéis.
 
 ## 4. Planejamento Futuro
 
@@ -105,26 +118,26 @@ Esta seção descreve as próximas grandes funcionalidades e suas diretrizes arq
 
 O mapa é a principal ferramenta de visualização do jogador. As seguintes camadas estão planejadas para fornecer insights estratégicos:
 
-*   **Camada Diplomática (Aliados e Inimigos):**
+*   **Camada Diplomática (Aliados e Inimigos): (Concluído)**
     *   **Objetivo:** Visualizar rapidamente a postura diplomática do mundo em relação ao jogador.
     *   **Fonte de Dados:** `GameState.kingdoms[player.id].diplomacy.relations`.
     *   **Lógica:** As regiões serão coloridas com base na relação entre o jogador e o dono da região (ex: azul para aliados, vermelho para inimigos, cinza para neutros).
 
-*   **Camada de Conflito (Zonas de Paz e Guerra):**
+*   **Camada de Conflito (Zonas de Paz e Guerra): (Concluído)**
     *   **Objetivo:** Identificar focos de instabilidade e guerra no mapa.
     *   **Fonte de Dados:** `GameState.wars` e `GameState.world.regions[regionId].unrest`.
     *   **Lógica:** A camada `"war"` existente será aprimorada. Regiões em guerra ativa ficarão em vermelho vibrante. Regiões com alta instabilidade (`unrest`), mas sem guerra, ficarão em laranja/amarelo. Zonas pacíficas terão uma cor neutra.
 
-*   **Camada Religiosa:**
+*   **Camada Religiosa: (Concluído)**
     *   **Objetivo:** Entender a distribuição das fés pelo mundo e identificar oportunidades de expansão religiosa.
     *   **Fonte de Dados:** `GameState.world.regions[regionId].dominantFaith`.
     *   **Lógica:** Cada religião (`ReligionId`) terá uma cor designada. As regiões serão coloridas de acordo com sua fé dominante.
     *   **Benefícios (Game Design):** A expansão da religião estatal aumentará a estabilidade em províncias convertidas, gerará mais recurso de `Fé` e poderá desbloquear ações especiais, como Guerras Santas, contra reinos de outra fé.
 
-*   **Camada Econômica (Riqueza e Pobreza):**
+*   **Camada Econômica (Riqueza e Pobreza): (Concluído)**
     *   **Objetivo:** Visualizar a força econômica de cada região individualmente.
     *   **Fonte de Dados:** `EcsState.gold` (do Worker).
-    *   **Lógica:** A riqueza de uma região será calculada com base no seu estoque de ouro (`gold`) na simulação do ECS. Será criado um gradiente de cores (ex: do amarelo pálido ao dourado intenso) para representar a faixa de riqueza, do mais pobre ao mais rico. Isso permitirá ao jogador identificar alvos econômicos valiosos para conquista ou comércio.
+    *   **Status:** A lógica técnica de extração do `Float64Array` para desenhar um gradiente visual de desigualdade foi concluída, **porém a funcionalidade foi temporariamente pausada/arquivada** para priorizarmos correções de bugs críticos (Fase 7).
 
 ### 4.2 Reforma do Sistema de Tecnologia
 
@@ -225,3 +238,8 @@ Esta seção registra falhas de engenharia significativas para garantir que não
     *   **Causa Raiz:** Múltiplas alterações grandes e interconectadas foram feitas no arquivo `main.ts` simultaneamente, tentando refatorar o fluxo de dados, a lógica de saves e a renderização da UI de uma só vez. Isso violou o princípio de mudanças atômicas.
     *   **Lição Aprendida:** O arquivo `main.ts` é um ponto de alta complexidade e acoplamento. Alterações nele devem ser mínimas, cirúrgicas e isoladas. O fluxo de dados deve ter uma única fonte da verdade (o evento `state:updated` da `GameSession`), e qualquer desvio desse padrão deve ser evitado.
     *   **Ação Corretiva:** Adotar uma estratégia de "Documentação Primeiro" e "Mudanças Atômicas". Cada alteração deve ser a menor possível para atingir um objetivo e ser verificada antes de prosseguir.
+
+*   **Falha 002: Foco em Sistemas vs Experiência do Usuário (Fase 6/7)**
+    *   **Sintomas:** O mapa estava sendo preenchido com camadas complexas (Economia, Religião), mas o usuário não conseguia identificar seu próprio país e não entendia os limites dos botões que apertava. Além disso, recarregar a página causava perda visual de recursos.
+    *   **Lição Aprendida:** Nunca assumir que variáveis técnicas ("Taxa 0.6", "Pontuação Militar") são óbvias para o jogador. Funcionalidades avançadas não têm valor se a base da confiança (saves que funcionam no F5) e a clareza (legendas e guias) não existem.
+    *   **Ação Corretiva:** Criação do `docs/manual.md`. Pausa no desenvolvimento de simulações até que a interface seja autoexplicativa e à prova de quebras por F5.

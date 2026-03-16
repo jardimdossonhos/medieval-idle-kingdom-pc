@@ -1,4 +1,4 @@
-﻿import { Application, Container, Graphics, Text } from "pixi.js";
+﻿﻿import { Application, Container, Graphics, Text } from "pixi.js";
 import type { KingdomState } from "../../core/models/game-state";
 import type { StaticWorldData } from "../../core/models/static-world-data";
 import type { RegionDefinition, WorldState } from "../../core/models/world";
@@ -63,6 +63,12 @@ export class PixiMapRenderer implements GameMapRenderer {
     const recentlyCapturedRegionIds = context?.recentlyCapturedRegionIds?.length
       ? new Set(context.recentlyCapturedRegionIds)
       : null;
+    const playerAlliedRegionIds = context?.playerAlliedRegionIds?.length
+      ? new Set(context.playerAlliedRegionIds)
+      : null;
+    const playerEnemyRegionIds = context?.playerEnemyRegionIds?.length
+      ? new Set(context.playerEnemyRegionIds)
+      : null;
 
     for (const [regionId, regionState] of Object.entries(world.regions)) {
       const node = this.regionNodes.get(regionId);
@@ -87,6 +93,21 @@ export class PixiMapRenderer implements GameMapRenderer {
 
       if (this.mapLayer === "religion") {
         fillColor = colorForFaith(regionState.dominantFaith, this.staticData);
+      }
+
+      if (this.mapLayer === "diplomacy") {
+        if (playerAlliedRegionIds?.has(regionId)) {
+          fillColor = 0x3e6b8c;
+        } else if (playerEnemyRegionIds?.has(regionId)) {
+          fillColor = 0xa32a2a;
+        } else {
+          fillColor = 0x8d816e;
+        }
+      }
+
+      if (this.mapLayer === "economy") {
+        const ratio = context?.regionWealthRatio?.[regionId] ?? 0;
+        fillColor = colorForWealth(ratio);
       }
 
       const projected = this.toCanvasPoint(node.definition);
@@ -236,4 +257,20 @@ function colorForFaith(faithId: string, staticData: StaticWorldData): number {
   const palette = [0x7b4a33, 0xad7b2f, 0x4f6c3e, 0xb66a6a, 0x49657a, 0x8a6a9b, 0x2f6f74];
   const hash = faithId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return palette[hash % palette.length];
+}
+
+function colorForWealth(ratio: number): number {
+  if (ratio >= 0.8) {
+    return 0xf2d067;
+  }
+
+  if (ratio >= 0.4) {
+    return 0xcca43b;
+  }
+
+  if (ratio >= 0.1) {
+    return 0xa6955a;
+  }
+
+  return 0x8d816e;
 }

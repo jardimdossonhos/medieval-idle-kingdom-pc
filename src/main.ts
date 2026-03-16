@@ -330,6 +330,8 @@ async function bootstrapApp(): Promise<void> {
                 <option value="unrest">Instabilidade</option>
                 <option value="war">Contestado/Guerra</option>
                 <option value="religion">Religião</option>
+                <option value="diplomacy">Diplomacia (Jogador)</option>
+                <option value="economy">Economia (Ouro)</option>
               </select>
             </label>
           </div>
@@ -566,7 +568,7 @@ async function bootstrapApp(): Promise<void> {
         populationGrowthRateData?: Float64Array;
       };
     };
-    if (data?.type === "TICK") {
+    if (data?.type === "TICK" || data?.type === "INITIAL_STATE") {
       const payload = data.payload;
       if (payload?.goldData instanceof Float64Array) {
         currentSimulationState.goldData = payload.goldData;
@@ -1348,6 +1350,9 @@ async function bootstrapApp(): Promise<void> {
     const contestedRegionIds = new Set<string>();
     const recentlyCapturedRegionIds = new Set<string>();
     const activeWarMarkerRegionIds = new Set<string>();
+    const playerAlliedRegionIds = new Set<string>();
+    const playerEnemyRegionIds = new Set<string>();
+    const regionWealthRatio: Record<string, number> = {};
     const recentCaptureWindowMs = Math.max(30_000, state.meta.tickDurationMs * 24);
 
     for (const warId of Object.keys(state.wars).sort()) {
@@ -1375,10 +1380,78 @@ async function bootstrapApp(): Promise<void> {
       }
     }
 
+    const player = getPlayerKingdom(state);
+    const enemyIds = new Set<string>();
+
+    // 1. Mapeia quem são os inimigos de guerras ativas
+    for (const warId of Object.keys(state.wars)) {
+      const war = state.wars[warId];
+      if (war.attackers.includes(player.id)) {
+        war.defenders.forEach((id) => enemyIds.add(id));
+      } else if (war.defenders.includes(player.id)) {
+        war.attackers.forEach((id) => enemyIds.add(id));
+      }
+    }
+
+    // 2. Avalia a posse e sentimento de cada região
+    for (const regionId of Object.keys(state.world.regions)) {
+      const region = state.world.regions[regionId];
+      const ownerId = region.ownerId;
+
+      if (ownerId === player.id) {
+        playerAlliedRegionIds.add(regionId);
+      } else if (enemyIds.has(ownerId)) {
+        playerEnemyRegionIds.add(regionId);
+      } else {
+        const relation = player.diplomacy.relations[ownerId];
+        if (relation) {
+          if (relation.score.trust > 0.6) {
+            playerAlliedRegionIds.add(regionId);
+          } else if (relation.score.rivalry > 0.6) {
+            playerEnemyRegionIds.add(regionId);
+          }
+        }
+      }
+    }
+
+    // 3. Calcula a Riqueza Econômica Relativa com base nos dados do Worker (ECS)
+    const goldData = currentSimulationState.goldData;
+    if (goldData && goldData.length > 0) {
+      let maxGold = Number.MIN_VALUE;
+      let minGold = Number.MAX_VALUE;
+
+      for (let i = 0; i < goldData.length; i++) {
+        if (goldData[i] > maxGold) {
+          maxGold = goldData[i];
+        }
+        if (goldData[i] < minGold) {
+          minGold = goldData[i];
+        }
+      }
+
+      const range = maxGold - minGold;
+
+      for (let i = 0; i < goldData.length; i++) {
+        const def = WORLD_DEFINITIONS_V1[i];
+        if (def) {
+          if (range <= 0.001) {
+            // Se não há desigualdade no mundo (todos produzem igual),
+            // exibe uma cor média em vez do cinza de pobreza extrema.
+            regionWealthRatio[def.id] = 0.3;
+          } else {
+            regionWealthRatio[def.id] = Math.max(0, Math.min(1, (goldData[i] - minGold) / range));
+          }
+        }
+      }
+    }
+
     return {
       contestedRegionIds: Array.from(contestedRegionIds).sort(),
       recentlyCapturedRegionIds: Array.from(recentlyCapturedRegionIds).sort(),
       activeWarMarkerRegionIds: Array.from(activeWarMarkerRegionIds).sort(),
+      playerAlliedRegionIds: Array.from(playerAlliedRegionIds).sort(),
+      playerEnemyRegionIds: Array.from(playerEnemyRegionIds).sort(),
+      regionWealthRatio,
       animationClockMs: typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
     };
   }

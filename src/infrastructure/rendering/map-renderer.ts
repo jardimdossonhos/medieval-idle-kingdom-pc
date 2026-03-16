@@ -1,7 +1,7 @@
-﻿import type { KingdomState } from "../../core/models/game-state";
+﻿﻿import type { KingdomState } from "../../core/models/game-state";
 import type { WorldState } from "../../core/models/world";
 
-export type MapLayerMode = "owner" | "unrest" | "war" | "religion";
+export type MapLayerMode = "owner" | "unrest" | "war" | "religion" | "diplomacy" | "economy";
 
 export interface MapSelection {
   regionId: string;
@@ -12,6 +12,9 @@ export interface MapRenderContext {
   contestedRegionIds?: readonly string[];
   recentlyCapturedRegionIds?: readonly string[];
   activeWarMarkerRegionIds?: readonly string[];
+  playerAlliedRegionIds?: readonly string[];
+  playerEnemyRegionIds?: readonly string[];
+  regionWealthRatio?: Record<string, number>;
   animationClockMs?: number;
 }
 

@@ -21,6 +21,9 @@ interface CountryFeatureProperties {
   recentlyCaptured?: number;
   pulse?: number;
   selected?: number;
+  isAllied?: number;
+  isEnemy?: number;
+  wealthRatio?: number;
 }
 
 interface CountryFeature {
@@ -137,6 +140,12 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
     const recentlyCapturedRegionIds = context?.recentlyCapturedRegionIds?.length
       ? new Set(context.recentlyCapturedRegionIds)
       : new Set<string>();
+    const playerAlliedRegionIds = context?.playerAlliedRegionIds?.length
+      ? new Set(context.playerAlliedRegionIds)
+      : new Set<string>();
+    const playerEnemyRegionIds = context?.playerEnemyRegionIds?.length
+      ? new Set(context.playerEnemyRegionIds)
+      : new Set<string>();
     const animationClockMs = context?.animationClockMs ?? (typeof performance !== "undefined" ? performance.now() : Date.now());
 
     for (const feature of this.geojson.features) {
@@ -163,6 +172,9 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         feature.properties.recentlyCaptured = 0;
         feature.properties.pulse = pulse;
         feature.properties.selected = this.selectedRegionId === regionId ? 1 : 0;
+        feature.properties.isAllied = 0;
+        feature.properties.isEnemy = 0;
+        feature.properties.wealthRatio = 0;
         continue;
       }
 
@@ -181,6 +193,9 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       feature.properties.recentlyCaptured = isRecentlyCaptured ? 1 : 0;
       feature.properties.pulse = pulse;
       feature.properties.selected = this.selectedRegionId === regionId ? 1 : 0;
+      feature.properties.isAllied = playerAlliedRegionIds.has(regionId) ? 1 : 0;
+      feature.properties.isEnemy = playerEnemyRegionIds.has(regionId) ? 1 : 0;
+      feature.properties.wealthRatio = context?.regionWealthRatio?.[regionId] ?? 0;
     }
 
     const source = this.map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
@@ -433,6 +448,29 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           1,
           0.9
         ]);
+        break;
+      case "diplomacy":
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
+          "case",
+          ["==", ["coalesce", ["get", "isAllied"], 0], 1],
+          "#3e6b8c", // Azul: Jogador e Aliados
+          ["==", ["coalesce", ["get", "isEnemy"], 0], 1],
+          "#a32a2a", // Vermelho: Inimigos / Rivais
+          "#8d816e"  // Neutro
+        ]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", 0.85);
+        break;
+      case "economy":
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
+          "interpolate",
+          ["linear"],
+          ["coalesce", ["get", "wealthRatio"], 0],
+          0, "#8d816e",     // Pobre (Cor base neutra)
+          0.2, "#a6955a",   // Leve acúmulo
+          0.5, "#cca43b",   // Riqueza moderada
+          1, "#f2d067"      // Extremamente Rico (Dourado Vibrante)
+        ]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", 0.85);
         break;
     }
   }
