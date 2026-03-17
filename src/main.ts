@@ -1,7 +1,5 @@
 import "./styles/global.css";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { TechnologyEffect } from "./core/models/technology";
-import { isTechnologyAvailable, isTechnologyUnlocked } from "./core/data/technology-tree";
 import { createInitialState } from "./application/boot/create-initial-state";
 import { createStaticWorldData } from "./application/boot/static-world-data";
 import { WORLD_DEFINITIONS_V1 } from "./application/boot/generated/world-definitions-v1";
@@ -37,6 +35,8 @@ interface UiRefs {
   speedSelect: HTMLSelectElement;
   openSavesButton: HTMLButtonElement;
   manualSaveButton: HTMLButtonElement;
+  refreshSavesButton: HTMLButtonElement;
+  exitToMenuBtn: HTMLButtonElement;
   toastArea: HTMLElement;
   devTickLastValue: HTMLElement | null;
   devTickAvgValue: HTMLElement | null;
@@ -70,6 +70,13 @@ interface UiRefs {
   debugAddGoldButton: HTMLButtonElement | null;
   tabButtons: HTMLButtonElement[];
   tabPanels: HTMLElement[];
+  splashScreen: HTMLElement;
+  splashContinueBtn: HTMLButtonElement;
+  splashNewBtn: HTMLButtonElement;
+  splashForm: HTMLElement;
+  splashMonarchInput: HTMLInputElement;
+  splashCountrySelect: HTMLSelectElement;
+  splashStartBtn: HTMLButtonElement;
 }
 
 type TabId = "mapa" | "governo" | "diplomacia" | "tecnologia" | "militar" | "eventos" | "saves" | "configuracoes";
@@ -148,38 +155,6 @@ function riskClass(value: number): string {
   }
 
   return "risk-low";
-}
-
-function formatTechEffect(effect: TechnologyEffect): string {
-  const isMultiplier = effect.type === "multiplier";
-  const sign = effect.value > 0 ? "+" : "";
-  const value = isMultiplier ? `${sign}${effect.value * 100}%` : `${sign}${effect.value}`;
-
-  // Mapeamento para nomes mais amigáveis na UI
-  const targetMap: Record<string, string> = {
-    "economy.food_production_multiplier": "Produção de Comida",
-    "population.growth_rate_multiplier": "Crescimento Populacional",
-    "economy.tax_income_multiplier": "Renda de Impostos",
-    "economy.trade_income_multiplier": "Renda de Comércio",
-    "stability_additive": "Estabilidade",
-    "military.manpower_recovery_multiplier": "Recuperação de Mão de Obra",
-    "military.army_maintenance_multiplier": "Manutenção de Exércitos",
-    "military.infantry_quality_multiplier": "Qualidade da Infantaria",
-    "economy.iron_production_multiplier": "Produção de Ferro",
-    "military.siege_ability_multiplier": "Habilidade de Cerco",
-    "administration.capacity_additive": "Capacidade Administrativa",
-    "administration.corruption_multiplier": "Corrupção",
-    "legitimacy_additive": "Legitimidade",
-    "religion.authority_multiplier": "Autoridade Religiosa",
-    "religion.faith_production_multiplier": "Produção de Fé",
-    "technology.research_points_multiplier": "Pontos de Pesquisa",
-    "military.movement_speed_multiplier": "Velocidade de Movimento",
-    "economy.wood_production_multiplier": "Produção de Madeira",
-    "military.fort_defense_multiplier": "Defesa de Forte"
-  };
-
-  const targetLabel = targetMap[effect.target] || effect.target;
-  return `${value} ${targetLabel}`;
 }
 
 function normalizePercentage(value: string): number {
@@ -292,6 +267,41 @@ async function bootstrapApp(): Promise<void> {
   const showDevMetrics = import.meta.env.DEV;
 
   appRoot.innerHTML = `
+    <style>
+      .splash-overlay { position: fixed; inset: 0; z-index: 10000; background: rgba(10, 10, 15, 0.95); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+      .splash-overlay.is-hidden { display: none !important; }
+      .splash-card { background: var(--surface-color, #1e1e24); border: 1px solid var(--border-color, #333); padding: 2.5rem; border-radius: 12px; width: 100%; max-width: 450px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+      .splash-card h1 { color: var(--primary-color, #d4af37); margin-bottom: 0.5rem; font-size: 2.2rem; font-family: serif; }
+      .splash-actions { display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; }
+      .splash-actions button { flex: 1; padding: 0.8rem; font-size: 1.05rem; }
+      .splash-form { margin-top: 2rem; text-align: left; animation: fadeIn 0.3s ease; }
+      .splash-form hr { border-color: var(--border-color, #333); margin-bottom: 1.5rem; }
+      .splash-form label { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.2rem; font-weight: bold; color: #ccc; }
+      .splash-form input, .splash-form select { width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, #444); color: white; border-radius: 4px; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+    <div id="splash-screen" class="splash-overlay">
+      <div class="splash-card card">
+        <h1>Medieval Idle Kingdom</h1>
+        <p style="color: #aaa;">A forja de um novo império aguarda o seu comando.</p>
+        <div class="splash-actions">
+          <button id="splash-continue-btn" class="primary" style="display: none;">Continuar Jornada</button>
+          <button id="splash-new-btn">Nova Campanha</button>
+        </div>
+        <div id="splash-form" class="splash-form is-hidden">
+          <hr />
+          <h3 style="margin-bottom: 1rem; text-align: center;">Fundar Novo Império</h3>
+          <label>Nome do Monarca
+            <input id="splash-monarch" type="text" value="${loadLocalProfile().name || 'Soberano'}" maxlength="30">
+          </label>
+          <label>Nação Inicial
+            <select id="splash-country"></select>
+          </label>
+          <button id="splash-start-btn" class="primary" style="width: 100%; margin-top: 0.5rem; font-size: 1.1rem; padding: 0.8rem;">Fundar Império</button>
+        </div>
+      </div>
+    </div>
+
     <main class="app-shell">
       <header class="app-header card">
         <div class="header-title">
@@ -452,6 +462,7 @@ async function bootstrapApp(): Promise<void> {
           <div class="inline-form saves-toolbar">
             <button id="manual-save-btn">Salvar Jogo</button>
             <button id="refresh-saves-btn">Atualizar Lista</button>
+            <button id="exit-to-menu-btn" class="danger" style="margin-left: auto;">Sair para o Menu</button>
           </div>
           <div id="save-list" class="save-list"></div>
         </article>
@@ -506,6 +517,7 @@ async function bootstrapApp(): Promise<void> {
     openSavesButton: queryElement(appRoot, "#open-saves-btn"),
     manualSaveButton: queryElement(appRoot, "#manual-save-btn"),
     refreshSavesButton: queryElement(appRoot, "#refresh-saves-btn"),
+    exitToMenuBtn: queryElement(appRoot, "#exit-to-menu-btn"),
     toastArea: queryElement(appRoot, "#toast-area"),
     devTickLastValue: queryOptionalElement(appRoot, "#dev-tick-last"),
     devTickAvgValue: queryOptionalElement(appRoot, "#dev-tick-avg"),
@@ -549,7 +561,14 @@ async function bootstrapApp(): Promise<void> {
     debugLogStateButton: queryOptionalElement(appRoot, "#debug-log-state"),
     debugAddGoldButton: queryOptionalElement(appRoot, "#debug-add-gold"),
     tabButtons: Array.from(appRoot.querySelectorAll<HTMLButtonElement>(".tab-btn")),
-    tabPanels: Array.from(appRoot.querySelectorAll<HTMLElement>(".tab-panel"))
+    tabPanels: Array.from(appRoot.querySelectorAll<HTMLElement>(".tab-panel")),
+    splashScreen: queryElement(appRoot, "#splash-screen"),
+    splashContinueBtn: queryElement(appRoot, "#splash-continue-btn"),
+    splashNewBtn: queryElement(appRoot, "#splash-new-btn"),
+    splashForm: queryElement(appRoot, "#splash-form"),
+    splashMonarchInput: queryElement(appRoot, "#splash-monarch"),
+    splashCountrySelect: queryElement(appRoot, "#splash-country"),
+    splashStartBtn: queryElement(appRoot, "#splash-start-btn")
   };
 
   const simulationWorker = new Worker(
@@ -621,6 +640,15 @@ async function bootstrapApp(): Promise<void> {
   const totalCountries = WORLD_DEFINITIONS_V1.length;
   simulationWorker.postMessage({ type: "INIT" as const, payload: { entityCount: totalCountries } });
 
+  // Popula o select de países ordenados alfabeticamente
+  const sortedDefs = [...WORLD_DEFINITIONS_V1].sort((a, b) => a.name.localeCompare(b.name));
+  for (const def of sortedDefs) {
+    const opt = document.createElement("option");
+    opt.value = def.id;
+    opt.textContent = `${def.name} (Riqueza Eco: ${def.economyValue})`;
+    ui.splashCountrySelect.appendChild(opt);
+  }
+
   const resourceLabels: Record<ResourceType, string> = {
     gold: "Ouro",
     food: "Comida",
@@ -641,7 +669,6 @@ async function bootstrapApp(): Promise<void> {
   let isGovernmentFormDirty = false;
   let hideCompletedTechnologies = true;
   let profile = loadLocalProfile();
-  let selectedCountryIndex: number | null = null;
   let currentSimulationState: {
     goldData: Float64Array;
     foodData: Float64Array;
@@ -731,7 +758,34 @@ async function bootstrapApp(): Promise<void> {
   });
   // highlight-start
   // Envia o estado do ECS para o worker quando um jogo é carregado
-  eventBus.subscribe("game.loaded", (state) => {
+  eventBus.subscribe("game.loaded", (eventPayload: any) => {
+    const state = eventPayload as GameState;
+    
+    let isEcsEmpty = true;
+    if (state.ecs && state.ecs.populationTotal) {
+      const pop = state.ecs.populationTotal as any;
+      if (pop.length !== undefined && pop.length > 0) {
+        isEcsEmpty = false;
+      } else if (pop.length === undefined && Object.keys(pop).length > 0) {
+        isEcsEmpty = false;
+      }
+    }
+
+    // FAGULHA VITAL: Injeção robusta caso o ECS esteja ausente ou corrompido
+    if (isEcsEmpty) {
+      const len = WORLD_DEFINITIONS_V1.length;
+      state.ecs = {
+        gold: new Float64Array(len).fill(500),
+        food: new Float64Array(len).fill(1000),
+        wood: new Float64Array(len).fill(500),
+        iron: new Float64Array(len).fill(100),
+        faith: new Float64Array(len).fill(50),
+        legitimacy: new Float64Array(len).fill(50),
+        populationTotal: new Float64Array(len).fill(5000),
+        populationGrowthRate: new Float64Array(len).fill(0.015)
+      };
+    }
+
     if (state.ecs) {
       // Evita race conditions pausando o worker durante a restauração
       simulationWorker.postMessage({ type: "STOP" });
@@ -769,14 +823,6 @@ async function bootstrapApp(): Promise<void> {
     selectedRegionId = selection.regionId;
     selectedMapLabel = selection.label ?? selection.regionId;
 
-    const regionId = selectedRegionId;
-    if (regionId) {
-      const index = WORLD_DEFINITIONS_V1.findIndex((def) => def.id === regionId);
-      selectedCountryIndex = index >= 0 ? index : null;
-    } else {
-      selectedCountryIndex = null;
-    }
-
     renderRegionInfo(session.getState());
     setActiveTab("mapa");
     updateUIPanel();
@@ -810,7 +856,7 @@ async function bootstrapApp(): Promise<void> {
     ui.devOfflineValue.textContent = `${formatNumber(metrics.offlineCatchUpMs, 2)} ms / ${metrics.offlineTicks} ticks`;
   }
 
-  function renderResources(state: GameState): void {
+  function renderResources(): void {
     if (!resourcesInitialized) {
       ui.resourceList.innerHTML = "";
 
@@ -1052,6 +1098,8 @@ async function bootstrapApp(): Promise<void> {
     }
 
     const owner = state.kingdoms[region.ownerId];
+    const isPlayer = owner?.isPlayer;
+    const ownerName = owner ? `${owner.name}${isPlayer ? " (Você)" : ""}` : "-";
     const dominantFaith = staticWorldData.religions[region.dominantFaith];
     const minorityFaith = region.minorityFaith ? staticWorldData.religions[region.minorityFaith] : null;
     const minorityText = region.minorityFaith && typeof region.minorityShare === "number"
@@ -1061,7 +1109,7 @@ async function bootstrapApp(): Promise<void> {
     ui.regionInfo.innerHTML = `
       <div class="summary-grid">
         <span>Nome</span><strong>${regionDef.name}</strong>
-        <span>Dono</span><strong>${owner?.name ?? "-"}</strong>
+        <span>Dono</span><strong>${ownerName}</strong>
         <span>Fé dominante</span><strong>${dominantFaith?.name ?? region.dominantFaith} (${formatNumber(region.dominantShare * 100)}%)</strong>
         <span>Minoria religiosa</span><strong>${minorityText}</strong>
         <span>Tensão de fé</span><strong>${formatNumber(region.faithUnrest * 100)}%</strong>
@@ -1227,11 +1275,10 @@ async function bootstrapApp(): Promise<void> {
       <span>Meta tecnológica</span><strong>${goalChoice?.name ?? "-"}</strong>
       <span>Automação</span><strong>${automationLevelLabel(player.administration.automation.technology)}</strong>
       <span>Acúmulo</span><strong>${formatNumber(player.technology.accumulatedResearch)}</strong>
-      <span>Taxa</span><strong>${formatNumber(player.technology.researchRate, 2)}</strong>
       <span>Tecnologias desbloqueadas</span><strong>${player.technology.unlocked.length}</strong>
     `;
 
-    renderTechnologyTree(choices, state);
+    renderTechnologyTree(choices);
   }
 
   function createDiplomacyActionButton(targetId: string, actionType: DiplomaticActionType, label: string): HTMLButtonElement {
@@ -1554,7 +1601,7 @@ async function bootstrapApp(): Promise<void> {
   function renderState(state: GameState): void {
     renderHeader(state);
     renderRuntimeMetrics(session.getRuntimeMetrics());
-    renderResources(state);
+    renderResources();
     renderRiskIndicators(state);
     renderExplainers(state);
     renderRegionInfo(state);
@@ -1601,6 +1648,11 @@ async function bootstrapApp(): Promise<void> {
   ui.refreshSavesButton.addEventListener("click", async () => {
     await renderSaveSlots();
     showToast("Lista de saves atualizada.");
+  });
+
+  ui.exitToMenuBtn.addEventListener("click", () => {
+    session.stop();
+    window.location.href = window.location.pathname + "?menu=1";
   });
 
   ui.mapLayerSelect.addEventListener("change", () => {
@@ -1695,17 +1747,92 @@ async function bootstrapApp(): Promise<void> {
 
   syncProfileUi();
 
-  const initialState = await session.bootstrap(createInitialState(staticWorldData));
-  mapRenderer.setLayer("owner");
-  await mapRenderer.mount(initialState.world, initialState.kingdoms);
+  const urlParams = new URLSearchParams(window.location.search);
+  const forceMenu = urlParams.has("menu");
+  const currentState = await persistence.gameStateRepository.loadCurrent();
+  const initialSlots = await persistence.saveRepository.listSlots();
 
-  session.subscribe((state) => {
-    renderState(state);
+  if (currentState && !forceMenu) {
+    // AUTO-BOOT: Pula a tela inicial caso exista uma campanha ativa (comportamento ideal para o F5)
+    ui.splashScreen.classList.add("is-hidden");
+    await startGameplay(currentState);
+  } else {
+    if (initialSlots.length > 0 || currentState) {
+      ui.splashContinueBtn.style.display = "inline-block";
+    }
+  }
+
+  ui.splashNewBtn.addEventListener("click", () => {
+    ui.splashForm.classList.remove("is-hidden");
+    ui.splashNewBtn.style.display = "none";
+    ui.splashContinueBtn.style.display = "none";
   });
 
-  await renderSaveSlots();
-  session.start();
-  simulationWorker.postMessage({ type: "START" as const });
+  ui.splashContinueBtn.addEventListener("click", async () => {
+    await startGameplay(null);
+  });
+
+  ui.splashStartBtn.addEventListener("click", async () => {
+    const currentSlots = await persistence.saveRepository.listSlots();
+    if (currentSlots.length > 0 && !confirm("ATENÇÃO: Fundar um novo império apagará TODO o seu progresso da campanha atual. Deseja continuar?")) {
+      return;
+    }
+
+    ui.splashStartBtn.disabled = true;
+    ui.splashStartBtn.textContent = "Forjando mundo...";
+
+    profile = { ...profile, name: ui.splashMonarchInput.value.trim() || "Soberano" };
+    saveLocalProfile(profile);
+
+    session.stop();
+    await persistence.saveRepository.clearAll();
+    await persistence.gameStateRepository.clearCurrent();
+    
+    const freshState = createInitialState(staticWorldData);
+    const selectedRegionId = ui.splashCountrySelect.value;
+    const ownerId = freshState.world.regions[selectedRegionId]?.ownerId;
+
+    if (ownerId) {
+      for (const kid of Object.keys(freshState.kingdoms)) {
+        freshState.kingdoms[kid].isPlayer = false;
+      }
+      if (freshState.kingdoms[ownerId]) {
+        freshState.kingdoms[ownerId].isPlayer = true;
+        const def = WORLD_DEFINITIONS_V1.find(d => d.id === selectedRegionId);
+        if (def) {
+          freshState.kingdoms[ownerId].name = `Império de ${def.name}`;
+          freshState.kingdoms[ownerId].adjective = def.name;
+        }
+      }
+    }
+
+    await persistence.gameStateRepository.saveCurrent(freshState);
+
+    ui.splashStartBtn.disabled = false;
+    ui.splashStartBtn.textContent = "Fundar Império";
+    await startGameplay(freshState);
+  });
+
+  async function startGameplay(stateToBoot: GameState | null) {
+    ui.splashScreen.classList.add("is-hidden");
+    
+    const bootState = stateToBoot ?? createInitialState(staticWorldData);
+    const finalState = await session.bootstrap(bootState);
+    
+    mapRenderer.setLayer("owner");
+    await mapRenderer.mount(finalState.world, finalState.kingdoms);
+
+    session.subscribe((state) => {
+      renderState(state);
+    });
+
+    (window as any).__DEBUG_SESSION = session;
+    (window as any).__WORLD_DEFS = WORLD_DEFINITIONS_V1;
+
+    await renderSaveSlots();
+    session.start();
+    simulationWorker.postMessage({ type: "START" as const });
+  }
 
   window.addEventListener("beforeunload", () => {
     session.stop();

@@ -37,6 +37,7 @@ interface TickMessage {
   };
 }
 
+let debugTickCount = 0;
 function startClock(): void {
   if (intervalId !== null) {
     return;
@@ -61,6 +62,16 @@ function startClock(): void {
     if (economy && population) {
       economySystem.update(deltaTimeSeconds, economy, activeEntities);
       populationSystem.update(deltaTimeSeconds, population, activeEntities);
+
+      debugTickCount++;
+      if (debugTickCount % 10 === 0) {
+        console.log(`[Worker Audit] Tick ${debugTickCount} | Delta: ${deltaTimeSeconds}s`);
+        console.log(`[Worker Audit] Entity 0 - Ouro: ${economy.gold[0]}, Pop Total: ${population.total[0]}, Pop Taxa: ${population.growthRate[0]}`);
+        
+        if (population.total[0] === 0 && population.growthRate[0] === 0) {
+           console.warn("[Worker Audit] ALERTA: População ou taxa no índice 0 permanecem ZERADOS no Worker!");
+        }
+      }
 
       const message: TickMessage = {
         type: "TICK",
@@ -134,18 +145,10 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
       }
       const state = command.payload;
       
-      // Helper para obter o length real, seja Array, Float64Array ou Object (JSON parseado)
-      const getLength = (data: any) => {
-        if (!data) return 0;
-        if (typeof data.length === 'number') return data.length;
-        if (typeof data === 'object') return Object.keys(data).length;
-        return 0;
-      };
-
-      // Copia de forma resiliente até o limite dos dados disponíveis.
-      // Resolve o erro de carregamento vazio caso o tamanho do mapa mude entre saves.
+      // Usamos o tamanho alocado internamente. Mesmo que o JSON recebido 
+      // seja um objeto esparso, garantimos que todos os índices recebam o valor ou 0.
       if (state.gold) {
-        const len = Math.min(getLength(state.gold), economy.gold.length);
+        const len = economy.gold.length;
         for (let i = 0; i < len; i++) {
           economy.gold[i] = state.gold[i] || 0;
           economy.food[i] = state.food[i] || 0;
