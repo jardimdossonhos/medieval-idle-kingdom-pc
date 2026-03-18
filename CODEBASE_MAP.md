@@ -28,15 +28,18 @@ A casca visual que o usuário interage. **Nenhuma lógica de negócios reside aq
 *   **`src/main.ts`**: O Maestro. 
     *   Monta a DOM.
     *   Instancia a `GameSession` (Aplicação).
-    *   Liga e desliga o `simulation.worker` (Web Worker).
-    *   Processa a ponte visual de dados (recebe os ArrayBuffers de performance e traduz para números na tela).
+    *   Controla a **Splash Screen** e o **Auto-Boot**.
+    *   **Ponto Crítico:** Orquestra a comunicação entre a UI e o Worker. É o responsável por enviar os comandos de restauração (`RESTORE_ECS_STATE`) e início (`START`). O protocolo de comunicação original não aguardava confirmação do Worker, sendo a causa principal da falha no carregamento de jogos. *(Ver Seção 4.1 do ARCHITECTURE.md).*
+    *   Processa a ponte visual de dados (recebe os `TICK`s do worker e atualiza a `GameSession`).
 
 ---
 
 ## Nível 2: Aplicação e Orquestração (A Ponte)
 Sistemas de controle de fluxo de estado. Eles ditam "o quê" fazer, orquestrando as regras puras do *Core*.
 *   **`src/application/`**:
-    *   `game-session.ts`: A super-classe da API do Jogo. Mantém o `currentState`, despacha as intenções do jogador (ex: botões de Diplomacia ou Governo) através de verificações (`canAfford`) e garante que os auto-saves aconteçam na hora certa.
+    *   `game-session.ts`: A super-classe da API do Jogo. Mantém uma cópia do `currentState`.
+    *   **Ponto Crítico:** Dispara o `autosave` com base em seus próprios ticks, usando uma cópia local do estado do Worker. Essa dessincronia causa a **race condition** que resulta na perda de recursos. *(Ver Seção 4.2 do ARCHITECTURE.md).*
+    *   Despacha as intenções do jogador (ex: botões de Diplomacia ou Governo) e verifica custos (`canAfford`) usando sua cópia local (e potencialmente desatualizada) do `EcsState`.
     *   **`boot/`**: Rotinas para construir a campanha "do zero".
         *   `create-initial-state.ts`, `static-world-data.ts`: Fabricas que constroem a árvore inicial JSON.
         *   `generated/world-definitions-v1.ts`: A lista *hardcoded* final de regiões. **O length deste arquivo dita a alocação do Worker de alta performance.**
@@ -48,7 +51,8 @@ Sistemas de controle de fluxo de estado. Eles ditam "o quê" fazer, orquestrando
 ## Nível 3: Infraestrutura (Os Adaptadores Concretos)
 Arquivos acoplados a frameworks externos (IndexDB, MapLibre, WebWorkers) que implementam as "Ports" (contratos) exigidos pelo *Core*.
 *   **`src/infrastructure/worker/`**:
-    *   `simulation.worker.ts`: A Segunda Thread matemática. Isola 100% dos cálculos do ECS para impedir congelamentos de interface (UI bloqueada). **Dependência pesada do ECS/Core.**
+    *   `simulation.worker.ts`: A Segunda Thread matemática. Isola 100% dos cálculos do ECS para impedir congelamentos de interface (UI bloqueada).
+    *   **Ponto Crítico:** Ao receber `RESTORE_ECS_STATE`, ele restaura seu estado interno mas, no protocolo original, **não enviava nenhuma mensagem de confirmação (handshake)** para a thread principal. Essa ausência de confirmação era a causa raiz da falha no carregamento de jogos. *(Ver Seção 4.1 do ARCHITECTURE.md).*
 *   **`src/infrastructure/rendering/`**:
     *   `hybrid-map-renderer.ts`, `maplibre-world-renderer.ts`: Consumidores da biblioteca MapLibre GL. Traduzem o estado dos reinos do `GameSession` em preenchimentos (polígonos e cores) no canvas geográfico.
 *   **`src/infrastructure/persistence/`**:

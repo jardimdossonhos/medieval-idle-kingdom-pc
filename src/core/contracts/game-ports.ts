@@ -25,6 +25,11 @@ export interface GameStateRepository {
   loadCurrent(): Promise<GameState | null>;
   saveCurrent(state: GameState): Promise<void>;
   clearCurrent(): Promise<void>;
+
+  // New methods for synchronous operations
+  saveCurrentSync(state: GameState): void;
+  loadCurrentSync(): GameState | null;
+  clearCurrentSync(): void;
 }
 
 export interface SaveRepository {

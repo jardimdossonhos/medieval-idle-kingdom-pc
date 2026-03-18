@@ -105,27 +105,52 @@ class ManualClock implements ClockService {
 }
 
 class InMemoryEventBus implements EventBus {
-  publish(_event: DomainEvent): void {}
-  subscribe(_eventType: string, _listener: (event: DomainEvent) => void): () => void {
-    return () => {};
+  private listeners = new Map<string, Array<(event: any) => void>>();
+
+  publish(eventOrType: string | DomainEvent, payload?: any): void {
+    const type = typeof eventOrType === "string" ? eventOrType : (eventOrType as DomainEvent).type;
+    const data = typeof eventOrType === "string" ? payload : eventOrType;
+    const cbs = this.listeners.get(type) || [];
+    for (const cb of cbs) {
+      cb(data);
+    }
+  }
+
+  subscribe(eventType: string, listener: (event: any) => void): () => void {
+    if (!this.listeners.has(eventType)) {
+      this.listeners.set(eventType, []);
+    }
+    this.listeners.get(eventType)!.push(listener);
+    return () => {
+      const arr = this.listeners.get(eventType)!;
+      this.listeners.set(eventType, arr.filter(cb => cb !== listener));
+    };
   }
 }
 
 const staticData = createStaticWorldData();
 
 function createTestSession(deps: Partial<GameSessionDeps>): GameSession {
-  return new GameSession({
+  const eventBus = deps.eventBus ?? new InMemoryEventBus();
+  const session = new GameSession({
     gameStateRepository: deps.gameStateRepository ?? new InMemoryGameStateRepository(),
     saveRepository: deps.saveRepository ?? new InMemorySaveRepository(),
     staticWorldData: staticData,
     commandLogRepository: deps.commandLogRepository ?? new NoopCommandLogRepository(),
     snapshotRepository: deps.snapshotRepository ?? new NoopSnapshotRepository(),
     clock: deps.clock ?? new ManualClock(Date.now()),
-    eventBus: deps.eventBus ?? new InMemoryEventBus(),
+    eventBus: eventBus,
     systems: deps.systems ?? [],
     autosaveEveryTicks: 2, // Frequent autosave for testing
     ...deps
   });
+
+  eventBus.subscribe("game.loaded", () => {
+    // Simula a chegada do primeiro TICK do WebWorker que auto-destrava a engine
+    session.updateEcsState({} as any);
+  });
+
+  return session;
 }
 
 describe("Save, Load and State Restoration Audit", () => {
@@ -150,6 +175,9 @@ describe("Save, Load and State Restoration Audit", () => {
     
     clock.advance(1000); // Tick 2 -> should trigger autosave (autosaveEveryTicks: 2)
     
+    // Dispara o TICK do Worker para consumir o pendingAutosave no momento exato
+    session1.updateEcsState({} as any);
+
     await session1.flushPersistence(); // Ensure async save operations complete
 
     const tick2State = session1.getState();
@@ -183,7 +211,12 @@ describe("Save, Load and State Restoration Audit", () => {
 
     // 2. Change state and save manually
     session.updateTaxPolicy({ baseRate: 0.25 });
-    await session.saveManual();
+    const savePromise = session.saveManual();
+    
+    // O Save só se concretiza na chegada natural do próximo frame de dados (Sincronização Passiva)
+    session.updateEcsState({} as any);
+    await savePromise;
+    
     await session.flushPersistence();
 
     const savedPlayerKingdom = Object.values(session.getState().kingdoms).find(k => k.isPlayer)!;

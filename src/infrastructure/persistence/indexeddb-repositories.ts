@@ -106,6 +106,38 @@ export class IndexedDbGameStateRepository implements GameStateRepository {
     const db = await this.dbPromise;
     await db.delete("current_state", this.key);
   }
+
+  saveCurrentSync(state: GameState): void {
+    try {
+      const envelope = createCurrentStateEnvelope(state);
+      localStorage.setItem(this.key, JSON.stringify(envelope));
+    } catch (error) {
+      console.error("Failed to save state to localStorage", error);
+    }
+  }
+
+  loadCurrentSync(): GameState | null {
+    try {
+      const raw = localStorage.getItem(this.key);
+      if (!raw) {
+        return null;
+      }
+      const envelope = JSON.parse(raw);
+      const normalized = normalizeCurrentStateEnvelope(envelope);
+      return normalized?.state ?? null;
+    } catch (error) {
+      console.error("Failed to load state from localStorage", error);
+      return null;
+    }
+  }
+
+  clearCurrentSync(): void {
+    try {
+      localStorage.removeItem(this.key);
+    } catch (error) {
+      console.error("Failed to clear state from localStorage", error);
+    }
+  }
 }
 
 export class IndexedDbSaveRepository implements SaveRepository {

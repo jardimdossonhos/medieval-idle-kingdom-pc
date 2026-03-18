@@ -4,6 +4,9 @@ test.describe('Sincronização Inicial e Boot do Jogo', () => {
   test('A UI deve aguardar e renderizar o estado do Worker corretamente sem dados vazios', async ({ page }) => {
     // Navega para a raiz da aplicação
     await page.goto('/');
+    await page.click("button:has-text('Nova Campanha')");
+    await page.click("button:has-text('Fundar Império')");
+    await page.waitForSelector('#splash-screen', { state: 'hidden', timeout: 30000 });
 
     // 1. Verifica se o loop do jogo iniciou
     const statusValue = page.locator('#status-value');

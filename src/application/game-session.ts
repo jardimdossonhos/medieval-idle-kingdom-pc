@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
+﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
 import type {
   CommandLogRepository,
   GameStateRepository,
@@ -83,6 +83,9 @@ export class GameSession {
   private commandSequence = 0;
   private commandHeadHash = "genesis";
   private tickSamples: number[] = [];
+  private isWorkerReady = false; // Bloqueio de segurança (Handshake)
+  private pendingManualSaveResolver: (() => void) | null = null;
+  private pendingAutosave = false;
   private runtimeMetrics: RuntimeMetrics = {
     tickMsLast: 0,
     tickMsAverage: 0,
@@ -96,6 +99,8 @@ export class GameSession {
 
   async bootstrap(initialState: GameState): Promise<GameState> {
     await this.bootstrapCommandHead();
+
+    this.isWorkerReady = false; // Trava a engine principal até confirmação do Worker
 
     const persisted = await this.deps.gameStateRepository.loadCurrent();
     const recovered = persisted ?? (await this.restoreFromSnapshotOrSave());
@@ -143,13 +148,18 @@ export class GameSession {
     return this.currentState;
   }
 
+  public markWorkerReady(): void {
+    this.isWorkerReady = true;
+    console.log("[GameSession] Handshake confirmado. Simulação liberada.");
+  }
+
   start(): void {
     this.deps.clock.start((deltaMs, now) => {
       this.onClockTick(deltaMs, now);
     });
   }
 
-  stop(): void {
+  stop(sync = false): void {
     this.deps.clock.stop();
 
     if (!this.currentState) {
@@ -160,11 +170,15 @@ export class GameSession {
     this.currentState.meta.lastClosedAt = now;
     this.recordSystemCommand("session.stop", { reason: "manual_stop" }, now);
 
-    this.enqueueIo(async () => {
-      if (this.currentState) {
-        await this.deps.gameStateRepository.saveCurrent(this.currentState);
-      }
-    });
+    if (sync) {
+      this.deps.gameStateRepository.saveCurrentSync(this.currentState);
+    } else {
+      this.enqueueIo(async () => {
+        if (this.currentState) {
+          await this.deps.gameStateRepository.saveCurrent(this.currentState);
+        }
+      });
+    }
   }
 
   subscribe(listener: StateListener): () => void {
@@ -572,10 +586,24 @@ export class GameSession {
   }
 
   async saveManual(): Promise<void> {
-    const snapshot = this.buildSaveSlotSnapshot(MANUAL_SLOT_ID);
-    await this.deps.saveRepository.saveToSlot(snapshot);
-    this.recordPlayerCommand("save.manual", { slotId: MANUAL_SLOT_ID });
-    this.captureSnapshot("manual");
+    if (!this.currentState) {
+      return Promise.resolve();
+    }
+    
+    return new Promise<void>((resolve) => {
+      // Sincronização Passiva: Levanta a bandeira de salvar. 
+      // O save será feito com dados perfeitamente frescos na exata fração de segundo em que o próximo TICK do Worker chegar.
+      this.pendingManualSaveResolver = resolve;
+      
+      // Proteção de UI (Anti-Ghost Button): Se nada ocorrer em 3s, força o destrave para não congelar o jogo.
+      setTimeout(() => {
+        if (this.pendingManualSaveResolver === resolve) {
+          console.warn("[GameSession] Timeout aguardando Worker. Forçando salvamento com dados atuais.");
+          this.doCommitManualSave(resolve).catch(console.error);
+          this.pendingManualSaveResolver = null;
+        }
+      }, 3000);
+    });
   }
 
   async listSaveSlots(): Promise<SaveSummary[]> {
@@ -583,6 +611,8 @@ export class GameSession {
   }
 
   async loadSlot(slotId: SaveSlotId): Promise<GameState> {
+    this.isWorkerReady = false; // Trava a engine até RESTORE_ECS_STATE confirmar
+
     const snapshot = await this.deps.saveRepository.loadFromSlot(slotId);
 
     if (!snapshot) {
@@ -710,10 +740,40 @@ export class GameSession {
   public updateEcsState(ecsState: EcsState): void {
     const state = this.currentState;
     if (state) {
-      // Anexa o estado mais recente do ECS ao estado principal do jogo.
-      // Isso garante que o próximo autosave ou save manual inclua esses dados.
       state.ecs = ecsState;
+
+      // AUTO-DESTRAVE: O Worker provou estar vivo. Libera a simulação do F5/Load congelado!
+      if (!this.isWorkerReady) {
+        this.markWorkerReady();
+      }
+
+      // COMMIT ATÔMICO: Transação segura no exato frame em que a matriz fresca chegou.
+      if (this.pendingManualSaveResolver) {
+        this.doCommitManualSave(this.pendingManualSaveResolver).catch(console.error);
+        this.pendingManualSaveResolver = null;
+      }
+      if (this.pendingAutosave) {
+        this.doCommitAutosave();
+        this.pendingAutosave = false;
+      }
     }
+  }
+
+  private async doCommitManualSave(resolve: () => void): Promise<void> {
+    const snapshot = this.buildSaveSlotSnapshot(MANUAL_SLOT_ID);
+    await this.deps.saveRepository.saveToSlot(snapshot);
+    this.recordPlayerCommand("save.manual", { slotId: MANUAL_SLOT_ID });
+    this.captureSnapshot("manual");
+    resolve();
+  }
+
+  private doCommitAutosave(): void {
+    const snapshot = this.buildSaveSlotSnapshot(AUTOSAVE_SLOT_ID);
+    this.enqueueIo(async () => {
+      await this.deps.saveRepository.saveToSlot(snapshot);
+    });
+    this.recordSystemCommand("save.autosave", { slotId: AUTOSAVE_SLOT_ID });
+    this.captureSnapshot("autosave");
   }
 
   private getPlayerKingdom(state: GameState): GameState["kingdoms"][string] {
@@ -1032,7 +1092,7 @@ export class GameSession {
 
   private onClockTick(deltaMs: number, now: number): void {
     const state = this.currentState;
-    if (!state || state.meta.paused) {
+    if (!state || state.meta.paused || !this.isWorkerReady) {
       return;
     }
 
@@ -1105,24 +1165,30 @@ export class GameSession {
     if (!this.currentState) {
       return;
     }
-
-    const snapshot = this.buildSaveSlotSnapshot(AUTOSAVE_SLOT_ID);
-
-    this.enqueueIo(async () => {
-      await this.deps.saveRepository.saveToSlot(snapshot);
-    });
-
-    this.recordSystemCommand("save.autosave", { slotId: AUTOSAVE_SLOT_ID });
-    this.captureSnapshot("autosave");
+    this.pendingAutosave = true;
   }
 
   private buildSaveSlotSnapshot(slotId: SaveSlotId): SaveSnapshot {
     const state = this.requireState();
     const now = this.deps.clock.now();
 
+    // Cria uma cópia profunda para evitar mutações no estado em memória
+    const stateCopy = structuredClone(state);
+
+    // Converte os Float64Arrays do ECS para Arrays normais para garantir a serialização
+    if (stateCopy.ecs) {
+      const ecs = stateCopy.ecs as EcsState;
+      for (const key of Object.keys(ecs)) {
+        const typedArray = ecs[key as keyof EcsState];
+        if (typedArray instanceof Float64Array) {
+          ecs[key as keyof EcsState] = Array.from(typedArray) as any;
+        }
+      }
+    }
+
     return {
-      summary: buildSaveSummary(slotId, state, now),
-      state: structuredClone(state)
+      summary: buildSaveSummary(slotId, stateCopy, now),
+      state: stateCopy
     };
   }
 

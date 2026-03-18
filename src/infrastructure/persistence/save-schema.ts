@@ -114,6 +114,15 @@ function migrateStateToCurrent(state: GameState): GameState {
   migrateWars(migrated);
   migrateTreaties(migrated);
 
+  if (migrated.ecs) {
+    for (const key of Object.keys(migrated.ecs) as Array<keyof typeof migrated.ecs>) {
+      const data = migrated.ecs[key];
+      if (data && !(data instanceof Float64Array)) {
+        migrated.ecs[key] = new Float64Array(Object.values(data));
+      }
+    }
+  }
+
   const worldMutable = migrated.world as GameState["world"] & {
     definitions?: unknown;
     routes?: unknown;

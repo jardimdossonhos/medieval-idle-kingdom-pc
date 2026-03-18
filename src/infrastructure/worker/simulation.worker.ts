@@ -20,7 +20,9 @@ type WorkerCommand =
   | { type: "STOP" }
   | { type: "INIT"; payload: { entityCount: number } }
   | { type: "RESTORE_ECS_STATE"; payload: EcsState }
-  | { type: "EXTRACT_SAVE_STATE" };
+  | { type: "EXTRACT_SAVE_STATE" }
+  | { type: "PAUSE_AND_EXTRACT_STATE" }
+  | { type: "RESUME" };
 
 interface TickMessage {
   type: "TICK";
@@ -139,11 +141,32 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
       self.postMessage({ type: "SAVE_STATE_DATA", payload: saveData });
       break;
     }
+    case "PAUSE_AND_EXTRACT_STATE": {
+      stopClock();
+      if (!economy || !population) return;
+      const saveData: EcsState = {
+        gold: Array.from(economy.gold),
+        food: Array.from(economy.food),
+        wood: Array.from(economy.wood),
+        iron: Array.from(economy.iron),
+        faith: Array.from(economy.faith || []),
+        legitimacy: Array.from(economy.legitimacy || []),
+        populationTotal: Array.from(population.total),
+        populationGrowthRate: Array.from(population.growthRate)
+      };
+      self.postMessage({ type: "SAVE_STATE_DATA", payload: saveData });
+      break;
+    }
+    case "RESUME": {
+      startClock();
+      break;
+    }
     case "RESTORE_ECS_STATE": {
       if (!economy || !population) {
         return;
       }
       const state = command.payload;
+      console.log("[Worker] Restoring ECS state:", state);
       
       // Usamos o tamanho alocado internamente. Mesmo que o JSON recebido 
       // seja um objeto esparso, garantimos que todos os índices recebam o valor ou 0.
@@ -160,6 +183,9 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
           if (population.growthRate && state.populationGrowthRate) population.growthRate[i] = state.populationGrowthRate[i] || 0;
         }
       }
+      
+      // Handshake Crítico: Avisa a Main Thread que os dados foram restaurados com sucesso
+      self.postMessage({ type: "WORKER_STATE_RESTORED" });
       break;
     }
     case "START":

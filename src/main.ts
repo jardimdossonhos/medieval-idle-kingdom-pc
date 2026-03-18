@@ -663,12 +663,43 @@ async function bootstrapApp(): Promise<void> {
     ...Object.values(ui.budgetInputs)
   ];
 
+  let profile = loadLocalProfile();
+  
+  const activeCampaignId = `campaign:${profile.id}`;
+  const staticWorldData = createStaticWorldData();
+  const eventBus = new LocalEventBus();
+  const npcDecisionService = new RuleBasedNpcDecisionService();
+  const diplomacyResolver = new LocalDiplomacyResolver();
+  const warResolver = new LocalWarResolver(staticWorldData);
+  const persistence = createRuntimePersistenceBundle(activeCampaignId);
+
+  const session = new GameSession({
+    gameStateRepository: persistence.gameStateRepository,
+    saveRepository: persistence.saveRepository,
+    staticWorldData,
+    commandLogRepository: persistence.commandLogRepository,
+    snapshotRepository: persistence.snapshotRepository,
+    clock: new BrowserClockService(1_000),
+    eventBus,
+    diplomacyResolver,
+    warResolver,
+    systems: createDefaultSimulationSystems({
+      npcDecisionService,
+      diplomacyResolver,
+      warResolver
+    }),
+    autosaveEveryTicks: 5,
+    maxOfflineTicks: 12_000,
+    snapshotEveryTicks: 25,
+    maxSnapshots: 20
+  });
+
   let selectedRegionId: string | null = null;
   let selectedMapLabel: string | null = null;
   let toastTimeout: number | null = null;
   let isGovernmentFormDirty = false;
   let hideCompletedTechnologies = true;
-  let profile = loadLocalProfile();
+  
   let currentSimulationState: {
     goldData: Float64Array;
     foodData: Float64Array;
@@ -724,38 +755,7 @@ async function bootstrapApp(): Promise<void> {
     const active = document.activeElement;
     return governmentInputs.includes(active as HTMLInputElement);
   }
-
-  const staticWorldData = createStaticWorldData();
-  const eventBus = new LocalEventBus();
-  const npcDecisionService = new RuleBasedNpcDecisionService();
-  const diplomacyResolver = new LocalDiplomacyResolver();
-  const warResolver = new LocalWarResolver(staticWorldData);
-
-  // Esta será a base para o gerenciamento de múltiplas campanhas.
-  // Por enquanto, usamos um ID fixo. No futuro, este ID virá de uma tela de seleção.
-  const activeCampaignId = "default_campaign_v1";
-  const persistence = createRuntimePersistenceBundle(activeCampaignId);
-
-  const session = new GameSession({
-    gameStateRepository: persistence.gameStateRepository,
-    saveRepository: persistence.saveRepository,
-    staticWorldData,
-    commandLogRepository: persistence.commandLogRepository,
-    snapshotRepository: persistence.snapshotRepository,
-    clock: new BrowserClockService(1_000),
-    eventBus,
-    diplomacyResolver,
-    warResolver,
-    systems: createDefaultSimulationSystems({
-      npcDecisionService,
-      diplomacyResolver,
-      warResolver
-    }),
-    autosaveEveryTicks: 5,
-    maxOfflineTicks: 12_000,
-    snapshotEveryTicks: 25,
-    maxSnapshots: 20
-  });
+  
   // highlight-start
   // Envia o estado do ECS para o worker quando um jogo é carregado
   eventBus.subscribe("game.loaded", (eventPayload: any) => {
@@ -789,7 +789,17 @@ async function bootstrapApp(): Promise<void> {
     if (state.ecs) {
       // Evita race conditions pausando o worker durante a restauração
       simulationWorker.postMessage({ type: "STOP" });
-      simulationWorker.postMessage({ type: "RESTORE_ECS_STATE", payload: state.ecs });
+      const payload = {
+        gold: new Float64Array(state.ecs.gold),
+        food: new Float64Array(state.ecs.food),
+        wood: new Float64Array(state.ecs.wood),
+        iron: new Float64Array(state.ecs.iron),
+        faith: new Float64Array(state.ecs.faith),
+        legitimacy: new Float64Array(state.ecs.legitimacy),
+        populationTotal: new Float64Array(state.ecs.populationTotal),
+        populationGrowthRate: new Float64Array(state.ecs.populationGrowthRate),
+      };
+      simulationWorker.postMessage({ type: "RESTORE_ECS_STATE", payload });
       simulationWorker.postMessage({ type: "START" });
 
       // Força a atualização local e da UI imediatamente após carregar o save
@@ -1566,12 +1576,16 @@ async function bootstrapApp(): Promise<void> {
     const loadButton = document.createElement("button");
     loadButton.textContent = "Carregar";
     loadButton.addEventListener("click", async () => {
+      console.log(`[UI] Load button clicked for slot: ${slot.slotId}`);
       try {
-        await session.loadSlot(slot.slotId);
+        const result = await session.loadSlot(slot.slotId);
+        console.log('[UI] session.loadSlot completed.', result);
         await renderSaveSlots();
         showToast("Save restaurado com sucesso.");
-      } catch {
-        showToast("Falha ao carregar save.");
+        console.log('[UI] Save loaded and UI updated.');
+      } catch (e) {
+        console.error("Falha ao carregar save:", e);
+        showToast("Falha ao carregar save. Verifique o console para detalhes.");
       }
     });
 
@@ -1651,7 +1665,7 @@ async function bootstrapApp(): Promise<void> {
   });
 
   ui.exitToMenuBtn.addEventListener("click", () => {
-    session.stop();
+    session.stop(true);
     window.location.href = window.location.pathname + "?menu=1";
   });
 
@@ -1749,17 +1763,19 @@ async function bootstrapApp(): Promise<void> {
 
   const urlParams = new URLSearchParams(window.location.search);
   const forceMenu = urlParams.has("menu");
+  
+  // Check for sync state first and move it to async if it exists
+  const syncState = persistence.gameStateRepository.loadCurrentSync();
+  if (syncState) {
+    persistence.gameStateRepository.clearCurrentSync();
+    await persistence.gameStateRepository.saveCurrent(syncState);
+  }
+
   const currentState = await persistence.gameStateRepository.loadCurrent();
   const initialSlots = await persistence.saveRepository.listSlots();
 
-  if (currentState && !forceMenu) {
-    // AUTO-BOOT: Pula a tela inicial caso exista uma campanha ativa (comportamento ideal para o F5)
-    ui.splashScreen.classList.add("is-hidden");
-    await startGameplay(currentState);
-  } else {
-    if (initialSlots.length > 0 || currentState) {
-      ui.splashContinueBtn.style.display = "inline-block";
-    }
+  if (initialSlots.length > 0 || currentState) {
+    ui.splashContinueBtn.style.display = "inline-block";
   }
 
   ui.splashNewBtn.addEventListener("click", () => {
@@ -1769,7 +1785,33 @@ async function bootstrapApp(): Promise<void> {
   });
 
   ui.splashContinueBtn.addEventListener("click", async () => {
-    await startGameplay(null);
+    // `currentState` and `initialSlots` are from the outer scope and already loaded.
+    let stateToBoot: GameState | null = currentState;
+
+    if (!stateToBoot && initialSlots.length > 0) {
+      // No active session, but there are saved slots. Load the most recent one.
+      const mostRecentSlot = [...initialSlots].sort((a, b) => b.savedAt - a.savedAt)[0];
+
+      try {
+        // `loadSlot` will place the session in the correct state and return the state object.
+        stateToBoot = await session.loadSlot(mostRecentSlot.slotId);
+        showToast(`Continuando do save: ${mostRecentSlot.slotId}`);
+      } catch (e) {
+        console.error("Falha ao carregar o save mais recente.", e);
+        showToast("Falha ao carregar save. Verifique o console.");
+        return; // Abort on failure
+      }
+    }
+
+    if (stateToBoot) {
+      await startGameplay(stateToBoot);
+    } else {
+      // This case should not be reached if the button is only visible when there's something to load.
+      // As a fallback, show the new game form.
+      ui.splashForm.classList.remove("is-hidden");
+      ui.splashNewBtn.style.display = "none";
+      ui.splashContinueBtn.style.display = "none";
+    }
   });
 
   ui.splashStartBtn.addEventListener("click", async () => {
@@ -1835,7 +1877,7 @@ async function bootstrapApp(): Promise<void> {
   }
 
   window.addEventListener("beforeunload", () => {
-    session.stop();
+    session.stop(true);
     mapRenderer.destroy();
   });
 }

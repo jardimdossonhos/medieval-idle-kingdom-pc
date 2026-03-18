@@ -8,7 +8,7 @@ Bem-vindo ao **Medieval Idle Kingdom**. Este manual tem o objetivo de eliminar a
 
 O mapa é a sua principal visão do mundo. Por padrão, você verá dezenas de nações coloridas.
 
-*   **Meus Territórios:** Na aba "Resumo" da Lista de Saves, a contagem "Territórios" indica quantas regiões você possui. No futuro, o mapa terá uma camada específica onde seu reino sempre será destacado em Azul, facilitando a identificação imediata.
+*   **Meus Territórios:** No painel de informações, seu reino nativo sempre exibirá o sufixo **(Você)** após o nome do governante/império, facilitando saber exatamente de quem é a terra.
 *   **Camadas do Mapa (Seletor no topo do mapa):**
     *   **Domínio:** Mostra cada reino com uma cor única aleatória. Ajuda a ver fronteiras.
     *   **Diplomacia:** *(Em desenvolvimento)* Seu reino em Azul, aliados em tons claros, inimigos declarados em Vermelho.
@@ -49,13 +49,13 @@ Todo imposto arrecadado vai para um "Pote de Orçamento". Você deve dividir 100
 
 ## 4. Salvamento e Proteção de Dados (Persistência)
 
+> ⚠️ **Atenção:** A funcionalidade de salvar e carregar jogos está passando por uma reestruturação crítica. Foram identificados problemas que podem levar à perda de progresso ou à impossibilidade de carregar um jogo salvo. A correção está em andamento.
+
 O jogo foi projetado para rodar localmente no seu navegador.
 *   **Autosave:** O jogo salva a si mesmo automaticamente a cada 5 ciclos (5 segundos).
-*   **Atualizar a Página (F5):** *No momento (Fase 7 de Dev), há um bug reconhecido onde apertar F5 zera os recursos temporariamente até o próximo cálculo completo. Isso está no topo da lista de correções da equipe.* O comportamento correto no futuro será que apertar F5 não causará perda de nenhum dado.
+*   **Atualizar a Página (F5 / Auto-Boot):** O jogo suporta carregamento direto. Apertar F5, fechar ou reabrir a aba fará a engine pular o menu inicial e reconectar automaticamente na sua simulação exata, sem perda de recursos ou moedas.
 *   **Save Manual:** A qualquer momento, na aba "Saves", você pode clicar em "Salvar Jogo". Isso cria um marco definitivo que não será apagado pelo Autosave.
 *   **Fechamento:** Ao fechar a aba, o jogo fará um "Catch-up" na próxima vez que você abrir (tentará simular o que aconteceu enquanto você esteve fora, até um limite de tempo).
-
-> ⚠️ **Aviso de Refatoração:** Ao trabalhar em refatorações neste jogo, a fonte central de segurança anti-quebra é o `CODEBASE_MAP.md`. Devido à ponte de mensagens constante entre `GameSession`, `main.ts` e o Web Worker de Simulação, propriedades esquecidas (especialmente Arrays de recursos do ECS) resultam na "falha do recarregamento F5". Consulte o mapa mental sempre que os modelos de domínio ou persistência mudarem.
 
 ---
 

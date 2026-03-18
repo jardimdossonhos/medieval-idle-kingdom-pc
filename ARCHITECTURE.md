@@ -1,4 +1,4 @@
-﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
+﻿﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -77,11 +77,75 @@ A organização do projeto reflete os princípios da Arquitetura Limpa.
     2.  **Exclusão de Saves:** Cada slot de save na UI agora possui um botão "Excluir", protegido por uma caixa de diálogo de confirmação, permitindo ao jogador gerenciar seus saves de forma limpa.
     3.  **Preparação para Múltiplas Campanhas:** O botão "Novo Jogo" foi temporariamente removido. A funcionalidade de reiniciar a campanha atual foi removida para dar lugar a um futuro sistema de gerenciamento de campanhas, onde o jogador poderá criar, carregar e excluir campanhas inteiras de forma independente.
 
-## 4. Planejamento Futuro
+### Fase 6: Identidade, Seamless Transition e Auto-Boot (Concluída)
+*   **Problema Identificado:** Recarregar a página (F5) causava perda dos recursos no Worker (ECS vazio). Além disso, iniciar uma "Nova Campanha" por cima de um save existente exigia um Hard Reset (`window.location.reload()`) que falhava por lock no IndexedDB. O país do jogador também não recebia a identidade correta (nome do império).
+*   **Solução:** 
+    1.  **Auto-Boot:** O `main.ts` agora verifica ativamente se existe um `currentState` salvo no boot. Se sim, ele pula a tela de "Splash" e carrega a simulação instantaneamente (F5 perfeito).
+    2.  **Identidade Dinâmica:** Na criação do mundo, a entidade selecionada pelo jogador recebe o prefixo "Império de [Nome]" e uma tag visual "(Você)".
+    3.  **Seamless Transition:** Ao invés de recarregar a página, uma Nova Campanha agora encerra o Worker (`session.stop()`), faz uma limpeza nativa no banco (`clearAll()`) e injeta o `freshState` sem telas de carregamento.
+    4.  **Fagulha Vital Robusta:** Criado um "Fallback" no payload do `game.loaded`. Se o estado do ECS chegar vazio por qualquer motivo, dados básicos (5.000 pop, 500 ouro/comida) são injetados para impedir o travamento matemático (Crescimento Zero).
+
+## 4. Análise de Falhas Críticas de Persistência
+
+Apesar dos mecanismos de persistência e recuperação descritos na Fase 6, uma investigação aprofundada revelou duas falhas arquiteturais críticas no protocolo de comunicação entre a thread principal (UI) e o Web Worker (simulação). Estas falhas são a causa raiz da instabilidade sistêmica no salvamento e carregamento.
+
+### 4.1. Causa Raiz: Falha no Carregamento de Jogo (Handshake Quebrado)
+
+A falha completa ao carregar um jogo salvo origina-se de um protocolo de inicialização incompleto, que não possui etapas de confirmação (handshake).
+
+*   **Fluxo Falho:**
+    1.  A `GameSession` lê o estado do IndexedDB e publica um evento `game.loaded`.
+    2.  O orquestrador (`main.ts`) ouve o evento e envia o `EcsState` para o Worker via `RESTORE_ECS_STATE`.
+    3.  O Worker recebe o estado, preenche seus dados internos e **não envia nenhuma confirmação** de que o processo foi bem-sucedido.
+    4.  A thread principal, operando no escuro, envia um comando `START` para o Worker e inicia sua própria simulação (`TickPipeline`), assumindo que o Worker está pronto.
+
+*   **Ponto de Quebra:** A simulação na thread principal começa sem a garantia de que o Worker está sincronizado. Isso leva a um estado de inconsistência catastrófica, onde a `GameSession` pode operar com dados de ECS vazios ou dessincronizados, resultando no travamento ou comportamento indefinido do jogo. A "Fagulha Vital" (Fase 6) falha porque não há um aperto de mãos para confirmar que a fagulha foi recebida e acendeu a simulação no Worker.
+
+### 4.2. Causa Raiz: Perda de Recursos no Autosave (Race Condition)
+
+A perda de recursos ao usar a função "Continuar" (que carrega o último autosave) é causada por uma clássica **condição de corrida (race condition)**.
+
+*   **Fluxo Falho:**
+    1.  **Simulação Paralela:** O Worker calcula a economia e envia uma mensagem `TICK` a cada segundo com os novos totais de recursos. A `GameSession` na thread principal recebe esses dados e atualiza sua cópia local do `EcsState`.
+    2.  **Gatilho de Save Dessincronizado:** O `autosave` é disparado pela `GameSession` com base nos seus próprios ciclos de tick, que não têm sincronia com os ticks do Worker.
+    3.  **A Condição de Corrida:** Se o `autosave` é executado *depois* do último recebimento de dados, mas *antes* que a nova mensagem `TICK` do Worker chegue, a `GameSession` salva uma **cópia desatualizada do `EcsState`**.
+    4.  **Resultado:** Todos os recursos gerados pelo Worker nesse intervalo de 1 segundo são perdidos no arquivo de save. Ao continuar, o jogador é efetivamente revertido para o estado econômico do segundo anterior. O "acoplamento atômico" mencionado na Fase 6 é, na prática, um **acoplamento eventualmente consistente**, vulnerável a essa condição de corrida.
+
+## 5. Solução Arquitetural: Protocolos de Comunicação Robustos
+
+Para resolver essas falhas, serão implementados protocolos de comunicação explícitos e sequenciais, transformando as operações de persistência em transações atômicas e confirmadas.
+
+### 5.1. Protocolo de Carregamento Robusto
+
+O carregamento seguirá um fluxo sequencial com confirmação, garantindo a sincronia total antes do início do jogo.
+
+1.  **Parada e Restauração:** Após o `game.loaded`, o orquestrador (`main.ts`) enviará, em sequência:
+    *   `STOP` para o Worker (garante que qualquer simulação anterior pare).
+    *   `INIT` para alocar a memória.
+    *   `RESTORE_ECS_STATE` com os dados do save.
+2.  **Confirmação do Worker:** Após aplicar o estado, o Worker enviará uma nova mensagem: `WORKER_STATE_RESTORED`.
+3.  **Início Sincronizado:** A thread principal **aguardará** pela mensagem `WORKER_STATE_RESTORED`. Somente após recebê-la, ela:
+    *   Enviará o comando `START` para o Worker.
+    *   Iniciará a `TickPipeline` da `GameSession` e habilitará a UI.
+
+*   **Benefício:** Garante que ambas as threads partam de um estado idêntico e confirmado, eliminando a inconsistência.
+
+### 5.2. Protocolo de Save Atômico
+
+O salvamento se tornará uma operação transacional que requisita o estado ao invés de usar uma cópia local.
+
+1.  **Requisição de Estado:** Ao iniciar um save, a `GameSession` enviará uma mensagem `PAUSE_AND_EXTRACT_STATE` ao Worker.
+2.  **Extração no Worker:** O Worker para sua simulação, extrai seu estado atual e o envia de volta em uma mensagem `SAVE_STATE_DATA`.
+3.  **Salvamento Centralizado:** A `GameSession` aguardará por `SAVE_STATE_DATA`. Ao receber, ela usa esses dados frescos para construir o snapshot do save e escrevê-lo no disco.
+4.  **Retomada da Simulação:** Após a conclusão da escrita, a `GameSession` envia uma mensagem `RESUME` para o Worker.
+
+*   **Benefício:** Garante que o estado salvo seja uma fotografia perfeita do momento da simulação, eliminando a condição de corrida.
+
+## 6. Planejamento Futuro
 
 Esta seção descreve as próximas grandes funcionalidades e suas diretrizes arquiteturais.
 
-### 4.1 Camadas do Mapa Estratégico
+### 6.1. Camadas do Mapa Estratégico
 
 O mapa é a principal ferramenta de visualização do jogador. As seguintes camadas estão planejadas para fornecer insights estratégicos:
 
@@ -106,7 +170,7 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     *   **Fonte de Dados:** `EcsState.gold` (do Worker).
     *   **Lógica:** A riqueza de uma região será calculada com base no seu estoque de ouro (`gold`) na simulação do ECS. Será criado um gradiente de cores (ex: do amarelo pálido ao dourado intenso) para representar a faixa de riqueza, do mais pobre ao mais rico. Isso permitirá ao jogador identificar alvos econômicos valiosos para conquista ou comércio.
 
-### 4.2 Reforma do Sistema de Tecnologia
+### 6.2. Reforma do Sistema de Tecnologia
 
 *   **Problema Identificado:** A progressão tecnológica é muito rápida, o impacto das tecnologias no jogo é mínimo ou nulo, e os benefícios não são claros para o jogador. O sistema atual não suporta campanhas de longo prazo.
 *   **Solução:** Realizar uma reforma completa no balanceamento, impacto e apresentação do sistema de tecnologia.
@@ -125,7 +189,7 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     5.  **Profundidade Estratégica:**
         *   Expandir o sistema de **Doutrinas**. Certas tecnologias-chave não darão um bônus direto, mas desbloquearão uma escolha entre duas ou mais doutrinas mutuamente exclusivas, forçando o jogador a se especializar e adaptar sua estratégia.
 
-### 4.3 Sistema de Efeitos Maléficos (Desastres e Crises)
+### 6.3. Sistema de Efeitos Maléficos (Desastres e Crises)
 
 *   **Objetivo:** Introduzir eventos negativos e aleatórios para criar desafios dinâmicos e testar a resiliência do império do jogador.
 *   **Arquitetura Proposta:**
@@ -146,7 +210,7 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
         *   **Gatilho:** Não é aleatório. É uma consequência direta da guerra. Quando uma região se torna um front de batalha no `WarSystem`, ela está efetivamente sob cerco.
         *   **Efeitos:** O `WarSystem` enviará um comando ao Worker para aplicar um modificador negativo massivo em toda a produção de recursos (`gold`, `food`, etc.) daquela entidade. O efeito é removido quando a guerra termina ou o front se move. Isso conecta diretamente a simulação de guerra da thread principal com a simulação econômica do Worker.
 
-### 4.4 Reforma do Sistema de Religião
+### 6.4. Reforma do Sistema de Religião
 
 *   **Problema Identificado:** O sistema de religião atual é passivo e carece de profundidade estratégica e impacto direto no jogo.
 *   **Solução:** Transformar a religião em um sistema ativo de poder, influência e risco, com escolhas significativas para o jogador.
@@ -168,7 +232,7 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     5.  **Integração com a Árvore Tecnológica:**
         *   A árvore de tecnologia religiosa se tornará crucial, desbloqueando novos Poderes Divinos, aumentando a eficácia dos missionários e podendo mitigar as penalidades de conversão religiosa.
 
-### 4.5 Reforma do Sistema de Diplomacia
+### 6.5. Reforma do Sistema de Diplomacia
 
 *   **Problema Identificado:** A diplomacia atual é transacional e carece de profundidade. As interações não criam narrativas ou consequências de longo prazo.
 *   **Solução:** Evoluir a diplomacia para um sistema dinâmico baseado em relações, poder e influência, permitindo interações complexas como vassalagem, intimidação e ajuda coordenada.
@@ -195,18 +259,17 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
         *   **Agressão a Aliados:** Declarar guerra a um reino aplicará um modificador de opinião negativo severo ("Atacou nosso aliado") a todos os seus aliados.
         *   **Chamado às Armas:** Os aliados do reino atacado terão uma alta probabilidade de entrar na guerra contra o jogador, tornando as alianças pactos defensivos significativos e perigosos de se provocar.
 
-## 5. Problemas Conhecidos
+## 7. Problemas Anteriores (Resolvidos)
 
-Esta seção documenta problemas ativos na arquitetura que estão sob investigação.
+Esta seção documenta problemas que foram identificados e corrigidos em fases anteriores do desenvolvimento, servindo como um registro histórico.
 
-### 5.1 Perda de Estado do ECS ao Recarregar a Página (F5)
+### 7.1. Perda de Estado do ECS ao Recarregar a Página (F5)
 
-*   **Sintoma:** Ao recarregar a página do navegador (F5), os recursos do jogador (ouro, comida, etc.), que são gerenciados pela simulação do ECS no Web Worker, são zerados. No entanto, outros dados do estado do jogo, como a contagem de ciclos (`tick`), são restaurados corretamente.
-*   **Análise Preliminar:** O problema sugere uma falha no ciclo de vida de persistência e restauração do `EcsState`. Embora o `GameSession` salve o estado do jogo, incluindo um campo `ecs`, há uma provável condição de corrida ou um bug na serialização/desserialização que faz com que o estado do ECS seja perdido ou salvo em um estado vazio/nulo antes do recarregamento da página ser concluído. O `autosave` ou o salvamento no `beforeunload` pode estar gravando um `GameState` sem os dados do `EcsState` mais recentes vindos do Worker.
-*   **Status:** **Crítico.** A correção deste problema é prioritária para garantir a integridade da principal premissa do jogo (`local-first`). A investigação está focada em garantir que a cópia mais recente do `EcsState` seja sempre atomicamente acoplada ao `GameState` antes de qualquer operação de escrita no IndexedDB.
+*   **Sintoma Antigo:** Ao recarregar a página (F5), os recursos do jogador (ouro, comida, etc.) vindos do Worker eram zerados devido a concorrência na gravação do IndexedDB.
+*   **Solução Implementada (Fase 6):** Criado o mecanismo de **Auto-Boot** e injeção vital. O recarregamento intercepta a ausência de estado, injeta recursos garantidores e a `GameSession` agora acopla atomicamente o último espelho de `EcsState` a cada tick recebido. O F5 funciona nativamente como "Continuar Jogo" sem perda de dados.
 
-### 5.2 Bug do Crescimento Zero (Resolvido)
+### 7.2. Bug do Crescimento Zero
 
-*   **Sintoma:** O mundo do jogo iniciava "morto" demograficamente em novas campanhas. Sistemas exponenciais do Worker, como o `PopulationSystem`, apresentavam `populationTotal` e `populationGrowthRate` zerados absolutos. Qualquer cálculo (ex: `0 * taxa * tempo`) resultava em zero contínuo.
-*   **Causa Arquitetural:** Em campanhas novas (`createInitialState`), o `state.ecs` subia nulo/indefinido. A inicialização pulava o preenchimento do Worker na UI, fazendo com que o `Float64Array` assumisse seu valor nativo padrão do Javascript (`0` absoluto).
-*   **Solução Implementada:** Injeção de estado reativo (*Fallback payload*) na inicialização da ponte visual (`main.ts`). Caso o `state.ecs` seja ausente na subida de um `game.loaded`, o Client UI empacota dados de crescimento mínimos (ex: População de 5.000 e taxa de 1.5%) e envia ao Worker, garantindo a fagulha matemática necessária para as funções puras de ECS gerarem mutação orgânica desde o primeiro tick.
+*   **Sintoma Antigo:** O mundo do jogo iniciava "morto" demograficamente em novas campanhas, com `populationTotal` e `populationGrowthRate` zerados, impedindo qualquer crescimento.
+*   **Causa Arquitetural Antiga:** Em campanhas novas (`createInitialState`), o `state.ecs` subia nulo, fazendo com que o `Float64Array` no Worker assumisse seu valor padrão (`0`).
+*   **Solução Implementada (Fase 6):** Injeção de estado reativo (*Fallback payload*) na inicialização da ponte visual (`main.ts`). Caso o `state.ecs` seja ausente na subida de um `game.loaded`, a UI empacota dados de crescimento mínimos e envia ao Worker, garantindo a "fagulha matemática" necessária.
