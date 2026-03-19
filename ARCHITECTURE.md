@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
+﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -258,6 +258,50 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
         *   O `DiplomacySystem` será aprimorado para gerenciar "cascatas de reputação".
         *   **Agressão a Aliados:** Declarar guerra a um reino aplicará um modificador de opinião negativo severo ("Atacou nosso aliado") a todos os seus aliados.
         *   **Chamado às Armas:** Os aliados do reino atacado terão uma alta probabilidade de entrar na guerra contra o jogador, tornando as alianças pactos defensivos significativos e perigosos de se provocar.
+
+### 6.6. Visão Épica: Da Aurora Humana à Infinidade (Multi-Eras)
+
+*   **A Grande Visão:** O jogo deixará de ser restrito ao período Medieval e abarcará toda a existência da civilização. O jogador começará controlando a primeira tribo de caçadores-coletores e avançará até a exploração espacial e transcendência da espécie.
+*   **Ritmo Punitivo e Recompensador (Pacing de Longo Prazo):** Para garantir que uma era dure **cerca de 1 mês de jogo contínuo**, a progressão tecnológica utilizará um sistema de "Soft-Caps" (limites suaves) e "Paradigm Shifts" (Quebras de Paradigma). O avanço para a próxima Era exigirá um sacrifício monumental ou o acúmulo de um "Recurso de Transição" específico daquela era.
+*   **O Valor da Evolução:** Avançar de Era não é apenas "aumentar a produção em 10%". A evolução deve alterar fundamentalmente a UI e as mecânicas. Abas inteiras do jogo começarão bloqueadas (ex: A aba "Diplomacia" não existe na Era Tribal, a aba "Governo" só surge na Antiguidade).
+
+**Fases do Desdobramento Evolutivo:**
+
+1.  **Era 1: A Aurora (Tribal / Nômade)**
+    *   **O Mapa:** Sem fronteiras de países. O mapa é escuro (Fog of War).
+    *   **Mecânicas Ativas:** Apenas "População", "Comida" e "Exploração".
+    *   **Objetivo da Era:** Sobreviver à natureza, expandir a tribo e descobrir o fogo e a agricultura.
+    *   **A Evolução:** Ao pesquisar "Sedentarismo", a tribo funda a primeira cidade. As fronteiras do seu país nascem no mapa.
+
+2.  **Era 2: A Antiguidade (Idade do Bronze/Ferro)**
+    *   **Desbloqueio:** O recurso "Madeira" e "Ouro" surgem. A aba "Diplomacia" é liberada (você encontra outras tribos que também se assentaram).
+    *   **Mecânicas:** Primeiras guerras rudimentares (conquista territorial pura). Construção de Monumentos (Maravilhas).
+    *   **A Evolução:** O desenvolvimento da "Escrita" e do "Estado de Direito" permite transicionar para governos formais.
+
+3.  **Era 3: Idade Média (Nosso Core Atual)**
+    *   **Desbloqueio:** O recurso "Fé" e "Legitimidade" surgem. A aba "Governo e Impostos" ganha complexidade.
+    *   **Mecânicas:** Religião estatal, feudalismo, cruzadas, castelos.
+    *   **A Evolução:** A "Prensa de Tipos Móveis" e o "Renascimento" quebram o monopólio da fé.
+
+4.  **Era 4: Era Industrial**
+    *   **Desbloqueio:** O recurso "Carvão" e "Aço" substituem "Madeira" e "Ferro". A aba de "Religião" é substituída por "Ideologia" (Capitalismo, Comunismo, Fascismo).
+    *   **Mecânicas:** Explosão populacional. O status de `devastation` (devastação) nas províncias passa a ser alimentado por **Poluição**. Se a poluição sair do controle, ocorrem colapsos climáticos locais. Produção em massa de exércitos.
+    *   **A Evolução:** A invenção da "Fissão Nuclear" e da "Computação".
+
+5.  **Era 5: Era da Informação (Moderna)**
+    *   **Desbloqueio:** O recurso "Urânio" e "Silício". O Mapa ganha satélites (visão perfeita do mundo).
+    *   **Mecânicas:** Guerra Fria. O "Poder Militar" tradicional perde força para a **Destruição Mútua Assegurada (Armas Nucleares)**. As guerras passam a ser econômicas, cibernéticas e guerras por procuração (proxy wars). ONU e Sanções Globais.
+    *   **A Evolução:** O domínio da "Fusão Nuclear" e "Inteligência Artificial Forte (AGI)".
+
+6.  **Era 6: Era Estelar / A Infinidade (Sci-Fi)**
+    *   **Desbloqueio:** Recursos alienígenas (Matéria Escura, Antimatéria). O conceito de "Planeta" se torna apenas uma capital; o jogador constrói Megaestruturas (Esferas de Dyson, Anéis Orbitais).
+    *   **Mecânicas:** A tela principal se afasta do mapa terrestre. A população agora é contada em Trilhões. A diplomacia envolve federações galácticas. O crescimento se torna exponencial a níveis cósmicos (semelhante ao *endgame* extremo de jogos clicker como *Universal Paperclips* ou *Cookie Clicker*).
+    *   **Objetivo Final:** Atingir a "Singularidade" ou criar um "Universo Simulado", recomeçando o jogo em uma nova dimensão com status de "Prestígio" (Deus).
+
+**Impacto no Motor (Arquitetura necessária para suportar isso):**
+*   **Dicionários Dinâmicos:** O arquivo de traduções da UI (`i18n`) precisará responder à Era. A variável `tax_clergy` na Idade Média será exibida como "Isenção do Clero", mas na Era da Informação será lida como "Isenção Corporativa" ou "Subsídio Tecnológico".
+*   **Árvore Tecnológica Particionada:** A `technology-tree.ts` será dividida em matrizes gigantescas atreladas à `currentEra`. Tecnologias da próxima era terão custo definido como "Infinity" até que a Quebra de Paradigma seja atingida.
+*   **Variáveis ECS Mutantes:** No `EcsState`, o array `faith` (Fé) continuará sendo uma matriz de `Float64Array`, mas a UI irá mascará-lo chamando-o de "Influência Tribal" na era 1 e de "Ideologia" na era 5. O motor matemático não muda, apenas a "pintura" sobre ele.
 
 ## 7. Problemas Anteriores (Resolvidos)
 

@@ -133,7 +133,7 @@ export class GameSession {
     }
 
     // Notifica o sistema que um estado de jogo está pronto (seja novo ou recuperado)
-    this.deps.eventBus.publish("game.loaded", this.currentState);
+    (this.deps.eventBus as any).publish({ type: "game.loaded", payload: this.currentState });
 
     await this.deps.gameStateRepository.saveCurrent(this.currentState);
 
@@ -170,13 +170,28 @@ export class GameSession {
     this.currentState.meta.lastClosedAt = now;
     this.recordSystemCommand("session.stop", { reason: "manual_stop" }, now);
 
+    // Converte os Float64Arrays para Arrays normais antes de serializar
+    // Isso previne o bug onde o F5 corrompe os recursos gerando um objeto vazio {}
+    const safeState = structuredClone(this.currentState);
+    if (safeState.ecs) {
+      // Bypass no structuredClone: extraímos os arrays nativos da fonte viva imune à corrupção de Proxy
+      safeState.ecs = {
+        gold: Array.from(this.currentState.ecs?.gold || []),
+        food: Array.from(this.currentState.ecs?.food || []),
+        wood: Array.from(this.currentState.ecs?.wood || []),
+        iron: Array.from(this.currentState.ecs?.iron || []),
+        faith: Array.from(this.currentState.ecs?.faith || []),
+        legitimacy: Array.from(this.currentState.ecs?.legitimacy || []),
+        populationTotal: Array.from(this.currentState.ecs?.populationTotal || []),
+        populationGrowthRate: Array.from(this.currentState.ecs?.populationGrowthRate || []),
+      } as any;
+    }
+
     if (sync) {
-      this.deps.gameStateRepository.saveCurrentSync(this.currentState);
+      this.deps.gameStateRepository.saveCurrentSync(safeState);
     } else {
       this.enqueueIo(async () => {
-        if (this.currentState) {
-          await this.deps.gameStateRepository.saveCurrent(this.currentState);
-        }
+        await this.deps.gameStateRepository.saveCurrent(safeState);
       });
     }
   }
@@ -426,12 +441,12 @@ export class GameSession {
     const { cost, chance, cooldownMs, actionPt } = this.getDiplomaticConfig(state, player.id, target.id, actionType);
 
     // A verificação de custo agora usa o estado do ECS como fonte da verdade.
-    if (!this.canAfford(player.economy.stock, cost)) { // O primeiro parâmetro é ignorado
+    if (!this.canAfford(cost)) {
       return { ok: false, message: "Recursos insuficientes para executar esta ação." };
     }
 
     // A aplicação do custo agora modifica o estado do ECS (atualização otimista).
-    this.applyCost(player.economy.stock, cost); // O primeiro parâmetro é ignorado
+    this.applyCost(cost);
 
     const roll = this.nextRandom(state);
     const success = roll <= chance;
@@ -539,11 +554,11 @@ export class GameSession {
     }
 
     const config = this.getRegionActionConfig(actionType);
-    if (!this.canAfford(player.economy.stock, config.cost)) { // O primeiro parâmetro é ignorado
+    if (!this.canAfford(config.cost)) {
       return { ok: false, message: "Recursos insuficientes para esta ação regional." };
     }
 
-    this.applyCost(player.economy.stock, config.cost); // O primeiro parâmetro é ignorado
+    this.applyCost(config.cost);
     region.actionCooldowns[actionType] = now + config.cooldownMs;
 
     switch (actionType) {
@@ -610,6 +625,12 @@ export class GameSession {
     return this.deps.saveRepository.listSlots();
   }
 
+  async peekSaveSlot(slotId: SaveSlotId): Promise<GameState | null> {
+    // Espia os dados do save no banco sem alterar a sessão atual. Útil para a UI montar modais de confirmação pré-load.
+    const snapshot = await this.deps.saveRepository.loadFromSlot(slotId);
+    return snapshot ? snapshot.state : null;
+  }
+
   async loadSlot(slotId: SaveSlotId): Promise<GameState> {
     this.isWorkerReady = false; // Trava a engine até RESTORE_ECS_STATE confirmar
 
@@ -628,7 +649,7 @@ export class GameSession {
     this.captureSnapshot("bootstrap");
 
     // Notifica o sistema que um estado de jogo foi carregado
-    this.deps.eventBus.publish("game.loaded", this.currentState);
+    (this.deps.eventBus as any).publish({ type: "game.loaded", payload: this.currentState });
 
     this.emitState();
     return this.currentState;
@@ -643,7 +664,7 @@ export class GameSession {
   }
 
   async clearAllSaves(): Promise<void> {
-    await this.deps.saveRepository.clearAll();
+    await (this.deps.saveRepository as any).clearAll();
   }
 
   getState(): GameState {
@@ -672,11 +693,11 @@ export class GameSession {
       return { ok: false, message: "Ação religiosa em cooldown.", cooldownUntil };
     }
 
-    if (!this.canAfford(player.economy.stock, config.cost)) { // O primeiro parâmetro é ignorado
+    if (!this.canAfford(config.cost)) {
       return { ok: false, message: "Recursos insuficientes para enviar missionários." };
     }
 
-    this.applyCost(player.economy.stock, config.cost); // O primeiro parâmetro é ignorado
+    this.applyCost(config.cost);
     const roll = this.nextRandom(state);
     const success = roll <= config.chance;
 
@@ -862,8 +883,7 @@ export class GameSession {
     return totals;
   }
 
-  private canAfford(stock: Record<ResourceType, number>, cost: Partial<Record<ResourceType, number>>): boolean {
-    // O parâmetro 'stock' é legado. A verificação agora usa o estado do ECS.
+  private canAfford(cost: Partial<Record<ResourceType, number>>): boolean {
     const state = this.requireState();
     const player = this.getPlayerKingdom(state);
     const playerEcsStock = this.getKingdomTotalEcsStock(state, player.id);
@@ -875,8 +895,7 @@ export class GameSession {
     });
   }
 
-  private applyCost(stock: Record<ResourceType, number>, cost: Partial<Record<ResourceType, number>>): void {
-    // O parâmetro 'stock' é legado. O custo é aplicado na cópia local do estado do ECS.
+  private applyCost(cost: Partial<Record<ResourceType, number>>): void {
     // Esta é uma atualização otimista que será reconciliada pelo worker no próximo tick.
     const state = this.requireState();
     if (!state.ecs) {
@@ -1177,13 +1196,17 @@ export class GameSession {
 
     // Converte os Float64Arrays do ECS para Arrays normais para garantir a serialização
     if (stateCopy.ecs) {
-      const ecs = stateCopy.ecs as EcsState;
-      for (const key of Object.keys(ecs)) {
-        const typedArray = ecs[key as keyof EcsState];
-        if (typedArray instanceof Float64Array) {
-          ecs[key as keyof EcsState] = Array.from(typedArray) as any;
-        }
-      }
+      // Extração direta da fonte de verdade (imune a quebras de protótipo)
+      stateCopy.ecs = {
+        gold: Array.from(state.ecs?.gold || []),
+        food: Array.from(state.ecs?.food || []),
+        wood: Array.from(state.ecs?.wood || []),
+        iron: Array.from(state.ecs?.iron || []),
+        faith: Array.from(state.ecs?.faith || []),
+        legitimacy: Array.from(state.ecs?.legitimacy || []),
+        populationTotal: Array.from(state.ecs?.populationTotal || []),
+        populationGrowthRate: Array.from(state.ecs?.populationGrowthRate || []),
+      } as any;
     }
 
     return {

@@ -22,7 +22,8 @@ type WorkerCommand =
   | { type: "RESTORE_ECS_STATE"; payload: EcsState }
   | { type: "EXTRACT_SAVE_STATE" }
   | { type: "PAUSE_AND_EXTRACT_STATE" }
-  | { type: "RESUME" };
+  | { type: "RESUME" }
+  | { type: "SET_TIME_SCALE"; payload: { speedMultiplier: number; isPaused: boolean } };
 
 interface TickMessage {
   type: "TICK";
@@ -40,6 +41,8 @@ interface TickMessage {
 }
 
 let debugTickCount = 0;
+let speedMultiplier = 1;
+let isPaused = false;
 function startClock(): void {
   if (intervalId !== null) {
     return;
@@ -62,12 +65,15 @@ function startClock(): void {
     lastTickMs = nowMs;
 
     if (economy && population) {
-      economySystem.update(deltaTimeSeconds, economy, activeEntities);
-      populationSystem.update(deltaTimeSeconds, population, activeEntities);
+      if (!isPaused && speedMultiplier > 0) {
+        const gameDeltaTime = deltaTimeSeconds * speedMultiplier;
+        economySystem.update(gameDeltaTime, economy, activeEntities);
+        populationSystem.update(gameDeltaTime, population, activeEntities);
+      }
 
       debugTickCount++;
-      if (debugTickCount % 10 === 0) {
-        console.log(`[Worker Audit] Tick ${debugTickCount} | Delta: ${deltaTimeSeconds}s`);
+      if (debugTickCount % 40 === 0) { // Log aprox a cada 10s reais
+        console.log(`[Worker Audit] Tick ${debugTickCount} | Delta: ${deltaTimeSeconds * speedMultiplier}s (Speed: ${speedMultiplier}x)`);
         console.log(`[Worker Audit] Entity 0 - Ouro: ${economy.gold[0]}, Pop Total: ${population.total[0]}, Pop Taxa: ${population.growthRate[0]}`);
         
         if (population.total[0] === 0 && population.growthRate[0] === 0) {
@@ -91,7 +97,7 @@ function startClock(): void {
       };
       self.postMessage(message);
     }
-  }, 1_000);
+  }, 250); // 4 ciclos por segundo real para fluidez visual (Buttery Smooth UI)
 }
 
 function stopClock(): void {
@@ -109,6 +115,11 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
   }
 
   switch (command.type) {
+    case "SET_TIME_SCALE": {
+      speedMultiplier = command.payload.speedMultiplier;
+      isPaused = command.payload.isPaused;
+      break;
+    }
     case "INIT": {
       const count = command.payload?.entityCount ?? 0;
       world = new World();
@@ -163,15 +174,17 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
     }
     case "RESTORE_ECS_STATE": {
       if (!economy || !population) {
+        console.warn("[Worker] Ignorando RESTORE_ECS_STATE: economy ou population nulos!");
         return;
       }
       const state = command.payload;
-      console.log("[Worker] Restoring ECS state:", state);
+      console.log("[Worker] Recebeu RESTORE_ECS_STATE. Lendo Ouro[0]:", state.gold ? state.gold[0] : 'Vazio', "| OuroData[0]:", (state as any).goldData ? (state as any).goldData[0] : 'Vazio');
       
       // Usamos o tamanho alocado internamente. Mesmo que o JSON recebido 
       // seja um objeto esparso, garantimos que todos os índices recebam o valor ou 0.
       if (state.gold) {
         const len = economy.gold.length;
+        let modifiedCount = 0;
         for (let i = 0; i < len; i++) {
           economy.gold[i] = state.gold[i] || 0;
           economy.food[i] = state.food[i] || 0;
@@ -181,7 +194,9 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
           if (economy.legitimacy && state.legitimacy) economy.legitimacy[i] = state.legitimacy[i] || 0;
           if (population.total && state.populationTotal) population.total[i] = state.populationTotal[i] || 0;
           if (population.growthRate && state.populationGrowthRate) population.growthRate[i] = state.populationGrowthRate[i] || 0;
+          if (economy.gold[i] > 0) modifiedCount++;
         }
+        console.log(`[Worker] Preenchimento concluído. ${modifiedCount} entidades receberam ouro > 0.`);
       }
       
       // Handshake Crítico: Avisa a Main Thread que os dados foram restaurados com sucesso

@@ -392,11 +392,14 @@ async function bootstrapApp(): Promise<void> {
         <article class="card tab-panel is-hidden" data-tab-panel="governo">
           <h2>Governo e economia</h2>
           <div class="form-grid">
-            <label>Taxa base <input id="tax-base" type="number" min="0.05" max="0.6" step="0.01"></label>
-            <label>Alívio nobre <input id="tax-noble" type="number" min="0" max="0.4" step="0.01"></label>
-            <label>Isenção clero <input id="tax-clergy" type="number" min="0" max="0.4" step="0.01"></label>
-            <label>Tarifa comercial <input id="tax-tariff" type="number" min="0" max="0.5" step="0.01"></label>
+            <label>Taxa base (%) <input id="tax-base" type="number" min="5" max="60" step="1"></label>
+            <label>Alívio nobre (%) <input id="tax-noble" type="number" min="0" max="40" step="1"></label>
+            <label>Isenção clero (%) <input id="tax-clergy" type="number" min="0" max="40" step="1"></label>
+            <label>Tarifa comercial (%) <input id="tax-tariff" type="number" min="0" max="50" step="1"></label>
           </div>
+          <p class="hint-text" style="grid-column: 1 / -1; margin-top: 0.5rem; margin-bottom: 1.5rem;">
+            Valores em porcentagem (%). Taxas altas aumentam a arrecadação de ouro significativamente, mas elevam o risco de revoltas populares.
+          </p>
           <h3>Prioridade de orçamento (%)</h3>
           <div class="form-grid">
             <label>Economia <input id="budget-economy" type="number" min="0" max="100" step="1"></label>
@@ -577,6 +580,10 @@ async function bootstrapApp(): Promise<void> {
   );
 
   simulationWorker.onmessage = (event: MessageEvent) => {
+    if (Date.now() < ignoreWorkerTicksUntil) {
+      return; // Descarta ticks fantasmas/velhos gerados antes do carregamento
+    }
+
     const data = event.data as {
       type?: string;
       payload?: {
@@ -699,6 +706,9 @@ async function bootstrapApp(): Promise<void> {
   let toastTimeout: number | null = null;
   let isGovernmentFormDirty = false;
   let hideCompletedTechnologies = true;
+  let ignoreWorkerTicksUntil = 0;
+  let currentWorkerSpeed = 1;
+  let currentWorkerPaused = false;
   
   let currentSimulationState: {
     goldData: Float64Array;
@@ -758,57 +768,49 @@ async function bootstrapApp(): Promise<void> {
   
   // highlight-start
   // Envia o estado do ECS para o worker quando um jogo é carregado
-  eventBus.subscribe("game.loaded", (eventPayload: any) => {
-    const state = eventPayload as GameState;
+  eventBus.subscribe("game.loaded", (event: any) => {
+    // Suporta tanto a injeção antiga quanto o objeto de DomainEvent nativo
+    const state = (event.payload || event) as GameState;
     
-    let isEcsEmpty = true;
-    if (state.ecs && state.ecs.populationTotal) {
+    const len = WORLD_DEFINITIONS_V1.length;
+
+    // FAGULHA VITAL 2.0: Proteção contra saves mortos (Ausentes ou População Zerada)
+    if (!state.ecs) {
+      state.ecs = {
+        gold: Array.from(new Float64Array(len).fill(500)) as any,
+        food: Array.from(new Float64Array(len).fill(1000)) as any,
+        wood: Array.from(new Float64Array(len).fill(500)) as any,
+        iron: Array.from(new Float64Array(len).fill(100)) as any,
+        faith: Array.from(new Float64Array(len).fill(50)) as any,
+        legitimacy: Array.from(new Float64Array(len).fill(50)) as any,
+        populationTotal: Array.from(new Float64Array(len).fill(5000)) as any,
+        populationGrowthRate: Array.from(new Float64Array(len).fill(0.015)) as any
+      };
+    } else {
+      // Vacina: Se o save veio com População morta (artefato de testes antigos), revive o mundo
       const pop = state.ecs.populationTotal as any;
-      if (pop.length !== undefined && pop.length > 0) {
-        isEcsEmpty = false;
-      } else if (pop.length === undefined && Object.keys(pop).length > 0) {
-        isEcsEmpty = false;
+      if (!pop || pop[0] === 0 || pop[0] === undefined) {
+        console.warn("Fagulha Vital: Save antigo detectado (Mundo Morto). Revivendo a população...");
+        state.ecs.populationTotal = Array.from(new Float64Array(len).fill(5000)) as any;
+        state.ecs.populationGrowthRate = Array.from(new Float64Array(len).fill(0.015)) as any;
       }
     }
 
-    // FAGULHA VITAL: Injeção robusta caso o ECS esteja ausente ou corrompido
-    if (isEcsEmpty) {
-      const len = WORLD_DEFINITIONS_V1.length;
-      state.ecs = {
-        gold: new Float64Array(len).fill(500),
-        food: new Float64Array(len).fill(1000),
-        wood: new Float64Array(len).fill(500),
-        iron: new Float64Array(len).fill(100),
-        faith: new Float64Array(len).fill(50),
-        legitimacy: new Float64Array(len).fill(50),
-        populationTotal: new Float64Array(len).fill(5000),
-        populationGrowthRate: new Float64Array(len).fill(0.015)
-      };
-    }
-
     if (state.ecs) {
-      // Evita race conditions pausando o worker durante a restauração
-      simulationWorker.postMessage({ type: "STOP" });
-      const payload = {
-        gold: new Float64Array(state.ecs.gold),
-        food: new Float64Array(state.ecs.food),
-        wood: new Float64Array(state.ecs.wood),
-        iron: new Float64Array(state.ecs.iron),
-        faith: new Float64Array(state.ecs.faith),
-        legitimacy: new Float64Array(state.ecs.legitimacy),
-        populationTotal: new Float64Array(state.ecs.populationTotal),
-        populationGrowthRate: new Float64Array(state.ecs.populationGrowthRate),
-      };
-      simulationWorker.postMessage({ type: "RESTORE_ECS_STATE", payload });
-      simulationWorker.postMessage({ type: "START" });
-
-      // Força a atualização local e da UI imediatamente após carregar o save
       const expectedLength = WORLD_DEFINITIONS_V1.length;
       const toFloat = (data: any) => {
-        if (data instanceof Float64Array) return data;
-        if (Array.isArray(data)) return new Float64Array(data);
         const arr = new Float64Array(expectedLength);
-        if (data && typeof data === 'object') {
+        if (!data) return arr;
+
+        if (data instanceof Float64Array || Array.isArray(data)) {
+          const limit = Math.min(data.length, expectedLength);
+          for (let i = 0; i < limit; i++) {
+            arr[i] = data[i] || 0;
+          }
+          return arr;
+        }
+
+        if (typeof data === 'object') {
           for (let i = 0; i < expectedLength; i++) {
             arr[i] = data[i] || 0;
           }
@@ -816,14 +818,44 @@ async function bootstrapApp(): Promise<void> {
         return arr;
       };
       
-      currentSimulationState.goldData = toFloat(state.ecs.gold);
-      currentSimulationState.foodData = toFloat(state.ecs.food);
-      currentSimulationState.woodData = toFloat(state.ecs.wood);
-      currentSimulationState.ironData = toFloat(state.ecs.iron);
-      currentSimulationState.faithData = toFloat(state.ecs.faith);
-      currentSimulationState.legitimacyData = toFloat(state.ecs.legitimacy);
-      currentSimulationState.populationTotalData = toFloat(state.ecs.populationTotal);
-      currentSimulationState.populationGrowthRateData = toFloat(state.ecs.populationGrowthRate);
+      // Evita race conditions pausando o worker durante a restauração
+      simulationWorker.postMessage({ type: "STOP" });
+      simulationWorker.postMessage({ type: "INIT", payload: { entityCount: expectedLength } });
+      
+      const payload = {
+        gold: toFloat(state.ecs.gold),
+        food: toFloat(state.ecs.food),
+        wood: toFloat(state.ecs.wood),
+        iron: toFloat(state.ecs.iron),
+        faith: toFloat(state.ecs.faith),
+        legitimacy: toFloat(state.ecs.legitimacy),
+        populationTotal: toFloat(state.ecs.populationTotal),
+        populationGrowthRate: toFloat(state.ecs.populationGrowthRate),
+        
+        // Duplicado com sufixo Data para garantir compatibilidade com diferentes versões do Worker
+        goldData: toFloat(state.ecs.gold),
+        foodData: toFloat(state.ecs.food),
+        woodData: toFloat(state.ecs.wood),
+        ironData: toFloat(state.ecs.iron),
+        faithData: toFloat(state.ecs.faith),
+        legitimacyData: toFloat(state.ecs.legitimacy),
+        populationTotalData: toFloat(state.ecs.populationTotal),
+        populationGrowthRateData: toFloat(state.ecs.populationGrowthRate),
+      };
+
+      simulationWorker.postMessage({ type: "RESTORE_ECS_STATE", payload });
+      simulationWorker.postMessage({ type: "START" });
+
+      ignoreWorkerTicksUntil = Date.now() + 500;
+
+      currentSimulationState.goldData = payload.gold;
+      currentSimulationState.foodData = payload.food;
+      currentSimulationState.woodData = payload.wood;
+      currentSimulationState.ironData = payload.iron;
+      currentSimulationState.faithData = payload.faith;
+      currentSimulationState.legitimacyData = payload.legitimacy;
+      currentSimulationState.populationTotalData = payload.populationTotal;
+      currentSimulationState.populationGrowthRateData = payload.populationGrowthRate;
       
       updateUIPanel();
     }
@@ -1157,10 +1189,10 @@ async function bootstrapApp(): Promise<void> {
 
     const player = getPlayerKingdom(state);
 
-    ui.taxInputs.baseRate.value = String(round(player.economy.taxPolicy.baseRate));
-    ui.taxInputs.nobleRelief.value = String(round(player.economy.taxPolicy.nobleRelief));
-    ui.taxInputs.clergyExemption.value = String(round(player.economy.taxPolicy.clergyExemption));
-    ui.taxInputs.tariffRate.value = String(round(player.economy.taxPolicy.tariffRate));
+    ui.taxInputs.baseRate.value = String(round(player.economy.taxPolicy.baseRate * 100, 0));
+    ui.taxInputs.nobleRelief.value = String(round(player.economy.taxPolicy.nobleRelief * 100, 0));
+    ui.taxInputs.clergyExemption.value = String(round(player.economy.taxPolicy.clergyExemption * 100, 0));
+    ui.taxInputs.tariffRate.value = String(round(player.economy.taxPolicy.tariffRate * 100, 0));
 
     ui.budgetInputs.economy.value = String(round(player.economy.budgetPriority.economy));
     ui.budgetInputs.military.value = String(round(player.economy.budgetPriority.military));
@@ -1577,6 +1609,41 @@ async function bootstrapApp(): Promise<void> {
     loadButton.textContent = "Carregar";
     loadButton.addEventListener("click", async () => {
       console.log(`[UI] Load button clicked for slot: ${slot.slotId}`);
+      
+      const saveState = await session.peekSaveSlot(slot.slotId);
+      if (!saveState) {
+        showToast("Erro: O save está corrompido ou vazio.");
+        return;
+      }
+
+      const player = Object.values(saveState.kingdoms).find(k => k.isPlayer);
+      const ciclo = saveState.meta.tick;
+      const tecnologias = player?.technology.unlocked.length ?? 0;
+      const territorios = Object.values(saveState.world.regions).filter(r => r.ownerId === player?.id).length;
+      
+      let ouro = 0, comida = 0, popTotal = 0;
+      if (saveState.ecs && player) {
+        const sortedDefs = [...WORLD_DEFINITIONS_V1].sort((a, b) => a.id.localeCompare(b.id));
+        const capitalIndex = sortedDefs.findIndex(def => def.id === player.capitalRegionId);
+        
+        if (capitalIndex !== -1) {
+          ouro = saveState.ecs.gold[capitalIndex] ?? 0;
+          comida = saveState.ecs.food[capitalIndex] ?? 0;
+          popTotal = saveState.ecs.populationTotal[capitalIndex] ?? 0;
+        }
+      }
+
+      const msg = `Deseja carregar este jogo?\n\n` +
+                  `Ciclo: ${ciclo}\n` +
+                  `Domínios: ${territorios}\n` +
+                  `Tecnologias: ${tecnologias}\n` +
+                  `Ouro na Capital: ${Math.floor(ouro)} | Comida: ${Math.floor(comida)}\n` +
+                  `População (Capital): ${Math.floor(popTotal)}\n`;
+
+      if (!confirm(msg)) {
+        return;
+      }
+
       try {
         const result = await session.loadSlot(slot.slotId);
         console.log('[UI] session.loadSlot completed.', result);
@@ -1613,6 +1680,15 @@ async function bootstrapApp(): Promise<void> {
   }
 
   function renderState(state: GameState): void {
+    if (currentWorkerSpeed !== state.meta.speedMultiplier || currentWorkerPaused !== state.meta.paused) {
+      currentWorkerSpeed = state.meta.speedMultiplier;
+      currentWorkerPaused = state.meta.paused;
+      simulationWorker.postMessage({
+        type: "SET_TIME_SCALE",
+        payload: { speedMultiplier: currentWorkerSpeed, isPaused: currentWorkerPaused }
+      });
+    }
+
     renderHeader(state);
     renderRuntimeMetrics(session.getRuntimeMetrics());
     renderResources();
@@ -1761,9 +1837,6 @@ async function bootstrapApp(): Promise<void> {
 
   syncProfileUi();
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const forceMenu = urlParams.has("menu");
-  
   // Check for sync state first and move it to async if it exists
   const syncState = persistence.gameStateRepository.loadCurrentSync();
   if (syncState) {
@@ -1827,7 +1900,7 @@ async function bootstrapApp(): Promise<void> {
     saveLocalProfile(profile);
 
     session.stop();
-    await persistence.saveRepository.clearAll();
+    await (persistence.saveRepository as any).clearAll();
     await persistence.gameStateRepository.clearCurrent();
     
     const freshState = createInitialState(staticWorldData);

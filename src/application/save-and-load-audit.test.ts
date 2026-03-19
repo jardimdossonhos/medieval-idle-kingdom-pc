@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
-import { createInitialState } from "../src/application/boot/create-initial-state";
-import { createStaticWorldData } from "../src/application/boot/static-world-data";
-import { GameSession, type GameSessionDeps } from "../src/application/game-session";
+import { describe, expect, it } from "vitest";
+import { createInitialState } from "./boot/create-initial-state";
+import { createStaticWorldData } from "./boot/static-world-data";
+import { GameSession, type GameSessionDeps } from "./game-session";
 import type {
   CommandLogRepository,
   GameStateRepository,
@@ -10,16 +10,15 @@ import type {
   SaveSnapshot,
   SaveSummary,
   SnapshotRepository
-} from "../src/core/contracts/game-ports";
-import type { ClockService, EventBus } from "../src/core/contracts/services";
-import type { CommandLogEntry, SnapshotSummary, StateSnapshot } from "../src/core/models/commands";
-import type { DomainEvent } from "../src/core/models/events";
-import type { GameState } from "../src/core/models/game-state";
-import { AUTOSAVE_SLOT_ID, MANUAL_SLOT_ID } from "../src/infrastructure/persistence/save-slots";
+} from "../core/contracts/game-ports";
+import type { ClockService, EventBus } from "../core/contracts/services";
+import type { CommandLogEntry, SnapshotSummary, StateSnapshot } from "../core/models/commands";
+import type { DomainEvent } from "../core/models/events";
+import type { GameState } from "../core/models/game-state";
+import { AUTOSAVE_SLOT_ID, MANUAL_SLOT_ID } from "../infrastructure/persistence/save-slots";
 
 // Helper classes from game-session-player-actions.test.ts to isolate tests
 class InMemoryGameStateRepository implements GameStateRepository {
-  private state: GameState | null = null;
   private readonly persistenceKey = "current";
 
   constructor(private readonly store = new Map<string, GameState>()) {}
@@ -34,6 +33,19 @@ class InMemoryGameStateRepository implements GameStateRepository {
   }
 
   async clearCurrent(): Promise<void> {
+    this.store.delete(this.persistenceKey);
+  }
+
+  loadCurrentSync(): GameState | null {
+    const fromStore = this.store.get(this.persistenceKey);
+    return fromStore ? structuredClone(fromStore) : null;
+  }
+
+  saveCurrentSync(state: GameState): void {
+    this.store.set(this.persistenceKey, structuredClone(state));
+  }
+
+  clearCurrentSync(): void {
     this.store.delete(this.persistenceKey);
   }
 }
@@ -160,13 +172,13 @@ describe("Save, Load and State Restoration Audit", () => {
     const gameStateRepo = new InMemoryGameStateRepository();
     const saveRepo = new InMemorySaveRepository();
     const clock = new ManualClock(Date.now());
-    const initial = createInitialState(staticData, clock.now());
+    const initial = createInitialState(staticData);
     
     const session1 = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock });
     await session1.bootstrap(initial);
 
     // 2. Advance state and trigger an autosave
-    const playerKingdom1 = Object.values(session1.getState().kingdoms).find(k => k.isPlayer)!;
+    const playerKingdom1 = Object.values(session1.getState().kingdoms).find((k: any) => k.isPlayer) as any;
     playerKingdom1.stability = 50; // Change a value to check later
     
     session1.start(); // Register the onClockTick callback
@@ -182,12 +194,12 @@ describe("Save, Load and State Restoration Audit", () => {
 
     const tick2State = session1.getState();
     expect(tick2State.meta.tick).toBe(2);
-    expect(Object.values(tick2State.kingdoms).find(k => k.isPlayer)!.stability).toBe(50);
+    expect((Object.values(tick2State.kingdoms).find((k: any) => k.isPlayer) as any).stability).toBe(50);
 
     // 3. Simulate a refresh: create a new session with the same repositories
     const clock2 = new ManualClock(clock.now() + 100); // slightly later
     const session2 = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock: clock2 });
-    const initial2 = createInitialState(staticData, clock2.now());
+    const initial2 = createInitialState(staticData);
 
     // 4. Bootstrap the new session and verify state restoration
     await session2.bootstrap(initial2);
@@ -195,7 +207,7 @@ describe("Save, Load and State Restoration Audit", () => {
     
     // It should have loaded the autosaved state
     expect(restoredState.meta.tick).toBe(2);
-    const playerKingdom2 = Object.values(restoredState.kingdoms).find(k => k.isPlayer)!;
+    const playerKingdom2 = Object.values(restoredState.kingdoms).find((k: any) => k.isPlayer) as any;
     expect(playerKingdom2.stability).toBe(50);
   });
 
@@ -204,7 +216,7 @@ describe("Save, Load and State Restoration Audit", () => {
     const gameStateRepo = new InMemoryGameStateRepository();
     const saveRepo = new InMemorySaveRepository();
     const clock = new ManualClock(Date.now());
-    const initial = createInitialState(staticData, clock.now());
+    const initial = createInitialState(staticData);
     
     const session = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock });
     await session.bootstrap(initial);
@@ -219,18 +231,18 @@ describe("Save, Load and State Restoration Audit", () => {
     
     await session.flushPersistence();
 
-    const savedPlayerKingdom = Object.values(session.getState().kingdoms).find(k => k.isPlayer)!;
+    const savedPlayerKingdom = Object.values(session.getState().kingdoms).find((k: any) => k.isPlayer) as any;
     expect(savedPlayerKingdom.economy.taxPolicy.baseRate).toBe(0.25);
     
     // 3. Reset state to something different
     session.updateTaxPolicy({ baseRate: 0.5 });
-    const modifiedPlayerKingdom = Object.values(session.getState().kingdoms).find(k => k.isPlayer)!;
+    const modifiedPlayerKingdom = Object.values(session.getState().kingdoms).find((k: any) => k.isPlayer) as any;
     expect(modifiedPlayerKingdom.economy.taxPolicy.baseRate).toBe(0.5);
 
     // 4. Load the manual save and verify
     await session.loadSlot(MANUAL_SLOT_ID);
     const loadedState = session.getState();
-    const loadedPlayerKingdom = Object.values(loadedState.kingdoms).find(k => k.isPlayer)!;
+    const loadedPlayerKingdom = Object.values(loadedState.kingdoms).find((k: any) => k.isPlayer) as any;
     
     expect(loadedPlayerKingdom.economy.taxPolicy.baseRate).toBe(0.25);
   });
@@ -242,20 +254,20 @@ describe("Save, Load and State Restoration Audit", () => {
     const clock = new ManualClock(Date.now());
 
     // 2. Create an older autosave
-    const autosaveState = createInitialState(staticData, clock.now());
+    const autosaveState = createInitialState(staticData);
     autosaveState.meta.tick = 5;
     const autosaveSnapshot = { state: autosaveState, summary: { slotId: AUTOSAVE_SLOT_ID, savedAt: clock.now() } as SaveSummary };
     await saveRepo.saveToSlot(autosaveSnapshot as SaveSnapshot);
     
     // 3. Create a more recent "current" state (e.g. from a session.stop() call)
     clock.advance(10000); // 10 seconds later
-    const currentState = createInitialState(staticData, clock.now());
+    const currentState = createInitialState(staticData);
     currentState.meta.tick = 10;
     await gameStateRepo.saveCurrent(currentState);
 
     // 4. Bootstrap a new session
     const session = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock });
-    await session.bootstrap(createInitialState(staticData, clock.now()));
+    await session.bootstrap(createInitialState(staticData));
 
     // 5. Verify it loaded the most recent state (the "current" one)
     const finalState = session.getState();
