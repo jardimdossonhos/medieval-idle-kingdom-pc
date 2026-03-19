@@ -366,3 +366,15 @@ Os logs do "Passo 2" foram finalmente interceptados e atestaram o comportamento 
 ### Ação de Limpeza:
 1. Remoção de todos os códigos de telemetria e debug da UI e da Main Thread.
 2. Aprimoramento da **Fagulha Vital 2.0**: O algoritmo de ressurreição agora audita não apenas a ausência da árvore ECS no Load, mas avalia ativamente o Índice [0] da população salva. Caso a demografia seja identificada como morta/zerada (Save Corrompido Antigo), ele reinjeta 5.000 de População base para destrancar os cálculos multiplicadores do Worker, recuperando integralmente jogos perdidos nas versões anteriores. **SISTEMA DE SAVES 100% ESTÁVEL.**
+
+---
+
+## Entrada: 22
+
+**Data:** 19/03/2024
+
+### Validação Final de Estabilidade (Saves e ECS):
+O usuário confirmou formalmente que o problema crítico de interrupção de persistência foi definitivamente resolvido.
+- O recarregamento da página (F5) não zera mais os recursos da simulação do Worker.
+- O carregamento de saves manuais restaura integralmente o estado das matrizes econômicas e populacionais exatamente como estavam no momento da gravação.
+- A estabilidade do ciclo de persistência e do "Auto-Boot" foi garantida. O bug foi oficialmente extinto e as lições arquiteturais foram transportadas para o `ARCHITECTURE.md`.

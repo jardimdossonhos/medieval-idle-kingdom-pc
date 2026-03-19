@@ -317,3 +317,13 @@ Esta seção documenta problemas que foram identificados e corrigidos em fases a
 *   **Sintoma Antigo:** O mundo do jogo iniciava "morto" demograficamente em novas campanhas, com `populationTotal` e `populationGrowthRate` zerados, impedindo qualquer crescimento.
 *   **Causa Arquitetural Antiga:** Em campanhas novas (`createInitialState`), o `state.ecs` subia nulo, fazendo com que o `Float64Array` no Worker assumisse seu valor padrão (`0`).
 *   **Solução Implementada (Fase 6):** Injeção de estado reativo (*Fallback payload*) na inicialização da ponte visual (`main.ts`). Caso o `state.ecs` seja ausente na subida de um `game.loaded`, a UI empacota dados de crescimento mínimos e envia ao Worker, garantindo a "fagulha matemática" necessária.
+
+### 7.3. Falha Sistêmica na Restauração de ECS (Zeroing no Load e F5)
+
+*   **Sintoma Antigo:** Ao recarregar a página (F5) ou carregar um save manual, a interface e o ciclo avançavam corretamente, porém os recursos do Worker (Ouro, Comida, etc.) invariavelmente zeravam e recomeçavam seu crescimento a partir de zero.
+*   **Causa Arquitetural Antiga:** Ocorria uma falha dupla interligada. 
+    1.  O uso nativo de `structuredClone()` sobre objetos instanciados pelo WebWorker corrompia a cadeia de protótipos dos `Float64Array`, transformando os arrays em objetos vazios genéricos `{}` no momento da serialização em disco.
+    2.  A implementação do `EventBus.publish` falhava silenciosamente devido a uma tipagem quebrada. A thread principal da UI nunca recebia o evento de `game.loaded` e, portanto, o comando `RESTORE_ECS_STATE` nunca era disparado ao Worker durante o load.
+*   **Solução Implementada:** 
+    1.  **Bypass de Serialização:** A extração do ECS no salvamento agora ignora o clone temporário e extrai os literais numéricos com `Array.from()` diretamente da fonte viva de dados.
+    2.  **Handshake de Eventos e Fagulha 2.0:** Assinatura do `EventBus` estritamente padronizada para injeção. Além disso, o motor principal foi blindado com a *Fagulha Vital 2.0*, que detecta ativamente o carregamento de saves corrompidos (da era pré-fix, com população `0`) e reinjeta a vitalidade base mundial, protegendo a simulação contra estagnação de economia.
