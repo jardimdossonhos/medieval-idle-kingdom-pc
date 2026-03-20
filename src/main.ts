@@ -257,8 +257,23 @@ function saveLocalProfile(profile: LocalPlayerProfile): void {
 
 // Cache de Índice O(1) para abolir o findIndex em arrays de 62k posições
 const REGION_INDEX_MAP = new Map<string, number>();
+const STATIC_IS_WATER = new Uint8Array(WORLD_DEFINITIONS_V1.length);
+const STATIC_BIOME = new Uint8Array(WORLD_DEFINITIONS_V1.length);
+
 for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
-  REGION_INDEX_MAP.set(WORLD_DEFINITIONS_V1[i].id, i);
+  const def = WORLD_DEFINITIONS_V1[i];
+  REGION_INDEX_MAP.set(def.id, i);
+  
+  // Tradução Data-Oriented: Arrays compactos de 8-bits para transporte ultrarrápido ao Worker
+  STATIC_IS_WATER[i] = def.isWater ? 1 : 0;
+  switch (def.biome) {
+    case "ocean": STATIC_BIOME[i] = 0; break;
+    case "desert": STATIC_BIOME[i] = 1; break;
+    case "tundra": STATIC_BIOME[i] = 2; break;
+    case "temperate": STATIC_BIOME[i] = 3; break;
+    case "tropical": STATIC_BIOME[i] = 4; break;
+    default: STATIC_BIOME[i] = 0;
+  }
 }
 
 async function bootstrapApp(): Promise<void> {
@@ -651,7 +666,10 @@ async function bootstrapApp(): Promise<void> {
   };
 
   const totalCountries = WORLD_DEFINITIONS_V1.length;
-  simulationWorker.postMessage({ type: "INIT" as const, payload: { entityCount: totalCountries } });
+  simulationWorker.postMessage({ 
+    type: "INIT" as const, 
+    payload: { entityCount: totalCountries, isWaterData: STATIC_IS_WATER, biomeData: STATIC_BIOME } 
+  });
 
   // Impede o travamento do DOM listando apenas as 300 regiões de terra com maior valor estratégico
   const playableDefs = WORLD_DEFINITIONS_V1
@@ -830,7 +848,10 @@ async function bootstrapApp(): Promise<void> {
       
       // Evita race conditions pausando o worker durante a restauração
       simulationWorker.postMessage({ type: "STOP" });
-      simulationWorker.postMessage({ type: "INIT", payload: { entityCount: expectedLength } });
+      simulationWorker.postMessage({ 
+        type: "INIT", 
+        payload: { entityCount: expectedLength, isWaterData: STATIC_IS_WATER, biomeData: STATIC_BIOME } 
+      });
       
       const payload = {
         gold: toFloat(state.ecs.gold),

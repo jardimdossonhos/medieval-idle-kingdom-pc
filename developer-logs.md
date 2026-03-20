@@ -530,3 +530,32 @@ O motor de simulação (ECS) reporta integridade e velocidade totais no tratamen
 ### Análise de Compatibilidade (Investigação Pendente):
 A leitura dos logs do *Worker Interno do MapLibre* revelou a mensagem: `layer "hexgrid" does not use vector tile spec v2 and therefore may have some rendering errors`. 
 A engine de fatiamento no Node.js (`vt-pbf`) empacotou os tiles em um padrão obsoleto (Spec V1) ou os blocos de "Oceano Vazio" estão desprovidos de cabeçalhos estritos de versão. Como resultado, o MapLibre desativa suas otimizações de decodificação nativa para aplicar *fallbacks* de leitura, o que causa o engasgo da GPU. **Decisão:** O código foi congelado neste ponto. Essa ocorrência exigirá um estudo arquitetural profundo sobre a geração padronizada de arquivos `.mvt / .pbf` (potencialmente substituindo `vt-pbf` por ferramentas nativas como `tippecanoe`) antes de retomarmos as otimizações visuais do mundo.
+
+---
+
+## Entrada: 34
+
+**Data:** 19/03/2024
+
+### Início da Integração Geográfica (Data-Oriented Design)
+De acordo com a "Parada 1" do Roadmap Estratégico, foi iniciada a injeção do conhecimento espacial no motor matemático ECS. 
+A abordagem de engenharia escolhida foi a **Conversão de Enums para Buffers Tipados**. 
+Para evitar afogamento de IPC e custos de serialização (Clonagem Estruturada de JSONs gigantescos), os dados de `Biome` e `isWater` contidos no `.json` estático foram mapeados no boot do `main.ts` para ponteiros de `Uint8Array` de 8-bits.
+
+### Ação Executada (Ponte Cautelosa):
+A carga útil (`payload`) do comando `INIT` foi atualizada. O WebWorker agora recebe sua própria cópia ultra-compacta da geografia global (~62 KB) alocada em sua memória estática interna (`geography`). O registro validou a chegada dos dados sem quebrar a simulação existente. O próximo passo aplicará essas matrizes dentro das classes `EconomySystem` e `PopulationSystem`.
+
+---
+
+## Entrada: 35
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Inchaço Crítico de Memória RAM (Ocean Bloat)
+Auditoria manual de recursos (via Gerenciador de Tarefas do navegador Edge) revelou um consumo massivo e perigoso de **2.5 GB de RAM** e ~12% de uso constante de CPU por aba.
+
+### Análise e Planejamento (Expurgo Oceânico):
+O inchaço na RAM foi rastreado até o construtor do `GameState`. Atualmente, o inicializador do jogo (`create-initial-state.ts`) aloca um objeto `RegionState` completo para todos os **62.418 hexágonos** do mapa, incluindo mais de 40.000 zonas de Mar Profundo. Clonar essa árvore de memória a cada *Autosave* ou *Snapshot* causa uma Pressão de Coleta de Lixo (Garbage Collection Pressure) insustentável.
+
+**Ação Estratégica Planejada:**
+Alterar radicalmente as rotinas de inicialização e o modelo de domínio para que **apenas Hexágonos de Terra Firme existam no GameState**. As definições geográficas (`WORLD_DEFINITIONS_V1`) manterão o oceano para a Placa de Vídeo desenhar o mar, mas a Thread Principal e o ECS ignorarão completamente a existência de entidades marítimas até que mecânicas navais sejam explicitamente adicionadas no futuro.

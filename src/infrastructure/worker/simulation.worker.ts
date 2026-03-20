@@ -10,6 +10,7 @@ let intervalId: number | null = null;
 let world: World | null = null;
 let economy: EconomyComponent | null = null;
 let population: PopulationComponent | null = null;
+let geography: { isWater: Uint8Array; biome: Uint8Array } | null = null;
 const economySystem = new EconomySystem(1.5);
 const populationSystem = new PopulationSystem();
 
@@ -18,7 +19,7 @@ const activeEntities: number[] = [];
 type WorkerCommand =
   | { type: "START" }
   | { type: "STOP" }
-  | { type: "INIT"; payload: { entityCount: number } }
+  | { type: "INIT"; payload: { entityCount: number; isWaterData: Uint8Array; biomeData: Uint8Array } }
   | { type: "RESTORE_ECS_STATE"; payload: EcsState }
   | { type: "EXTRACT_SAVE_STATE" }
   | { type: "PAUSE_AND_EXTRACT_STATE" }
@@ -125,12 +126,17 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
       world = new World();
       economy = new EconomyComponent(count > 0 ? count : 1);
       population = new PopulationComponent(count > 0 ? count : 1);
+      geography = {
+        isWater: command.payload.isWaterData,
+        biome: command.payload.biomeData
+      };
       activeEntities.length = 0;
       // Apenas aloca as entidades. O preenchimento virá do RESTORE_ECS_STATE ou de uma lógica de "novo jogo".
       for (let i = 0; i < count; i += 1) {
         const entityId = world.createEntity();
         activeEntities.push(entityId);
       }
+      console.log(`[Worker] Geografia Inicializada. Matrizes geodésicas acopladas (${geography.isWater.length} zonas).`);
       break;
     }
     case "EXTRACT_SAVE_STATE": {
