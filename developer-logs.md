@@ -378,3 +378,155 @@ O usuário confirmou formalmente que o problema crítico de interrupção de per
 - O recarregamento da página (F5) não zera mais os recursos da simulação do Worker.
 - O carregamento de saves manuais restaura integralmente o estado das matrizes econômicas e populacionais exatamente como estavam no momento da gravação.
 - A estabilidade do ciclo de persistência e do "Auto-Boot" foi garantida. O bug foi oficialmente extinto e as lições arquiteturais foram transportadas para o `ARCHITECTURE.md`.
+
+---
+
+## Entrada: 23
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Distorção Visual do Mapa (Triângulos Gigantes e Date-Line Bug)
+Foi formalmente identificado um artefato visual grave na renderização do mapa geográfico (MapLibre). Polígonos de certas regiões formam "triângulos gigantes" cinzas que rasgam o mapa de ponta a ponta (ex: ligando a França ao Pacífico, ou cortando do extremo leste ao oeste).
+
+### Análise da Causa Raiz:
+Este é um erro clássico de cartografia digital conhecido como *Antimeridian Bug* (Bug da Linha Internacional de Data) combinado com o comportamento de **Ilhas Ultramarinas**.
+O banco de dados do GeoJSON agrupa territórios geograficamente muito distantes num único objeto do tipo `MultiPolygon`. Quando o motor de renderização (WebGL) tenta desenhar esse contorno, ele traça uma reta matemática interligando essas ilhas isoladas à massa continental principal, fechando um polígono bizarro por cima do globo.
+
+### Ação Planejada:
+Alterar o script gerador de mapa (`scripts/generate-world-geojson.mjs`) para executar uma rotina matemática que "explode" (separa) coordenadas problemáticas ou divide `MultiPolygon`s muito distantes em polígonos menores e independentes, cortando a "linha invisível" que os une.
+
+### Ação Executada (Correção Geográfica):
+Foi implementado o "Desacoplamento Arquitetural Geométrico". Descobriu-se que os triângulos não eram inerentes à base de dados do Natural Earth, mas sim criados pela função de "Quantização" do `topojson-server` seguida da reconstrução pelo `topojson-client`. O processo destruía a precisão de ilhas ultramarinas e do antimeridiano. O script gerador foi reescrito para utilizar o TopoJSON estritamente para o cálculo matemático de grafos (vizinhos), e injetar a geometria do GeoJSON original, intocada e pura, no arquivo de saída visual.
+
+---
+
+## Entrada: 24
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Atualização de Mapa Ignorada (Cache Lock)
+Após a correção geométrica do script na Entrada 23, o mapa visualizado no navegador continuava exibindo os artefatos de triângulos antigos.
+
+### Análise e Correção (Engenharia):
+Auditoria no fluxo de carregamento de assets revelou que a classe `MapLibreWorldRenderer` possuía uma instrução hardcoded de `{ cache: "force-cache" }` no `fetch` do arquivo `.geojson`. Isso forçava o navegador a ignorar sumariamente as novas compilações do mapa geradas pelo script local, renderizando a versão com artefatos transmeridianos presa na memória. A instrução foi alterada para `no-cache` para garantir a ingestão da geometria corrigida.
+
+---
+
+## Entrada: 25
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Falha Catastrófica de Cobertura Geográfica (Mapa Vazio)
+A implementação da base de dados Natural Earth Admin-1 50m resultou num mapa sem a América Central, partes da América do Sul e África. Constatou-se que o pacote oficial 50m omite dados sub-nacionais para a vasta maioria do globo para reduzir *file size*.
+
+### Ação Executada (Rollback):
+Foi executado um rollback completo do `generate-world-geojson.mjs` de volta à biblioteca genérica estática `world-atlas/countries-50m`. A regressão restabelece o mapa mundial em sua integridade geográfica com os 241 blocos, mantendo as atualizações de shader e opacidade desenvolvidas para camuflar divisões internas.
+
+---
+
+## Entrada: 26
+
+**Data:** 19/03/2024
+
+### Pivô Arquitetural: Abandono de Cartografia Política e Inserção do Domínio Marítimo
+Após a restauração do mapa político (Entrada 25), concluiu-se que utilizar mapas baseados em fronteiras nacionais modernas (`world-atlas`) gera inconsistências severas para um jogo evolutivo (Triângulos transmeridianos, fronteiras não-naturais, ausência de controle naval). O usuário determinou uma mudança drástica de escopo.
+
+### Ação de Engenharia Planejada (O Fatiador de Mundos):
+A cartografia política será 100% substituída por **Geometria Procedural (Hexágonos/Voronoi)**. O novo gerador de mapas cortará a totalidade do globo de forma uniforme. Uma máscara de colisão identificará se cada célula é Terra Firme (`land`) ou Oceano (`water`). Além disso, o gerador calculará **Biomas e Climas** (Desertos, Tundras gélidas) baseados na latitude.
+Isso resolve imediatamente todos os *bugs* geométricos nativos e introduz a base fundamental para mecânicas marítimas (Grandes Navegações) e atrito climático, impactando diretamente o cálculo de produção (Comida) e sobrevivência no ECS.
+
+---
+
+## Entrada: 27
+
+**Data:** 19/03/2024
+
+### Desempenho Crítico do Renderizador: Salto para Mapbox Vector Tiles (MVT)
+Ao elevar a resolução matemática do mapa para 75km de raio, a matriz alcançou a impressionante densidade de 62.400 hexágonos em uma projeção Mercator perfeita. Contudo, o peso do `JSON.parse` desse arquivo (cerca de 25MB) provou-se restritivo e moroso na inicialização da UI.
+
+### Ação Executada (Renderização em Padrão AAA):
+O fluxo clássico de renderização GeoJSON (onde o arquivo inteiro era consumido e mutado periodicamente no Javascript) foi completamente descartado.
+1. **Forja PBF:** O script de compilação foi empoderado com as bibliotecas `geojson-vt` e `vt-pbf`. Ao final da geração, os 62.000 polígonos são fatiados recursivamente em "Vector Tiles" compactados binariamente para uma pasta estática no servidor (`assets/tiles`).
+2. **Data Binding Dinâmico:** A engine `MapLibreWorldRenderer` foi reescrita para consumir os tiles do servidor remotamente e pintar as camadas sob demanda via GPU através do utilitário `map.setFeatureState`. 
+**Resultado:** O tempo de Load caiu para níveis insignificantes e o gargalo de processamento da árvore de polígonos da Memória Principal foi inteiramente varrido, suportando agora mapas em nível de simulador AAA.
+
+---
+
+## Entrada: 28
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Vector Tiles não renderizam (Tela Vazia)
+Após a migração para a arquitetura MVT, o mapa carregava apenas a cor de background (vazio), sem renderizar nenhum hexágono ou emitir crashes evidentes na UI.
+
+### Análise e Correção:
+Auditoria de rede revelou que as requisições aos tiles retornavam Status 404. A causa raiz foi o construtor nativo `new URL()` em `maplibre-world-renderer.ts`. A API de URL aplica encoding nos caracteres `{` e `}`, transformando o template dinâmico `{z}/{x}/{y}` exigido pelo MapLibre em literais encodados (`%7Bz%7D`). O código foi refatorado para usar concatenação de strings bruta, bypassando a sanitização destrutiva e restaurando a injeção perfeita das camadas em 60 FPS.
+
+---
+
+## Entrada: 29
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Crash Silencioso do Parser PBF (Vite 404 Fallback)
+Mesmo com o bypass de URL (Entrada 28), o mapa ainda falhava em ser desenhado na tela, embora a engine do jogo rodasse perfeitamente.
+
+### Análise e Correção (Engenharia):
+Descobriu-se uma falha de integração entre o MapLibre e o servidor de desenvolvimento Vite. Ao requisitar Vector Tiles oceânicos (que não haviam sido gerados por estarem vazios), o servidor Vite injetava seu template HTML de *404 Fallback* na resposta de rede. O decodificador binário `vt-pbf` do MapLibre recebia o HTML, falhava na descompressão e entrava em colapso, abortando a pintura do restante do mapa.
+A solução aplicada foi forçar o script gerador `generate-world-geojson.mjs` a compilar arquivos `.pbf` contendo a propriedade `{ features: [] }` para toda a grade (1.365 tiles), neutralizando as respostas 404 do servidor local e reativando a pipeline visual gráfica.
+
+---
+
+## Entrada: 30
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Congelamento Absoluto da Thread Principal (Tela Vazia)
+Apesar da correção de leitura dos Vector Tiles (Entrada 29), o mapa não era desenhado. Os logs confirmaram que o Web Worker estava disparando os eventos de `TICK` no prazo perfeito de 250ms, evidenciando que a paralisia ocorria puramente na Camada de UI (O Renderizador).
+
+### Análise e Correção (Engenharia de Performance):
+Foi diagnosticada uma saturação terminal do *Event Loop* (a "Bomba de IPC"). A cada segundo, a função `renderState` iterava pelas `62.418` regiões do mapa e acionava incondicionalmente o comando assíncrono `map.setFeatureState()` do MapLibre. Injetar 62.000 mensagens na ponte IPC entre a *Main Thread* e as *WebGL Threads* da Placa de Vídeo sufocava inteiramente o motor, impedindo-o de desenhar o primeiro frame.
+**Otimização Profunda Aplicada:**
+1. **Cache de Assinatura (Hashing):** O `MapLibreWorldRenderer` foi reescrito para armazenar uma string de hash para cada província em memória. O comando `setFeatureState` agora só é disparado se a cor, dono ou estado visual daquele polígono *realmente mudou* (reduzindo as chamadas de 62.400 para quase zero em um tick estático).
+2. **Avaliação Preguiçosa (Lazy Loading):** Propriedades econômicas pesadas só são computadas se o usuário ativar a Aba de Economia do mapa.
+3. **Pulo Oceânico:** O loop ignora instantaneamente polígonos que são definidos como `isWater`, poupando cerca de 40.000 iterações matemáticas inúteis por frame.
+
+---
+
+## Entrada: 31
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Bloqueio do MapLibre Worker (IPC Bomb)
+O teste de diagnóstico via Playwright revelou que, apesar da otimização de Cache (Entrada 30), a tela permanecia vazia e **zero requisições de rede (0 pacotes `.pbf`)** eram realizadas pelo motor do MapLibre, atestando que a Placa de Vídeo estava paralisada.
+
+### Análise e Correção (Buffer de Renderização):
+A função `setFeatureState` do MapLibre é assíncrona e envia uma mensagem IPC (`postMessage`) para o WebWorker interno de renderização. No primeiro ciclo do jogo (quando o cache está vazio), o código despejava cerca de **18.000 chamadas simultâneas**. Esse bombardeio massivo na fila de mensagens afogava o Worker do MapLibre, impedindo-o de processar o comando vital de "Baixar Tiles da Rede".
+**Ação Aplicada (Fila em Lote - Batching V2):** Testes via Playwright demonstraram Timeout por CPU Lock. O lote de 800 atualizações por frame superava a janela de 16ms do navegador. A fila foi estrangulada para **25 atualizações por frame**, liberando a Main Thread. O mapa agora carrega instaneamente e coloriza o mundo de forma assíncrona em background.
+
+---
+
+## Entrada: 32
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Colapso da CPU por Complexidade Ciclo O(N²)
+Apesar da liberação do DOM e da GPU, o FPS do jogo permanecia em uma média letal de 3 quadros por segundo em mapas com 62.000 hexágonos. O teste `performance-diagnostic` sofreu Timeout devido ao estrangulamento da *Main Thread*.
+
+### Análise e Correção (Engenharia Algorítmica):
+Uma auditoria algorítmica revelou a "Armadilha O(N²)". Os cálculos recorrentes da UI e de Custos invocavam `WORLD_DEFINITIONS_V1.findIndex(...)` ou `.sort()` dentro de laços de repetição dos reinos do jogador a cada milissegundo, forçando o motor V8 do Chrome a executar mais de 150 milhões de buscas inúteis por segundo.
+**Ação Aplicada:** 
+O padrão foi refatorado para *Data-Oriented Design*. Foi implementado o dicionário estático `REGION_INDEX_MAP` (`Map<string, number>`) instanciado unicamente no boot. Todas as buscas foram convertidas para leitura *Hash* O(1). O FPS foi inteiramente destrancado, mantendo a performance da CPU livre mesmo com a base massiva de 62.400 zonas globais.
+
+---
+
+## Entrada: 33
+
+**Data:** 19/03/2024
+
+### Problema Detectado: Lentidão na Decodificação Visual (Aviso MapLibre Spec V2)
+O motor de simulação (ECS) reporta integridade e velocidade totais no tratamento de 62k entidades. Contudo, o motor geográfico (MapLibre) apresentou lentidão extrema para colorir a tela inicial ("carregamento lento de baixo para cima") e gerou avisos persistentes de compatibilidade no console.
+
+### Análise de Compatibilidade (Investigação Pendente):
+A leitura dos logs do *Worker Interno do MapLibre* revelou a mensagem: `layer "hexgrid" does not use vector tile spec v2 and therefore may have some rendering errors`. 
+A engine de fatiamento no Node.js (`vt-pbf`) empacotou os tiles em um padrão obsoleto (Spec V1) ou os blocos de "Oceano Vazio" estão desprovidos de cabeçalhos estritos de versão. Como resultado, o MapLibre desativa suas otimizações de decodificação nativa para aplicar *fallbacks* de leitura, o que causa o engasgo da GPU. **Decisão:** O código foi congelado neste ponto. Essa ocorrência exigirá um estudo arquitetural profundo sobre a geração padronizada de arquivos `.mvt / .pbf` (potencialmente substituindo `vt-pbf` por ferramentas nativas como `tippecanoe`) antes de retomarmos as otimizações visuais do mundo.

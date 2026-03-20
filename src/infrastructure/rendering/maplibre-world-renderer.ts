@@ -1,41 +1,10 @@
 import maplibregl, { type GeoJSONSource, type Map } from "maplibre-gl";
-import type { FeatureCollection, Geometry } from "geojson";
+import type { FeatureCollection } from "geojson";
 import type { KingdomState } from "../../core/models/game-state";
 import type { StaticWorldData } from "../../core/models/static-world-data";
 import type { WorldState } from "../../core/models/world";
 import type { GameMapRenderer, MapLayerMode, MapRenderContext, MapSelection } from "./map-renderer";
-
-interface CountryFeatureProperties {
-  regionId?: string;
-  name?: string;
-  ownerId?: string;
-  ownerName?: string;
-  ownerColor?: string;
-  dominantFaith?: string;
-  dominantShare?: number;
-  minorityFaith?: string;
-  minorityShare?: number;
-  faithColor?: string;
-  unrest?: number;
-  contested?: number;
-  recentlyCaptured?: number;
-  pulse?: number;
-  selected?: number;
-  isAllied?: number;
-  isEnemy?: number;
-  wealthRatio?: number;
-}
-
-interface CountryFeature {
-  type: "Feature";
-  geometry: Geometry;
-  properties: CountryFeatureProperties;
-}
-
-interface CountryFeatureCollection {
-  type: "FeatureCollection";
-  features: CountryFeature[];
-}
+import { WORLD_DEFINITIONS_V1 } from "../../application/boot/generated/world-definitions-v1";
 
 interface WarMarkerFeature {
   type: "Feature";
@@ -63,11 +32,12 @@ const WAR_MARKER_LAYER_ID = "war-markers-circle";
 
 export class MapLibreWorldRenderer implements GameMapRenderer {
   private map: Map | null = null;
-  private geojson: CountryFeatureCollection | null = null;
-  private readonly regionCenters = new globalThis.Map<string, [number, number]>();
   private layerMode: MapLayerMode = "owner";
   private selectedRegionId: string | null = null;
   private mounted = false;
+  private featureStateCache: string[] = [];
+  private featureStateQueue: Array<{ id: number; state: any }> = [];
+  private animationFrameId: number | null = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -87,7 +57,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
               id: "background",
               type: "background",
               paint: {
-                "background-color": "#d8c7aa"
+                "background-color": "#4a6b7d"
               }
             }
           ]
@@ -99,16 +69,13 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         dragRotate: false
       });
 
+      this.startQueueProcessor();
+
       this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       this.map.scrollZoom.enable();
       this.map.dragPan.enable();
       this.map.doubleClickZoom.enable();
       this.map.touchZoomRotate.enable();
-    }
-
-    if (!this.geojson) {
-      this.geojson = await this.loadGeoJson();
-      this.indexRegionCenters(this.geojson);
     }
 
     if (!this.mounted) {
@@ -126,7 +93,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
   }
 
   render(world: WorldState, kingdoms: Record<string, KingdomState>, context?: MapRenderContext): void {
-    if (!this.map || !this.geojson) {
+    if (!this.map) {
       return;
     }
 
@@ -148,58 +115,83 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       : new Set<string>();
     const animationClockMs = context?.animationClockMs ?? (typeof performance !== "undefined" ? performance.now() : Date.now());
 
-    for (const feature of this.geojson.features) {
-      const regionId = feature.properties.regionId;
-      if (!regionId) {
-        continue;
-      }
+    const isEconomyLayer = this.layerMode === "economy";
+    const isReligionLayer = this.layerMode === "religion";
+    const isUnrestLayer = this.layerMode === "unrest";
+    const isDiplomacyLayer = this.layerMode === "diplomacy";
 
+    // Usa o array de definições puro como fonte da iteração de estados
+    for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
+      const def = WORLD_DEFINITIONS_V1[i];
+      if (def.isWater) continue; // Pula os oceanos instantaneamente (ganho massivo de FPS)
+
+      const numericId = i;
+      const regionId = def.id;
       const region = world.regions[regionId];
+      
       const isRecentlyCaptured = recentlyCapturedRegionIds.has(regionId);
       const pulse = isRecentlyCaptured ? buildPulse(animationClockMs, regionId) : 0;
+      const selected = this.selectedRegionId === regionId ? 1 : 0;
+      const contested = contestedRegionIds.has(regionId) ? 1 : 0;
 
       if (!region) {
-        feature.properties.ownerId = "neutral";
-        feature.properties.ownerName = "Fora da campanha";
-        feature.properties.ownerColor = "#857a67";
-        feature.properties.dominantFaith = "unknown";
-        feature.properties.dominantShare = 0;
-        feature.properties.minorityFaith = undefined;
-        feature.properties.minorityShare = undefined;
-        feature.properties.faithColor = "#6f6352";
-        feature.properties.unrest = 0;
-        feature.properties.contested = 0;
-        feature.properties.recentlyCaptured = 0;
-        feature.properties.pulse = pulse;
-        feature.properties.selected = this.selectedRegionId === regionId ? 1 : 0;
-        feature.properties.isAllied = 0;
-        feature.properties.isEnemy = 0;
-        feature.properties.wealthRatio = 0;
+        const hash = `empty|${selected}|${pulse}|${contested}`;
+        if (this.featureStateCache[numericId] !== hash) {
+          this.featureStateQueue.push({
+            id: numericId,
+            state: {
+              ownerColor: "#857a67",
+              faithColor: "#6f6352",
+              unrest: 0,
+              contested,
+              recentlyCaptured: 0,
+              pulse,
+              selected,
+              isAllied: 0,
+              isEnemy: 0,
+              wealthRatio: 0,
+              dominantShare: 0
+            }
+          });
+          this.featureStateCache[numericId] = hash;
+        }
         continue;
       }
 
       const owner = kingdoms[region.ownerId];
+      const ownerColor = colorForKingdom(owner?.id ?? region.ownerId);
+      
+      // Extração preguiçosa: Só envia para a Placa de Vídeo o que a camada atual exige
+      const unrest = isUnrestLayer ? region.unrest : 0;
+      const wealthRatio = isEconomyLayer ? (context?.regionWealthRatio?.[regionId] ?? 0) : 0;
+      const isAllied = isDiplomacyLayer && playerAlliedRegionIds.has(regionId) ? 1 : 0;
+      const isEnemy = isDiplomacyLayer && playerEnemyRegionIds.has(regionId) ? 1 : 0;
+      const faithColor = isReligionLayer ? colorForFaith(region.dominantFaith, this.staticData) : "";
+      const dominantShare = isReligionLayer ? region.dominantShare : 0;
 
-      feature.properties.ownerId = owner?.id ?? region.ownerId;
-      feature.properties.ownerName = owner?.name ?? region.ownerId;
-      feature.properties.ownerColor = colorForKingdom(owner?.id ?? region.ownerId);
-      feature.properties.dominantFaith = region.dominantFaith;
-      feature.properties.dominantShare = region.dominantShare;
-      feature.properties.minorityFaith = region.minorityFaith;
-      feature.properties.minorityShare = region.minorityShare;
-      feature.properties.faithColor = colorForFaith(region.dominantFaith, this.staticData);
-      feature.properties.unrest = region.unrest;
-      feature.properties.contested = contestedRegionIds.has(regionId) ? 1 : 0;
-      feature.properties.recentlyCaptured = isRecentlyCaptured ? 1 : 0;
-      feature.properties.pulse = pulse;
-      feature.properties.selected = this.selectedRegionId === regionId ? 1 : 0;
-      feature.properties.isAllied = playerAlliedRegionIds.has(regionId) ? 1 : 0;
-      feature.properties.isEnemy = playerEnemyRegionIds.has(regionId) ? 1 : 0;
-      feature.properties.wealthRatio = context?.regionWealthRatio?.[regionId] ?? 0;
+      // Assinatura de estado (String leve para verificação em cache)
+      const hash = `${ownerColor}|${selected}|${pulse}|${contested}|${unrest}|${wealthRatio}|${isAllied}|${isEnemy}|${faithColor}|${dominantShare}`;
+
+      if (this.featureStateCache[numericId] !== hash) {
+        this.featureStateQueue.push({
+          id: numericId,
+          state: {
+            ownerColor,
+            faithColor,
+            unrest,
+            contested,
+            recentlyCaptured: isRecentlyCaptured ? 1 : 0,
+            pulse,
+            selected,
+            isAllied,
+            isEnemy,
+            wealthRatio,
+            dominantShare
+          }
+        });
+        this.featureStateCache[numericId] = hash;
+      }
     }
-
-    const source = this.map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
-    source?.setData(this.geojson as unknown as FeatureCollection);
 
     const markerRegions = context?.activeWarMarkerRegionIds?.length
       ? context.activeWarMarkerRegionIds
@@ -209,6 +201,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
   }
 
   destroy(): void {
+    this.stopQueueProcessor();
     if (!this.map) {
       return;
     }
@@ -216,8 +209,30 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
     this.map.remove();
     this.map = null;
     this.mounted = false;
-    this.geojson = null;
-    this.regionCenters.clear();
+  }
+
+  private startQueueProcessor() {
+    const process = () => {
+      // A Placa de Vídeo precisa respirar. Reduzido para 25 por frame (~1.500/segundo).
+      // Isso garante 60 FPS cravados e impede o congelamento do DOM/CPU.
+      if (this.map && this.map.getSource(SOURCE_ID) && this.featureStateQueue.length > 0) {
+        const batch = this.featureStateQueue.splice(0, 25); 
+        
+        for (const item of batch) {
+          this.map.setFeatureState({ source: SOURCE_ID, sourceLayer: "hexgrid", id: item.id }, item.state);
+        }
+        this.map.triggerRepaint(); // Força a placa de vídeo a desenhar os novos hexágonos instantaneamente
+      }
+      this.animationFrameId = requestAnimationFrame(process);
+    };
+    this.animationFrameId = requestAnimationFrame(process);
+  }
+
+  private stopQueueProcessor() {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
   }
 
   private async mountLayers(): Promise<void> {
@@ -233,8 +248,9 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
 
     if (!this.map.getSource(SOURCE_ID)) {
       this.map.addSource(SOURCE_ID, {
-        type: "geojson",
-        data: this.geojson as unknown as FeatureCollection
+        type: "vector",
+        tiles: [buildTileUrl()],
+        maxzoom: 5
       });
     }
 
@@ -250,9 +266,11 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         id: FILL_LAYER_ID,
         type: "fill",
         source: SOURCE_ID,
+        "source-layer": "hexgrid",
         paint: {
-          "fill-color": ["coalesce", ["get", "ownerColor"], "#8d816e"],
-          "fill-opacity": 0.78
+          "fill-color": ["coalesce", ["feature-state", "ownerColor"], "#8d816e"],
+          "fill-opacity": 0.9,
+          "fill-outline-color": ["coalesce", ["feature-state", "ownerColor"], "#8d816e"]
         }
       });
     }
@@ -262,17 +280,18 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         id: CONTESTED_LAYER_ID,
         type: "line",
         source: SOURCE_ID,
+        "source-layer": "hexgrid",
         paint: {
           "line-color": "#8f1f1f",
           "line-width": [
             "case",
-            ["==", ["coalesce", ["get", "contested"], 0], 1],
+            ["==", ["coalesce", ["feature-state", "contested"], 0], 1],
             2.1,
             0.2
           ],
           "line-opacity": [
             "case",
-            ["==", ["coalesce", ["get", "contested"], 0], 1],
+            ["==", ["coalesce", ["feature-state", "contested"], 0], 1],
             0.88,
             0
           ],
@@ -286,32 +305,35 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
         id: BORDER_LAYER_ID,
         type: "line",
         source: SOURCE_ID,
+        "source-layer": "hexgrid",
         paint: {
           "line-color": [
             "case",
-            ["==", ["get", "selected"], 1],
-            "#f2d067",
-            [">", ["coalesce", ["get", "pulse"], 0], 0],
+            ["==", ["feature-state", "selected"], 1],
+            "#ffffff",
+            [">", ["coalesce", ["feature-state", "pulse"], 0], 0],
             "#f2b15a",
-            ["==", ["coalesce", ["get", "recentlyCaptured"], 0], 1],
+            ["==", ["coalesce", ["feature-state", "recentlyCaptured"], 0], 1],
             "#ef9e2b",
-            "#4a3722"
+            "#000000"
           ],
           "line-width": [
             "case",
-            ["==", ["get", "selected"], 1],
-            2.8,
-            [">", ["coalesce", ["get", "pulse"], 0], 0],
-            ["+", 1.5, ["*", ["coalesce", ["get", "pulse"], 0], 2.4]],
-            ["==", ["coalesce", ["get", "recentlyCaptured"], 0], 1],
+            ["==", ["feature-state", "selected"], 1],
+            2.5,
+            [">", ["coalesce", ["feature-state", "pulse"], 0], 0],
+            ["+", 1.5, ["*", ["coalesce", ["feature-state", "pulse"], 0], 2.4]],
+            ["==", ["coalesce", ["feature-state", "recentlyCaptured"], 0], 1],
             2.2,
-            1.1
+            0.5
           ],
           "line-opacity": [
             "case",
-            ["==", ["coalesce", ["get", "contested"], 0], 1],
+            ["==", ["get", "isWater"], true],
+            0.04,
+            ["==", ["coalesce", ["feature-state", "contested"], 0], 1],
             0.98,
-            0.8
+            0.12
           ]
         }
       });
@@ -369,108 +391,101 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
     });
   }
 
-  private async loadGeoJson(): Promise<CountryFeatureCollection> {
-    const failures: string[] = [];
-
-    for (const url of buildGeoJsonUrlCandidates()) {
-      let response: Response;
-      try {
-        response = await fetch(url, { cache: "force-cache" });
-      } catch (error) {
-        failures.push(`${url} (${error instanceof Error ? error.message : "erro de rede"})`);
-        continue;
-      }
-
-      if (!response.ok) {
-        failures.push(`${url} (HTTP ${response.status})`);
-        continue;
-      }
-
-      const payload = (await response.json()) as CountryFeatureCollection;
-      if (payload.type === "FeatureCollection" && Array.isArray(payload.features) && payload.features.length > 0) {
-        return payload;
-      }
-
-      failures.push(`${url} (payload inválido)`);
-    }
-
-    throw new Error(`Falha ao carregar GeoJSON do mapa mundial. Tentativas: ${failures.join("; ")}`);
-  }
-
   private applyLayerMode(): void {
     if (!this.map || !this.map.getLayer(FILL_LAYER_ID)) {
       return;
     }
+    
+    const WATER_COLOR = "#6b8696";
+    const WATER_OPACITY = 0.55;
 
     switch (this.layerMode) {
       case "owner":
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", ["coalesce", ["get", "ownerColor"], "#8d816e"]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", 0.8);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", ["case", ["==", ["get", "isWater"], true], WATER_COLOR, ["coalesce", ["feature-state", "ownerColor"], "#8d816e"]]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", ["case", ["==", ["get", "isWater"], true], WATER_OPACITY, 0.9]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", ["case", ["==", ["get", "isWater"], true], WATER_COLOR, ["coalesce", ["feature-state", "ownerColor"], "#8d816e"]]);
         break;
       case "unrest":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
-          "interpolate",
-          ["linear"],
-          ["coalesce", ["get", "unrest"], 0],
-          0,
-          "#3e6b57",
-          0.45,
-          "#bb7a2a",
-          0.75,
-          "#ad2a24"
+          "case",
+          ["==", ["get", "isWater"], true], WATER_COLOR,
+          [
+            "interpolate",
+            ["linear"],
+            ["coalesce", ["feature-state", "unrest"], 0],
+            0, "#3e6b57",
+            0.45, "#bb7a2a",
+            0.75, "#ad2a24"
+          ]
         ]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", 0.82);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", ["case", ["==", ["get", "isWater"], true], WATER_OPACITY, 0.9]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
         break;
       case "war":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
           "case",
-          ["==", ["coalesce", ["get", "contested"], 0], 1],
+          ["==", ["get", "isWater"], true], WATER_COLOR,
+          ["==", ["coalesce", ["feature-state", "contested"], 0], 1],
           "#a31f1f",
-          ["coalesce", ["get", "ownerColor"], "#8d816e"]
+          ["coalesce", ["feature-state", "ownerColor"], "#8d816e"]
         ]);
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", [
           "case",
-          ["==", ["coalesce", ["get", "contested"], 0], 1],
+          ["==", ["get", "isWater"], true], WATER_OPACITY,
+          ["==", ["coalesce", ["feature-state", "contested"], 0], 1],
           0.95,
-          0.58
+          0.75
         ]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
         break;
       case "religion":
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", ["coalesce", ["get", "faithColor"], "#75624a"]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
+          "case", ["==", ["get", "isWater"], true], WATER_COLOR, ["coalesce", ["feature-state", "faithColor"], "#75624a"]
+        ]);
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", [
-          "interpolate",
+          "case",
+          ["==", ["get", "isWater"], true], WATER_OPACITY,
+          ["interpolate",
           ["linear"],
-          ["coalesce", ["get", "dominantShare"], 0],
+          ["coalesce", ["feature-state", "dominantShare"], 0],
           0,
-          0.44,
+          0.5,
           0.5,
           0.72,
           1,
           0.9
-        ]);
+        ]]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
         break;
       case "diplomacy":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
           "case",
-          ["==", ["coalesce", ["get", "isAllied"], 0], 1],
+          ["==", ["get", "isWater"], true], WATER_COLOR,
+          ["==", ["coalesce", ["feature-state", "isAllied"], 0], 1],
           "#3e6b8c", // Azul: Jogador e Aliados
-          ["==", ["coalesce", ["get", "isEnemy"], 0], 1],
+          ["==", ["coalesce", ["feature-state", "isEnemy"], 0], 1],
           "#a32a2a", // Vermelho: Inimigos / Rivais
           "#8d816e"  // Neutro
         ]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", 0.85);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", ["case", ["==", ["get", "isWater"], true], WATER_OPACITY, 0.85]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
         break;
       case "economy":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
-          "interpolate",
-          ["linear"],
-          ["coalesce", ["get", "wealthRatio"], 0],
-          0, "#8d816e",     // Pobre (Cor base neutra)
-          0.2, "#a6955a",   // Leve acúmulo
-          0.5, "#cca43b",   // Riqueza moderada
-          1, "#f2d067"      // Extremamente Rico (Dourado Vibrante)
+          "case",
+          ["==", ["get", "isWater"], true], WATER_COLOR,
+          [
+            "interpolate",
+            ["linear"],
+            ["coalesce", ["feature-state", "wealthRatio"], 0],
+            0, "#8d816e",
+            0.2, "#a6955a",
+            0.5, "#cca43b",
+            1, "#f2d067"
+          ]
         ]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", 0.85);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", ["case", ["==", ["get", "isWater"], true], WATER_OPACITY, 0.85]);
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
         break;
     }
   }
@@ -487,10 +502,10 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
 
     const features: WarMarkerFeature[] = [];
     for (const regionId of Array.from(new Set(regionIds)).sort()) {
-      const center = this.regionCenters.get(regionId);
-      if (!center) {
-        continue;
-      }
+      const def = this.staticData?.definitions[regionId];
+      if (!def) continue;
+
+      const center = [def.center.x, def.center.y] as [number, number];
 
       features.push({
         type: "Feature",
@@ -510,22 +525,6 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       features
     } as unknown as FeatureCollection);
   }
-
-  private indexRegionCenters(collection: CountryFeatureCollection): void {
-    this.regionCenters.clear();
-
-    for (const feature of collection.features) {
-      const regionId = feature.properties.regionId;
-      if (!regionId) {
-        continue;
-      }
-
-      const center = geometryCenter(feature.geometry);
-      if (center) {
-        this.regionCenters.set(regionId, center);
-      }
-    }
-  }
 }
 
 function emptyWarMarkerCollection(): WarMarkerFeatureCollection {
@@ -539,56 +538,6 @@ function buildPulse(clockMs: number, regionId: string): number {
   const seed = regionId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const normalized = Math.sin((clockMs + seed * 13) * 0.008);
   return Number(((normalized + 1) * 0.5).toFixed(3));
-}
-
-function geometryCenter(geometry: Geometry | null | undefined): [number, number] | null {
-  if (!geometry) {
-    return null;
-  }
-
-  const bounds = {
-    minX: Number.POSITIVE_INFINITY,
-    minY: Number.POSITIVE_INFINITY,
-    maxX: Number.NEGATIVE_INFINITY,
-    maxY: Number.NEGATIVE_INFINITY
-  };
-
-  collectBounds(geometry, bounds);
-
-  if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY) || !Number.isFinite(bounds.maxX) || !Number.isFinite(bounds.maxY)) {
-    return null;
-  }
-
-  return [Number(((bounds.minX + bounds.maxX) / 2).toFixed(6)), Number(((bounds.minY + bounds.maxY) / 2).toFixed(6))];
-}
-
-function collectBounds(value: unknown, bounds: { minX: number; minY: number; maxX: number; maxY: number }): void {
-  if (Array.isArray(value)) {
-    if (value.length >= 2 && typeof value[0] === "number" && typeof value[1] === "number") {
-      const lon = value[0];
-      const lat = value[1];
-      bounds.minX = Math.min(bounds.minX, lon);
-      bounds.maxX = Math.max(bounds.maxX, lon);
-      bounds.minY = Math.min(bounds.minY, lat);
-      bounds.maxY = Math.max(bounds.maxY, lat);
-      return;
-    }
-
-    for (const child of value) {
-      collectBounds(child, bounds);
-    }
-    return;
-  }
-
-  if (value && typeof value === "object") {
-    const candidate = value as Record<string, unknown>;
-    if ("coordinates" in candidate) {
-      collectBounds(candidate.coordinates, bounds);
-    }
-    if ("geometries" in candidate) {
-      collectBounds(candidate.geometries, bounds);
-    }
-  }
 }
 
 function colorForKingdom(kingdomId: string): string {
@@ -608,7 +557,7 @@ function colorForFaith(faithId: string, staticData?: StaticWorldData): string {
   return palette[hash % palette.length];
 }
 
-function buildGeoJsonUrlCandidates(): string[] {
+function buildTileUrl(): string {
   const currentUrl = new URL(window.location.href);
   currentUrl.hash = "";
   currentUrl.search = "";
@@ -620,10 +569,6 @@ function buildGeoJsonUrlCandidates(): string[] {
       : `${currentUrl.pathname}/`;
   }
 
-  return [
-    new URL("assets/maps/world-countries-v1.geojson", currentUrl).toString(),
-    new URL("assets/maps/world-countries-v0.geojson", currentUrl).toString(),
-    new URL("./assets/maps/world-countries-v1.geojson", currentUrl).toString(),
-    new URL("./assets/maps/world-countries-v0.geojson", currentUrl).toString()
-  ];
+  // Concatenação manual estrita para evitar que o URL-encoder destrua as chaves de template do MapLibre (%7Bz%7D)
+  return `${currentUrl.origin}${currentUrl.pathname}assets/tiles/{z}/{x}/{y}.pbf`;
 }

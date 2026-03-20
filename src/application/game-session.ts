@@ -21,6 +21,7 @@ import type { StaticWorldData } from "../core/models/static-world-data";
 import { buildStateHash } from "../core/utils/state-fingerprint";
 import { hashDeterministic } from "../core/utils/stable-hash";
 import { TickPipeline, type SimulationSystem } from "../core/simulation/tick-pipeline";
+import { WORLD_DEFINITIONS_V1 } from "./boot/generated/world-definitions-v1";
 import { AUTOSAVE_SLOT_ID, MANUAL_SLOT_ID } from "../infrastructure/persistence/save-slots";
 
 export interface GameSessionDeps {
@@ -69,6 +70,12 @@ export interface RuntimeMetrics {
   tickMsAverage: number;
   offlineCatchUpMs: number;
   offlineTicks: number;
+}
+
+// Cache de Indexação Global: Transforma buscas O(N) em O(1)
+const REGION_INDEX_MAP = new Map<string, number>();
+for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
+  REGION_INDEX_MAP.set(WORLD_DEFINITIONS_V1[i].id, i);
 }
 
 export class GameSession {
@@ -851,9 +858,7 @@ export class GameSession {
     if (!kingdom) {
       return -1;
     }
-
-    const definitions = Object.values(this.deps.staticWorldData.definitions).sort((a, b) => a.id.localeCompare(b.id));
-    return definitions.findIndex((def) => def.id === kingdom.capitalRegionId);
+    return REGION_INDEX_MAP.get(kingdom.capitalRegionId) ?? -1;
   }
 
   private getKingdomTotalEcsStock(state: GameState, kingdomId: string): Record<ResourceType, number> {
@@ -862,12 +867,10 @@ export class GameSession {
       return emptyStock;
     }
 
-    const definitions = Object.values(this.deps.staticWorldData.definitions).sort((a, b) => a.id.localeCompare(b.id));
-
     const kingdomRegionIndices = Object.values(state.world.regions)
       .filter((r) => r.ownerId === kingdomId)
-      .map((r) => definitions.findIndex((def) => def.id === r.regionId))
-      .filter((index) => index !== -1);
+      .map((r) => REGION_INDEX_MAP.get(r.regionId))
+      .filter((index): index is number => index !== undefined);
 
     const totals = emptyStock;
     const ecs = state.ecs;

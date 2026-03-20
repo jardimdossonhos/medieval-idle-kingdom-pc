@@ -1,4 +1,4 @@
-﻿export enum ResourceType {
+﻿﻿export enum ResourceType {
   Gold = "gold",
   Food = "food",
   Wood = "wood",
@@ -80,4 +80,12 @@ export enum VictoryPath {
   EconomicSupremacy = "economic_supremacy",
   ReligiousSupremacy = "religious_supremacy",
   DynasticLegacy = "dynastic_legacy"
+}
+
+export enum BiomeType {
+  Ocean = "ocean",
+  Desert = "desert",
+  Tundra = "tundra",
+  Temperate = "temperate",
+  Tropical = "tropical"
 }

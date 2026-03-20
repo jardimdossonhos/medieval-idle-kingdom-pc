@@ -1,4 +1,5 @@
 import type { KingdomId, Point2D, RegionId, ReligionId } from "./types";
+import { BiomeType } from "./enums";
 
 export type RegionZone =
   | "europe"
@@ -20,6 +21,8 @@ export interface RegionDefinition {
   economyValue: number;
   militaryValue: number;
   isCoastal: boolean;
+  isWater: boolean;
+  biome: BiomeType;
   neighbors: RegionId[];
   center: Point2D;
 }

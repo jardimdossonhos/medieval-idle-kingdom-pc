@@ -255,6 +255,12 @@ function saveLocalProfile(profile: LocalPlayerProfile): void {
   localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
 
+// Cache de Índice O(1) para abolir o findIndex em arrays de 62k posições
+const REGION_INDEX_MAP = new Map<string, number>();
+for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
+  REGION_INDEX_MAP.set(WORLD_DEFINITIONS_V1[i].id, i);
+}
+
 async function bootstrapApp(): Promise<void> {
   const appRoot = document.getElementById("app");
 
@@ -647,9 +653,13 @@ async function bootstrapApp(): Promise<void> {
   const totalCountries = WORLD_DEFINITIONS_V1.length;
   simulationWorker.postMessage({ type: "INIT" as const, payload: { entityCount: totalCountries } });
 
-  // Popula o select de países ordenados alfabeticamente
-  const sortedDefs = [...WORLD_DEFINITIONS_V1].sort((a, b) => a.name.localeCompare(b.name));
-  for (const def of sortedDefs) {
+  // Impede o travamento do DOM listando apenas as 300 regiões de terra com maior valor estratégico
+  const playableDefs = WORLD_DEFINITIONS_V1
+    .filter(def => !def.isWater)
+    .sort((a, b) => (b.economyValue + b.strategicValue) - (a.economyValue + a.strategicValue))
+    .slice(0, 300);
+    
+  for (const def of playableDefs) {
     const opt = document.createElement("option");
     opt.value = def.id;
     opt.textContent = `${def.name} (Riqueza Eco: ${def.economyValue})`;
@@ -923,13 +933,14 @@ async function bootstrapApp(): Promise<void> {
     }
 
     const player = getPlayerKingdom(state);
-    const playerRegionIds = Object.keys(state.world.regions).filter(
-      (regionId) => state.world.regions[regionId].ownerId === player.id
-    );
-
-    const playerRegionIndices = playerRegionIds
-      .map((regionId) => WORLD_DEFINITIONS_V1.findIndex((def) => def.id === regionId))
-      .filter((index) => index !== -1);
+    
+    const playerRegionIndices: number[] = [];
+    for (const regionId in state.world.regions) {
+      if (state.world.regions[regionId].ownerId === player.id) {
+        const idx = REGION_INDEX_MAP.get(regionId);
+        if (idx !== undefined) playerRegionIndices.push(idx);
+      }
+    }
 
     const totals: Record<string, number> = {};
     const allResources = currentSimulationState;
@@ -955,13 +966,14 @@ async function bootstrapApp(): Promise<void> {
 
   function getPlayerTotalPopulation(state: GameState): number {
     const player = getPlayerKingdom(state);
-    const playerRegionIds = Object.keys(state.world.regions).filter(
-      (regionId) => state.world.regions[regionId].ownerId === player.id
-    );
-
-    const playerRegionIndices = playerRegionIds
-      .map((regionId) => WORLD_DEFINITIONS_V1.findIndex((def) => def.id === regionId))
-      .filter((index) => index !== -1);
+    
+    const playerRegionIndices: number[] = [];
+    for (const regionId in state.world.regions) {
+      if (state.world.regions[regionId].ownerId === player.id) {
+        const idx = REGION_INDEX_MAP.get(regionId);
+        if (idx !== undefined) playerRegionIndices.push(idx);
+      }
+    }
 
     let total = 0;
     const popData = currentSimulationState.populationTotalData;

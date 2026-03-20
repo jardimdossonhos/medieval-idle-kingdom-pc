@@ -259,11 +259,22 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
         *   **Agressão a Aliados:** Declarar guerra a um reino aplicará um modificador de opinião negativo severo ("Atacou nosso aliado") a todos os seus aliados.
         *   **Chamado às Armas:** Os aliados do reino atacado terão uma alta probabilidade de entrar na guerra contra o jogador, tornando as alianças pactos defensivos significativos e perigosos de se provocar.
 
-### 6.6. Visão Épica: Da Aurora Humana à Infinidade (Multi-Eras)
+### 6.6. Tabuleiro Procedural e Domínio Marítimo (O Novo Mundo)
+
+*   **A Grande Visão:** O mapa do jogo abandonará fronteiras geopolíticas reais e modernas. O mundo será um tabuleiro contínuo gerado matematicamente (Grid Hexagonal/Voronoi), separando o globo entre **Províncias Terrestres** e **Zonas Marítimas**.
+*   **Consequências Arquiteturais (Gerador e Clima):** O script de mapa será reescrito utilizando projeções geodésicas. Ele aplicará uma máscara de colisão (`land-50m`) para separar terra/água, e utilizará dados de latitude e algoritmos de ruído (Perlin/Simplex Noise) para gerar **Biomas e Climas** (Deserto, Tundra, Temperado, Tropical) para cada célula.
+*   **Mecânicas Desbloqueadas (Oceano Ativo):** 
+    1.  O oceano não é apenas um espaço vazio; é um território conquistável.
+    2.  As Zonas Marítimas produzirão Ouro (Rotas Comerciais) e Comida (Pesca), mas não comportarão População ou Instabilidade civil.
+    3.  A travessia e controle destas zonas serão estritamente atrelados a bloqueios da Árvore de Tecnologia Naval (permitindo o desenvolvimento fiel da Era das Grandes Navegações).
+    4.  **Regra de Ouro (Sedes Terrestres):** Nenhuma nação, agrupamento ou entidade política poderá ter sua capital/sede em uma Zona Marítima. O berço da civilização e o controle administrativo central devem ser estritamente terrestres.
+*   **Impacto Sistêmico do Clima:** Os biomas não serão puramente cosméticos. Regiões desérticas terão penalidades massivas em agricultura (Comida) e regiões gélidas sofrerão limites duros de População e maior atrito militar (Manpower), exigindo tecnologias de adaptação.
+
+### 6.7. Visão Épica: Da Aurora Humana à Infinidade (Multi-Eras)
 
 *   **A Grande Visão:** O jogo deixará de ser restrito ao período Medieval e abarcará toda a existência da civilização. O jogador começará controlando a primeira tribo de caçadores-coletores e avançará até a exploração espacial e transcendência da espécie.
+*   **Surgimento da Humanidade:** O jogo deve começar no início absoluto do processo civilizatório. O mapa será ocupado inicialmente por pequenos agrupamentos humanos. Essas populações irão se espalhar, se dividir e evoluir orgânica e socialmente pelas etapas de formação: **Clãs -> Tribos -> Cidades-Estado -> Reinos -> Grandes Impérios.**
 *   **Ritmo Punitivo e Recompensador (Pacing de Longo Prazo):** Para garantir que uma era dure **cerca de 1 mês de jogo contínuo**, a progressão tecnológica utilizará um sistema de "Soft-Caps" (limites suaves) e "Paradigm Shifts" (Quebras de Paradigma). O avanço para a próxima Era exigirá um sacrifício monumental ou o acúmulo de um "Recurso de Transição" específico daquela era.
-*   **O Valor da Evolução:** Avançar de Era não é apenas "aumentar a produção em 10%". A evolução deve alterar fundamentalmente a UI e as mecânicas. Abas inteiras do jogo começarão bloqueadas (ex: A aba "Diplomacia" não existe na Era Tribal, a aba "Governo" só surge na Antiguidade).
 
 **Fases do Desdobramento Evolutivo:**
 
