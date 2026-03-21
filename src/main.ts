@@ -284,7 +284,7 @@ async function bootstrapApp(): Promise<void> {
   }
 
   document.documentElement.lang = "pt-BR";
-  document.title = "Reino Idle Medieval";
+  document.title = "Epochs Idle PC";
   const showDevMetrics = import.meta.env.DEV;
 
   appRoot.innerHTML = `
@@ -303,7 +303,7 @@ async function bootstrapApp(): Promise<void> {
     </style>
     <div id="splash-screen" class="splash-overlay">
       <div class="splash-card card">
-        <h1>Medieval Idle Kingdom</h1>
+        <h1>Epochs Idle PC</h1>
         <p style="color: #aaa;">A forja de um novo império aguarda o seu comando.</p>
         <div class="splash-actions">
           <button id="splash-continue-btn" class="primary" style="display: none;">Continuar Jornada</button>
@@ -326,7 +326,7 @@ async function bootstrapApp(): Promise<void> {
     <main class="app-shell">
       <header class="app-header card">
         <div class="header-title">
-          <h1>Reino Idle Medieval</h1>
+          <h1>Epochs Idle PC</h1>
           <p>Grand strategy idle local-first com foco em decisões de alto nível.</p>
         </div>
         <div class="status-grid">

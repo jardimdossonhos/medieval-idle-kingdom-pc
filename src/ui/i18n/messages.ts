@@ -6,7 +6,7 @@ export const DEFAULT_LOCALE: Locale = "pt-BR";
 
 const MESSAGES: Record<Locale, Dictionary> = {
   "pt-BR": {
-    "app.title": "Reino Idle Medieval",
+    "app.title": "Epochs Idle PC",
     "app.subtitle": "Simulação local-first com mapa estratégico e saves persistentes.",
     "hud.tick": "Ciclo",
     "hud.date": "Atualizado",
@@ -43,7 +43,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "toast.recoveredSave": "Save restaurado com sucesso."
   },
   "en-US": {
-    "app.title": "Medieval Idle Kingdom",
+    "app.title": "Epochs Idle PC",
     "app.subtitle": "Local-first simulation with strategic map and persistent saves.",
     "hud.tick": "Tick",
     "hud.date": "Updated",

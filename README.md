@@ -1,4 +1,4 @@
-﻿﻿# Medieval Idle Kingdom
+﻿﻿﻿﻿# Epochs Idle
 
 > ⚠️ **Aviso Importante** ⚠️
 > 
@@ -57,13 +57,13 @@ npm run desktop:dist
 
 Saída do pacote:
 
-- `release/Medieval Idle Kingdom Setup *.exe`
-- `release/Medieval Idle Kingdom *.exe` (portable)
+ - `release/Epochs Idle Setup *.exe`
+ - `release/Epochs Idle *.exe` (portable)
 
 Persistência desktop:
 
 - os saves deixam de depender de `IndexedDB`
-- o app grava JSON local em `%APPDATA%/Medieval Idle Kingdom/game-data`
+- o app grava JSON local em `%APPDATA%/Epochs Idle/game-data`
 - isso prepara import/export, backup e futura sincronização LAN/internet
 
 Para testar no celular (mesma rede local):

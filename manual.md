@@ -1,6 +1,6 @@
 # Manual do Usuário e Guia de Testes (Criador)
 
-Bem-vindo ao **Medieval Idle Kingdom**. Este manual tem o objetivo de eliminar a "caixa preta" do jogo. Ele explica as regras de funcionamento, os significados visuais e as mecânicas exatas para que você possa jogar, testar e guiar o desenvolvimento com clareza.
+Bem-vindo ao **Epochs Idle**. Este manual tem o objetivo de eliminar a "caixa preta" do jogo. Ele explica as regras de funcionamento, os significados visuais e as mecânicas exatas para que você possa jogar, testar e guiar o desenvolvimento com clareza.
 
 ---
 

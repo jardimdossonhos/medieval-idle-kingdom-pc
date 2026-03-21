@@ -1,5 +1,5 @@
 {
-  "name": "medieval-idle-kingdom",
+  "name": "epochs-idle-pc",
   "version": "0.1.0",
   "private": true,
   "description": "Grand strategy idle medieval local-first com mapa mundial e simulação sistêmica.",
@@ -39,8 +39,8 @@
     "world-atlas": "^2.0.2"
   },
   "build": {
-    "appId": "com.jardimdossonhos.medievalidlekingdom",
-    "productName": "Medieval Idle Kingdom",
+    "appId": "com.jardimdossonhos.epochsidlepc",
+    "productName": "Epochs Idle PC",
     "directories": {
       "output": "release"
     },

@@ -1,10 +1,10 @@
-﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Medieval Idle Kingdom
+﻿﻿﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Epochs Idle
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
 ## 1. Visão Geral e Princípios Fundamentais
 
-"Medieval Idle Kingdom" é um jogo de grande estratégia com foco em simulação sistêmica profunda, projetado para ser executado primariamente no navegador (`local-first`).
+"Epochs Idle" é um jogo de grande estratégia com foco em simulação sistêmica profunda, projetado para ser executado primariamente no navegador (`local-first`).
 
 Os pilares da arquitetura são:
 
@@ -313,6 +313,20 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
 *   **Dicionários Dinâmicos:** O arquivo de traduções da UI (`i18n`) precisará responder à Era. A variável `tax_clergy` na Idade Média será exibida como "Isenção do Clero", mas na Era da Informação será lida como "Isenção Corporativa" ou "Subsídio Tecnológico".
 *   **Árvore Tecnológica Particionada:** A `technology-tree.ts` será dividida em matrizes gigantescas atreladas à `currentEra`. Tecnologias da próxima era terão custo definido como "Infinity" até que a Quebra de Paradigma seja atingida.
 *   **Variáveis ECS Mutantes:** No `EcsState`, o array `faith` (Fé) continuará sendo uma matriz de `Float64Array`, mas a UI irá mascará-lo chamando-o de "Influência Tribal" na era 1 e de "Ideologia" na era 5. O motor matemático não muda, apenas a "pintura" sobre ele.
+
+### 6.8. Evolução da Interface Gráfica (UI/UX)
+
+*   **A Grande Visão:** A interface deve funcionar como um painel de controle estratégico vivo e transparente, baseando-se no princípio vital de que **"Todo sistema deve ser visível, compreensível e rastreável"**.
+*   **Nova Estrutura Global (5 Camadas):** O layout atual será reestruturado para suportar a complexidade das Novas Eras e o motor procedural, dividindo o DOM em:
+    1.  **HUD Superior (Visão Macro):** Indicadores numéricos resumidos de recursos (sempre visíveis). Serão adicionados **Indicadores de Tendência (setas ↑/↓)** comparando ativamente o último ciclo (`tick`) com o anterior para indicar crescimento ou recessão instantânea.
+    2.  **Mapa Principal:** O motor MapLibre GL no fundo absoluto, recebendo as novas camadas visuais (Modo Climático, Modo Militar, Rotas Marítimas).
+    3.  **Painel Lateral Dinâmico:** Contextual à seleção. Ao clicar em um Hexágono, em vez de dados globais, passará a extrair do ECS o Bioma, o Clima e a produção isolada daquele território exato.
+    4.  **Painel Inferior (Log de Eventos):** Novo componente no rodapé. Um console/feed contínuo escutando o `EventBus` para renderizar o histórico recente, como notificações NPC, desastres e cascatas diplomáticas.
+    5.  **Telas Modulares:** Aprofundamento da gestão macro.
+*   **Mecânicas Visuais Planejadas (Qualidade de Vida):**
+    *   **Previsão de Causa e Efeito:** A UI protegerá o jogador de erros cegos. Mover *sliders* de controle (ex: Impostos no painel de Governo) calculará um "Delta" local e exibirá um texto flutuante preditivo (ex: `+150 Ouro / -5% Legitimidade`) antes que o jogador solte o mouse e confirme a ação.
+    *   **Sistema de Tooltips Inteligentes:** Interceptação dos dados do Worker para explicar o "Porquê" das coisas. Passar o mouse sobre um ganho revelará a fórmula destrinchada (ex: *Produção Base + Bônus Tecnológico - Penalidade Climática*).
+    *   **Automação (Modo Idle de Fim de Jogo):** A introdução de caixas de seleção estratégicas (`[x] Priorizar Defesa`, `[x] Focar Expansão`). Desbloqueáveis como "Burocracia de Estado" em Eras avançadas, permitindo que a própria thread principal faça o microgerenciamento dos *sliders* a cada ciclo, abraçando a natureza *Idle* do projeto.
 
 ## 7. Problemas Anteriores (Resolvidos)
 

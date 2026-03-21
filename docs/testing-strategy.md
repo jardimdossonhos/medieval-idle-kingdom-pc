@@ -1,4 +1,4 @@
-﻿﻿# Estratégia de Testes - Medieval Idle Kingdom
+﻿﻿# Estratégia de Testes - Epochs Idle PC
 
 Este documento descreve os procedimentos e ferramentas de teste para garantir a estabilidade e a qualidade do jogo.
 

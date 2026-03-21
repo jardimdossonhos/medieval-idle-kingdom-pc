@@ -23,7 +23,7 @@ import {
   normalizeSnapshotEnvelope
 } from "./command-snapshot-schema";
 
-const DB_NAME = "medieval-idle-kingdom";
+const DB_NAME = "epochs-idle-pc";
 const DB_VERSION = 2;
 const CURRENT_STATE_KEY = "current";
 

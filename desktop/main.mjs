@@ -156,7 +156,7 @@ function createMainWindow() {
     minHeight: 760,
     backgroundColor: "#d8ccb2",
     autoHideMenuBar: true,
-    title: "Medieval Idle Kingdom",
+    title: "Epochs Idle PC",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
