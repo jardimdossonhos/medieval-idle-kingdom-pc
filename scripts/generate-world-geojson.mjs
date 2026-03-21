@@ -231,6 +231,16 @@ async function buildWorldArtifacts() {
         }
       }
 
+      // Manual patches for straits.
+      // Strait of Gibraltar
+      if (lat > 35.5 && lat < 36.5 && safeLon > -6.2 && safeLon < -5.0) {
+        isWater = true;
+      }
+      // Bab-el-Mandeb Strait (Red Sea opening)
+      if (lat > 12.2 && lat < 13.0 && safeLon > 43.1 && safeLon < 43.6) {
+        isWater = true;
+      }
+
       let biome = "ocean";
       if (!isWater) {
         const absLat = Math.abs(lat);
