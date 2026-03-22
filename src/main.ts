@@ -728,6 +728,24 @@ async function bootstrapApp(): Promise<void> {
   let currentWorkerSpeed = 1;
   let currentWorkerPaused = false;
   
+  // CACHE DE TERRITÓRIO: Evita varrer 62.400 regiões múltiplas vezes por segundo
+  let cachedPlayerRegionIndices: number[] | null = null;
+
+  function getPlayerRegionIndicesCached(state: GameState, player: KingdomState): number[] {
+    if (cachedPlayerRegionIndices !== null) {
+      return cachedPlayerRegionIndices;
+    }
+    
+    cachedPlayerRegionIndices = [];
+    for (const regionId in state.world.regions) {
+      if (state.world.regions[regionId].ownerId === player.id) {
+        const idx = REGION_INDEX_MAP.get(regionId);
+        if (idx !== undefined) cachedPlayerRegionIndices.push(idx);
+      }
+    }
+    return cachedPlayerRegionIndices;
+  }
+
   let currentSimulationState: {
     goldData: Float64Array;
     foodData: Float64Array;
@@ -945,13 +963,7 @@ async function bootstrapApp(): Promise<void> {
 
     const player = getPlayerKingdom(state);
     
-    const playerRegionIndices: number[] = [];
-    for (const regionId in state.world.regions) {
-      if (state.world.regions[regionId].ownerId === player.id) {
-        const idx = REGION_INDEX_MAP.get(regionId);
-        if (idx !== undefined) playerRegionIndices.push(idx);
-      }
-    }
+    const playerRegionIndices = getPlayerRegionIndicesCached(state, player);
 
     const totals: Record<string, number> = {};
     const allResources = currentSimulationState;
@@ -978,13 +990,7 @@ async function bootstrapApp(): Promise<void> {
   function getPlayerTotalPopulation(state: GameState): number {
     const player = getPlayerKingdom(state);
     
-    const playerRegionIndices: number[] = [];
-    for (const regionId in state.world.regions) {
-      if (state.world.regions[regionId].ownerId === player.id) {
-        const idx = REGION_INDEX_MAP.get(regionId);
-        if (idx !== undefined) playerRegionIndices.push(idx);
-      }
-    }
+    const playerRegionIndices = getPlayerRegionIndicesCached(state, player);
 
     let total = 0;
     const popData = currentSimulationState.populationTotalData;
@@ -1000,12 +1006,9 @@ async function bootstrapApp(): Promise<void> {
 
   function getPlayerTotalResource(state: GameState, resource: ResourceType): number {
     const player = getPlayerKingdom(state);
-    const playerRegionIds = Object.keys(state.world.regions).filter(
-      (regionId) => state.world.regions[regionId].ownerId === player.id
-    );
-    const playerRegionIndices = playerRegionIds
-      .map((regionId) => WORLD_DEFINITIONS_V1.findIndex((def) => def.id === regionId))
-      .filter((index) => index !== -1);
+    
+    const playerRegionIndices = getPlayerRegionIndicesCached(state, player);
+
     let total = 0;
     const dataArray = currentSimulationState[`${resource}Data` as keyof typeof currentSimulationState];
     if (dataArray) {
@@ -1020,10 +1023,12 @@ async function bootstrapApp(): Promise<void> {
 
   function renderRiskIndicators(state: GameState): void {
     const player = getPlayerKingdom(state);
-    const ownedRegions = Object.keys(state.world.regions)
-      .sort()
-      .filter((regionId) => state.world.regions[regionId].ownerId === player.id)
-      .map((regionId) => state.world.regions[regionId]);
+    
+    const ownedRegions = [];
+    for (const regionId in state.world.regions) {
+      const region = state.world.regions[regionId];
+      if (region.ownerId === player.id) ownedRegions.push(region);
+    }
 
     // A necessidade de comida e o estoque agora são baseados nos dados do ECS.
     const totalFood = getPlayerTotalResource(state, ResourceType.Food);
@@ -1091,10 +1096,13 @@ async function bootstrapApp(): Promise<void> {
       });
     }
 
-    const highUnrestRegions = Object.keys(state.world.regions)
-      .sort()
-      .map((regionId) => state.world.regions[regionId])
-      .filter((region) => region.ownerId === player.id && region.unrest > 0.45).length;
+    let highUnrestRegions = 0;
+    for (const regionId in state.world.regions) {
+      const region = state.world.regions[regionId];
+      if (region.ownerId === player.id && region.unrest > 0.45) {
+        highUnrestRegions++;
+      }
+    }
 
     if (highUnrestRegions > 0) {
       explainers.push({
@@ -1382,7 +1390,7 @@ async function bootstrapApp(): Promise<void> {
     const player = getPlayerKingdom(state);
     const neighborIds = new Set<string>();
 
-    for (const regionId of Object.keys(state.world.regions).sort()) {
+    for (const regionId in state.world.regions) {
       const region = state.world.regions[regionId];
       if (region.ownerId !== player.id) {
         continue;
@@ -1507,7 +1515,7 @@ async function bootstrapApp(): Promise<void> {
       }
     }
 
-    for (const regionId of Object.keys(state.world.regions).sort()) {
+    for (const regionId in state.world.regions) {
       const region = state.world.regions[regionId];
       if (region.unrest > 0.62 || region.devastation > 0.35) {
         contestedRegionIds.add(regionId);
@@ -1527,7 +1535,7 @@ async function bootstrapApp(): Promise<void> {
     const enemyIds = new Set<string>();
 
     // 1. Mapeia quem são os inimigos de guerras ativas
-    for (const warId of Object.keys(state.wars)) {
+    for (const warId in state.wars) {
       const war = state.wars[warId];
       if (war.attackers.includes(player.id)) {
         war.defenders.forEach((id) => enemyIds.add(id));
@@ -1537,7 +1545,7 @@ async function bootstrapApp(): Promise<void> {
     }
 
     // 2. Avalia a posse e sentimento de cada região
-    for (const regionId of Object.keys(state.world.regions)) {
+    for (const regionId in state.world.regions) {
       const region = state.world.regions[regionId];
       const ownerId = region.ownerId;
 
@@ -1646,10 +1654,9 @@ async function bootstrapApp(): Promise<void> {
       
       let ouro = 0, comida = 0, popTotal = 0;
       if (saveState.ecs && player) {
-        const sortedDefs = [...WORLD_DEFINITIONS_V1].sort((a, b) => a.id.localeCompare(b.id));
-        const capitalIndex = sortedDefs.findIndex(def => def.id === player.capitalRegionId);
+        const capitalIndex = REGION_INDEX_MAP.get(player.capitalRegionId);
         
-        if (capitalIndex !== -1) {
+        if (capitalIndex !== undefined && capitalIndex !== -1) {
           ouro = saveState.ecs.gold[capitalIndex] ?? 0;
           comida = saveState.ecs.food[capitalIndex] ?? 0;
           popTotal = saveState.ecs.populationTotal[capitalIndex] ?? 0;
@@ -1703,6 +1710,9 @@ async function bootstrapApp(): Promise<void> {
   }
 
   function renderState(state: GameState): void {
+    // Limpa o cache todo início de render (1x por segundo) para forçar recálculo caso tenha anexado territórios
+    cachedPlayerRegionIndices = null;
+
     if (currentWorkerSpeed !== state.meta.speedMultiplier || currentWorkerPaused !== state.meta.paused) {
       currentWorkerSpeed = state.meta.speedMultiplier;
       currentWorkerPaused = state.meta.paused;

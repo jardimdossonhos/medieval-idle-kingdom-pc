@@ -634,3 +634,56 @@ Constatou-se que tentar aplicar Camadas Visuais ao mapa agora seria um erro de d
 Em conjunto com o início da Fase 1 (Infraestrutura de Efeitos e Tecnologia), foi decidido extinguir o painel de Debug fixo da tela principal, pois ele quebra a imersão. No lugar, será construído um **Modo Deus (Console de Dev)**.
 
 **Engenharia Oculta:** O acesso se dará através de 5 cliques sucessivos na versão do jogo. Este módulo funcionará como o painel mestre de trapaças e testes vitais para o desenvolvedor gerenciar balanceamento, permitindo forçar fome (zerando comida via Worker), dar saltos de milênios, ou desbloquear o late-game instantaneamente. O desenvolvimento deste painel atuará como o teste perfeito para validar a nova arquitetura do canal de danos/bônus instantâneos que será enviada para o Worker (ECS).
+
+    *   Meta & Tempo: Desbloqueio imediato de toda a árvore de Tecnologias, saltos de Eras e manipulação de saltos no relógio da simulação (Time Travel).
+    *   Estado & Debug: Monitoramento de saúde do Worker, FPS e Hard Reset profundo de Banco de Dados.
+
+---
+
+## Entrada: 42
+
+**Data:** 20/03/2024
+
+### Problema Detectado: Paralisia de Interface por Saturação de CPU (INP > 1.4s)
+Após a inserção do mapa procedural (62.400 Hexágonos), o navegador apresentou travamentos e mensagens de "Página não está respondendo". A auditoria de DevTools apontou uma métrica de INP (Interaction to Next Paint) letal de **1.440 ms** após interações (digitar impostos ou clicar no mapa).
+
+### Análise e Correção (A Armadilha O(N²)):
+O gargalo foi rastreado nas rotinas de renderização de interface da *Main Thread* no arquivo `main.ts` (`renderRiskIndicators`, `renderExplainers`, `renderDiplomacy`, `buildMapRenderContext`).
+O código da camada visual estava utilizando a abordagem arcaica `Object.keys(state.world.regions).sort()` e invocações de `Array.findIndex()` a cada ciclo de atualização (1 segundo). Pedir para o motor V8 Javascript extrair 62.400 chaves de um objeto e ordenar alfabeticamente repetidas vezes sequestrava a thread principal e colapsava a fila de eventos do usuário.
+**Ação Aplicada:** 
+O processamento orientado a dados foi injetado na UI. 
+1. Todas as chamadas baseadas em `.sort()` foram banidas do escopo de atualização do mapa.
+2. As buscas do tipo `WORLD_DEFINITIONS_V1.findIndex(...)` foram integralmente substituídas por leitura em cache assíncrono O(1) usando o mapeador em memória `REGION_INDEX_MAP.get()`.
+
+O travamento da interface foi sanado instantaneamente, retomando a média saudável de FPS e viabilizando o uso limpo do Motor.
+
+---
+
+## Entrada: 43
+
+**Data:** 22/03/2024
+
+### Problema Detectado: Efeito "Pintura Lenta" e Colapso de INP (5.7s)
+O usuário executou profiling de performance e detectou que, embora o FPS tenha destravado, a métrica de INP subiu para 5.7 segundos ao clicar nos botões do MapLibre. Além disso, notou que o mundo carrega cinza e demora dezenas de segundos pintando de baixo para cima.
+
+### Análise e Correção (O Custo do for...in):
+1. **O Efeito Pintura:** Foi confirmado como comportamento intencional (Batching V2 da Entrada 31). O limite de 25 atualizações de shader por frame protege a GPU do colapso (IPC Bomb), mas sacrifica o tempo de carregamento inicial do mapa.
+2. **O Pico de INP:** O loop `for (const regionId in state.world.regions)` inserido na Entrada 42 provou-se altamente custoso se chamado repetidamente. Como o WebWorker atualiza a economia a cada 250ms (4x/segundo), a UI estava iterando 62.400 chaves quase 8 vezes por segundo (~500.000 iterações/s) dentro de funções como `updateUIPanel` e `getPlayerTotalResource`, bloqueando as interações do DOM.
+**Ação Aplicada:** Implementado o **Cache de Territórios do Jogador** (`cachedPlayerRegionIndices`). O inventário de hexágonos do jogador agora é calculado apenas uma única vez por ciclo da *Main Thread* (1 segundo). As rotinas reativas do Worker (250ms) consomem o array em cache, despencando o peso computacional de O(N) massivo para O(1) imediato.
+
+---
+
+## Entrada: 44
+
+**Data:** 22/03/2024
+
+### Game Design Pivot: A Verdadeira Aurora da Humanidade (Reset Demográfico)
+Foi determinado pelo criador que o modelo de inicialização atual (`create-initial-state.ts`) é uma falha narrativa de design. Popular o mapa com centenas de "reinos" de 5.000 habitantes desde o primeiro milissegundo deforma a proposta do jogo de ser uma simulação de "Surgimento da Civilização".
+
+**Diretriz de Refatoração (Para implementação futura):**
+1. **Desolação Inicial:** O mundo (Cycle 0) deverá nascer ~99,9% desabitado (Terra virgem).
+2. **Sementes da Humanidade:** Haverá apenas 1 jogador e no máximo 5 NPCs no globo todo.
+3. **Demografia Base:** Os grupos nascem como nômades/famílias (População máxima de 20 pessoas).
+4. **Crescimento Orgânico e Mitose:** O crescimento populacional será a única forma de expandir para hexágonos vizinhos. "Novos" NPCs não surgirão do nada, mas sim de "Cismas Sociais" (Revoltas), onde uma tribo grande se parte em duas (Mitose NPC).
+5. **Permadeath (Extinção):** Tribos que falharem na coleta de comida podem ser eliminadas inteiramente e varridas do mapa, voltando a deixar o hexágono selvagem.
+**Status:** Documentado. Refatoração a ser agendada em conjunto com o motor de Eras.
