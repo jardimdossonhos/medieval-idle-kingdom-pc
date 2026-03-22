@@ -24,6 +24,25 @@ import { createRuntimePersistenceBundle } from "./infrastructure/persistence/run
 import { BrowserClockService } from "./infrastructure/runtime/browser-clock-service";
 import { LocalEventBus } from "./infrastructure/runtime/local-event-bus";
 import { LocalWarResolver } from "./infrastructure/war/local-war-resolver";
+import { calculateTechnologyBonuses } from "./core/models/technology-effects-service";
+
+// ============================================================================
+// SISTEMA DE DIAGNÓSTICO ESTRITO (TELEMETRIA F12)
+// ============================================================================
+export const Diagnostic = {
+  trace: (code: string, message: string, data?: any) => {
+    console.log(`%c[${code}]%c ${message}`, "color: #bada55; background: #222; padding: 2px 4px; border-radius: 3px; font-weight: bold;", "color: inherit;", data !== undefined ? data : "");
+  },
+  system: (code: string, message: string, data?: any) => {
+    console.log(`%c[${code}]%c ${message}`, "color: #00e5ff; background: #002233; padding: 2px 4px; border-radius: 3px; font-weight: bold;", "color: inherit;", data !== undefined ? data : "");
+  },
+  warn: (code: string, message: string, data?: any) => {
+    console.warn(`[${code}] ${message}`, data !== undefined ? data : "");
+  },
+  error: (code: string, message: string, data?: any) => {
+    console.error(`[${code}] ${message}`, data !== undefined ? data : "");
+  }
+};
 
 interface UiRefs {
   playerValue: HTMLElement;
@@ -79,7 +98,7 @@ interface UiRefs {
   splashStartBtn: HTMLButtonElement;
 }
 
-type TabId = "mapa" | "governo" | "diplomacia" | "tecnologia" | "militar" | "eventos" | "saves" | "configuracoes";
+type TabId = "mapa" | "governo" | "diplomacia" | "religiao" | "tecnologia" | "militar" | "eventos" | "saves" | "configuracoes";
 
 interface LocalPlayerProfile {
   id: string;
@@ -277,6 +296,8 @@ for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
 }
 
 async function bootstrapApp(): Promise<void> {
+  Diagnostic.system("SYS-BOOT", "Iniciando sequência de ignição da Engine (Main Thread)...");
+
   const appRoot = document.getElementById("app");
 
   if (!appRoot) {
@@ -396,6 +417,7 @@ async function bootstrapApp(): Promise<void> {
       <section class="tabs card">
         <button class="tab-btn is-active" data-tab="mapa">Mapa</button>
         <button class="tab-btn" data-tab="governo">Governo</button>
+        <button class="tab-btn" data-tab="religiao">Religião</button>
         <button class="tab-btn" data-tab="diplomacia">Diplomacia</button>
         <button class="tab-btn" data-tab="tecnologia">Tecnologia</button>
         <button class="tab-btn" data-tab="militar">Militar</button>
@@ -430,6 +452,18 @@ async function bootstrapApp(): Promise<void> {
             <label>Tecnologia <input id="budget-technology" type="number" min="0" max="100" step="1"></label>
           </div>
           <button id="government-apply-btn">Aplicar políticas</button>
+        </article>
+
+        <article class="card tab-panel is-hidden" data-tab-panel="religiao">
+          <h2>Fé e Poderes Divinos</h2>
+          <p>O acúmulo de Fé permite canalizar milagres que transcendem a lógica mortal, afetando diretamente a malha do mundo (Motor Físico).</p>
+          <div class="summary-grid">
+            <span>Fé Disponível</span><strong id="faith-pool-value">0</strong>
+          </div>
+          <div class="action-grid" style="margin-top: 15px;">
+            <button id="btn-bless-crops" style="background: #002200; border-color: #00ff00; color: #00ff00;">Bênção da Colheita (-500 Fé)</button>
+            <button id="btn-smite-rebels" style="background: #220000; border-color: #ff3333; color: #ff3333;">Expurgo (Em breve)</button>
+          </div>
         </article>
 
         <article class="card tab-panel is-hidden" data-tab-panel="diplomacia">
@@ -589,6 +623,15 @@ async function bootstrapApp(): Promise<void> {
     new URL("./infrastructure/worker/simulation.worker.ts", import.meta.url),
     { type: "module" }
   );
+  
+  // Interceptador O(1) de Tráfego de Saída (Main -> Worker)
+  const originalWorkerPost = simulationWorker.postMessage.bind(simulationWorker);
+  simulationWorker.postMessage = (msg: any) => {
+    if (msg.type !== "SET_TIME_SCALE" && msg.type !== "START" && msg.type !== "STOP" && msg.type !== "UPDATE_MODIFIERS") {
+      Diagnostic.trace("WRK-TX", `Ordem enviada ao Motor Físico: ${msg.type}`, msg.type === "RESTORE_ECS_STATE" ? "[Matrizes ECS Omitidas por Performance]" : msg.payload);
+    }
+    originalWorkerPost(msg);
+  };
 
   simulationWorker.onmessage = (event: MessageEvent) => {
     if (Date.now() < ignoreWorkerTicksUntil) {
@@ -652,6 +695,8 @@ async function bootstrapApp(): Promise<void> {
       }
 
       updateUIPanel();
+    } else {
+      Diagnostic.trace("WRK-RX", `Resposta recebida do Motor Físico: ${data?.type}`, data?.payload);
     }
   };
 
@@ -728,6 +773,8 @@ async function bootstrapApp(): Promise<void> {
   let currentWorkerSpeed = 1;
   let currentWorkerPaused = false;
   
+  let playerFaithCache = 0;
+
   // CACHE DE TERRITÓRIO: Evita varrer 62.400 regiões múltiplas vezes por segundo
   let cachedPlayerRegionIndices: number[] | null = null;
 
@@ -744,6 +791,18 @@ async function bootstrapApp(): Promise<void> {
       }
     }
     return cachedPlayerRegionIndices;
+  }
+
+  // Extrai índices geográficos dinâmicos para aplicar efeitos em qualquer nação (Player ou NPC)
+  function getKingdomRegionIndices(state: GameState, kingdomId: string): number[] {
+    const indices: number[] = [];
+    for (const regionId in state.world.regions) {
+      if (state.world.regions[regionId].ownerId === kingdomId) {
+        const idx = REGION_INDEX_MAP.get(regionId);
+        if (idx !== undefined) indices.push(idx);
+      }
+    }
+    return indices;
   }
 
   let currentSimulationState: {
@@ -766,6 +825,50 @@ async function bootstrapApp(): Promise<void> {
     populationGrowthRateData: new Float64Array(0)
   };
   let resourcesInitialized = false;
+
+  // FAGULHA VITAL 3.0: Compila e despacha a soma de todos os bônus tecnológicos para o Motor Matemático
+  function syncModifiersToWorker(state: GameState): void {
+    const expectedLength = WORLD_DEFINITIONS_V1.length;
+    const modifiers: Record<string, Float64Array> = {
+      "economy.food_production_multiplier": new Float64Array(expectedLength),
+      "economy.tax_income_multiplier": new Float64Array(expectedLength),
+      "population.growth_rate_multiplier": new Float64Array(expectedLength),
+    };
+
+    const kingdomBonuses = new Map<string, Map<string, number>>();
+    for (const kingdomId in state.kingdoms) {
+      kingdomBonuses.set(kingdomId, calculateTechnologyBonuses(state.kingdoms[kingdomId].technology));
+    }
+
+    // Roteia cada Bônus Nacional para as células geográficas que ele governa O(N)
+    for (let i = 0; i < expectedLength; i++) {
+      const regionId = WORLD_DEFINITIONS_V1[i].id;
+      const ownerId = state.world.regions[regionId]?.ownerId;
+      if (ownerId) {
+        const bonuses = kingdomBonuses.get(ownerId);
+        if (bonuses) {
+          modifiers["economy.food_production_multiplier"][i] = bonuses.get("economy.food_production_multiplier") ?? 0;
+          modifiers["economy.tax_income_multiplier"][i] = bonuses.get("economy.tax_income_multiplier") ?? 0;
+          modifiers["population.growth_rate_multiplier"][i] = bonuses.get("population.growth_rate_multiplier") ?? 0;
+        }
+      }
+    }
+
+    simulationWorker.postMessage({ type: "UPDATE_MODIFIERS", payload: modifiers });
+  }
+
+  // Efeito Visual de Feedback (Animação de Pulso de Cores)
+  function flashUIElement(el: HTMLElement | null, color: string) {
+    if (!el) return;
+    el.style.transition = 'none';
+    el.style.color = color;
+    el.style.textShadow = `0 0 10px ${color}`;
+    // Força o reflow do DOM para garantir que a transição comece de imediato
+    void el.offsetWidth;
+    el.style.transition = 'color 1.2s ease-out, text-shadow 1.2s ease-out';
+    el.style.color = '';
+    el.style.textShadow = '';
+  }
 
   function showToast(message: string): void {
     ui.toastArea.textContent = message;
@@ -826,7 +929,7 @@ async function bootstrapApp(): Promise<void> {
       // Vacina: Se o save veio com População morta (artefato de testes antigos), revive o mundo
       const pop = state.ecs.populationTotal as any;
       if (!pop || pop[0] === 0 || pop[0] === undefined) {
-        console.warn("Fagulha Vital: Save antigo detectado (Mundo Morto). Revivendo a população...");
+        Diagnostic.warn("PERS-003", "Fagulha Vital: Save antigo corrompido detectado (População Morta). Injetando reinicialização demográfica nas matrizes.");
         state.ecs.populationTotal = Array.from(new Float64Array(len).fill(5000)) as any;
         state.ecs.populationGrowthRate = Array.from(new Float64Array(len).fill(0.015)) as any;
       }
@@ -883,6 +986,7 @@ async function bootstrapApp(): Promise<void> {
       };
 
       simulationWorker.postMessage({ type: "RESTORE_ECS_STATE", payload });
+      syncModifiersToWorker(state); // Injeta a tecnologia no carregamento do Save
       simulationWorker.postMessage({ type: "START" });
 
       ignoreWorkerTicksUntil = Date.now() + 500;
@@ -896,9 +1000,65 @@ async function bootstrapApp(): Promise<void> {
       currentSimulationState.populationTotalData = payload.populationTotal;
       currentSimulationState.populationGrowthRateData = payload.populationGrowthRate;
       
+      playerFaithCache = getPlayerTotalResource(state, ResourceType.Faith);
+
       updateUIPanel();
     }
   });
+
+  // Evento assíncrono caso uma nova região seja capturada via guerra e necessite de recálculo
+  eventBus.subscribe("war.region_captured", () => {
+    const state = session.getState();
+    if (state) syncModifiersToWorker(state);
+  });
+
+  // ALVO B: Ouve eventos da simulação POO e dispara danos instantâneos na Memória ECS (Desastres)
+  eventBus.subscribe("disaster.plague", (event: any) => {
+    const state = session.getState();
+    if (!state) return;
+    const kingdomId = event.payload?.actorKingdomId || event.actorKingdomId;
+    const indices = getKingdomRegionIndices(state, kingdomId);
+    if (indices.length === 0) return;
+    simulationWorker.postMessage({
+      type: "APPLY_ECS_EFFECTS",
+      payload: { target: "population", operation: "subtract", value: 1000, indices }
+    });
+  });
+
+  eventBus.subscribe("disaster.drought", (event: any) => {
+    const state = session.getState();
+    if (!state) return;
+    const kingdomId = event.payload?.actorKingdomId || event.actorKingdomId;
+    const indices = getKingdomRegionIndices(state, kingdomId);
+    if (indices.length === 0) return;
+    simulationWorker.postMessage({
+      type: "APPLY_ECS_EFFECTS",
+      payload: { target: "food", operation: "subtract", value: 2000, indices }
+    });
+  });
+
+  // Escuta os poderes divinos POO e aplica o benefício nas matrizes ECS
+  eventBus.subscribe("religion.blessing", (event: any) => {
+    const state = session.getState();
+    if (!state) return;
+    const kingdomId = event.payload.kingdomId || event.kingdomId;
+    const indices = getKingdomRegionIndices(state, kingdomId);
+    if (indices.length === 0) return;
+
+    simulationWorker.postMessage({
+      type: "APPLY_ECS_EFFECTS",
+      payload: { 
+        target: "food", 
+        operation: "add_empire_total", 
+        value: event.payload.amount, 
+        indices
+      }
+    });
+    const foodEl = ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="food"]`);
+    flashUIElement(foodEl, "#00ff00");
+    showToast(`As colheitas de ${state.kingdoms[kingdomId]?.name} florescem (+${formatNumber(event.payload.amount)} Comida)!`);
+  });
+
   // highlight-end
   const mapRenderer = new HybridMapRenderer(ui.mapCanvas, staticWorldData, (selection: MapSelection) => {
     selectedRegionId = selection.regionId;
@@ -980,10 +1140,17 @@ async function bootstrapApp(): Promise<void> {
       }
       totals[resource] = total;
 
+      if (resource === ResourceType.Faith) playerFaithCache = total;
+
       const item = ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="${resource}"]`);
       if (item) {
         item.textContent = `${resourceLabels[resource]}: ${formatNumber(totals[resource])}`;
       }
+    }
+
+    const faithEl = appRoot!.querySelector("#faith-pool-value");
+    if (faithEl) {
+      faithEl.textContent = formatNumber(playerFaithCache);
     }
   }
 
@@ -1639,7 +1806,7 @@ async function bootstrapApp(): Promise<void> {
     const loadButton = document.createElement("button");
     loadButton.textContent = "Carregar";
     loadButton.addEventListener("click", async () => {
-      console.log(`[UI] Load button clicked for slot: ${slot.slotId}`);
+      Diagnostic.trace("CMD-UI", `Intenção de Carregamento Solicitada via UI. Slot alvo: ${slot.slotId}`);
       
       const saveState = await session.peekSaveSlot(slot.slotId);
       if (!saveState) {
@@ -1676,12 +1843,11 @@ async function bootstrapApp(): Promise<void> {
 
       try {
         const result = await session.loadSlot(slot.slotId);
-        console.log('[UI] session.loadSlot completed.', result);
         await renderSaveSlots();
         showToast("Save restaurado com sucesso.");
-        console.log('[UI] Save loaded and UI updated.');
+        Diagnostic.system("PERS-002", "Substituição do Mundo via Carregamento concluída com sucesso.", result);
       } catch (e) {
-        console.error("Falha ao carregar save:", e);
+        Diagnostic.error("ERR-SYS", "Falha catastrófica ao carregar save da persistência local.", e);
         showToast("Falha ao carregar save. Verifique o console para detalhes.");
       }
     });
@@ -1698,7 +1864,7 @@ async function bootstrapApp(): Promise<void> {
         await renderSaveSlots();
         showToast("Save excluído.");
       } catch (e) {
-        console.error("Falha ao excluir save", e);
+        Diagnostic.error("ERR-SYS", "Falha de IO ao tentar excluir save no Banco de Dados.", e);
         showToast("Falha ao excluir o save.");
       }
     });
@@ -1720,6 +1886,12 @@ async function bootstrapApp(): Promise<void> {
         type: "SET_TIME_SCALE",
         payload: { speedMultiplier: currentWorkerSpeed, isPaused: currentWorkerPaused }
       });
+    }
+
+    // Sincronização passiva: Garante que os bônus de pesquisa cheguem ao motor global
+    // A cada ~10 segundos (para não sobrecarregar as rotinas UI), varremos o status de Techs concluídas
+    if (state.meta.tick > 0 && state.meta.tick % 10 === 0) {
+       syncModifiersToWorker(state);
     }
 
     renderHeader(state);
@@ -1760,6 +1932,7 @@ async function bootstrapApp(): Promise<void> {
 
   ui.manualSaveButton.addEventListener("click", async () => {
     try {
+      Diagnostic.system("PERS-001", "Salvamento Manual Requisitado.");
       await session.saveManual();
       await renderSaveSlots();
       showToast("Save manual concluído.");
@@ -1792,6 +1965,7 @@ async function bootstrapApp(): Promise<void> {
   }
 
   ui.governmentApplyButton.addEventListener("click", () => {
+    Diagnostic.trace("CMD-UI", "Aplicando novas Políticas Fiscais e Orçamentárias.", { baseRate: ui.taxInputs.baseRate.value });
     session.updateTaxPolicy({
       baseRate: normalizePercentage(ui.taxInputs.baseRate.value),
       nobleRelief: normalizePercentage(ui.taxInputs.nobleRelief.value),
@@ -1811,6 +1985,32 @@ async function bootstrapApp(): Promise<void> {
     renderGovernmentInputs(session.getState());
     showToast("Políticas de governo aplicadas.");
   });
+
+  // Botões de Religião (Poderes Divinos Diretos)
+  const btnBlessCrops = appRoot!.querySelector("#btn-bless-crops");
+  if (btnBlessCrops) {
+    btnBlessCrops.addEventListener("click", () => {
+      const state = session.getState();
+      if (!state) return;
+      const player = getPlayerKingdom(state);
+      const indices = getPlayerRegionIndicesCached(state, player);
+      if (indices.length === 0) return;
+      
+      if (playerFaithCache >= 500) {
+        // Subtrai 500 de Fé de todo o império (Custo Proporcional Percentual)
+        simulationWorker.postMessage({
+          type: "APPLY_ECS_EFFECTS",
+          payload: { target: "faith", operation: "subtract_empire_total", value: 500, indices }
+        });
+        
+        flashUIElement(appRoot!.querySelector("#faith-pool-value"), "#ff3333");
+        // Invoca a Bênção para explodir +2.000 de Comida Instantânea
+        eventBus.publish({ type: "religion.blessing", payload: { kingdomId: player.id, amount: 2000 } } as any);
+      } else {
+        showToast("Fé insuficiente. Seus sacerdotes não foram ouvidos.");
+      }
+    });
+  }
 
   ui.techApplyButton.addEventListener("click", () => {
     const focus = ui.techFocusSelect.value as TechnologyDomain;
@@ -1862,17 +2062,23 @@ async function bootstrapApp(): Promise<void> {
 
     switch (command) {
       case "gold_10k":
-        simulationWorker.postMessage({
-          type: "APPLY_ECS_EFFECTS",
-          payload: { target: "gold", operation: "add", value: 10000, indices: playerRegionIndices }
-        });
+        if (playerRegionIndices.length > 0) {
+          simulationWorker.postMessage({
+            type: "APPLY_ECS_EFFECTS",
+            payload: { target: "gold", operation: "add", value: 10000, indices: playerRegionIndices }
+          });
+          flashUIElement(ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="gold"]`), "#00ff00");
+        }
         showToast("Modo Deus: +10.000 Ouro injetado.");
         break;
       case "food_10k":
-        simulationWorker.postMessage({
-          type: "APPLY_ECS_EFFECTS",
-          payload: { target: "food", operation: "add", value: 10000, indices: playerRegionIndices }
-        });
+        if (playerRegionIndices.length > 0) {
+          simulationWorker.postMessage({
+            type: "APPLY_ECS_EFFECTS",
+            payload: { target: "food", operation: "add", value: 10000, indices: playerRegionIndices }
+          });
+          flashUIElement(ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="food"]`), "#00ff00");
+        }
         showToast("Modo Deus: +10.000 Comida injetada.");
         break;
       case "ruin_economy":
@@ -1918,6 +2124,7 @@ async function bootstrapApp(): Promise<void> {
     let stateToBoot: GameState | null = currentState;
 
     if (!stateToBoot && initialSlots.length > 0) {
+      Diagnostic.system("SYS-BOOT", "Sem estado em memória. Auto-selecionando o save mais recente...");
       // No active session, but there are saved slots. Load the most recent one.
       const mostRecentSlot = [...initialSlots].sort((a, b) => b.savedAt - a.savedAt)[0];
 
@@ -1926,7 +2133,7 @@ async function bootstrapApp(): Promise<void> {
         stateToBoot = await session.loadSlot(mostRecentSlot.slotId);
         showToast(`Continuando do save: ${mostRecentSlot.slotId}`);
       } catch (e) {
-        console.error("Falha ao carregar o save mais recente.", e);
+        Diagnostic.error("ERR-SYS", "Auto-Boot falhou ao extrair o save mais recente.", e);
         showToast("Falha ao carregar save. Verifique o console.");
         return; // Abort on failure
       }
@@ -2012,7 +2219,7 @@ async function bootstrapApp(): Promise<void> {
 }
 
 void bootstrapApp().catch((error: unknown) => {
-  console.error("Falha ao iniciar aplicação", error);
+  Diagnostic.error("ERR-SYS", "Falha irreversível na injeção principal do arquivo Bootstrap.", error);
 
   const appRoot = document.getElementById("app");
   if (appRoot) {

@@ -712,3 +712,44 @@ Como Eng. de Software, concluí a outra metade da ponte estabelecida na Entrada 
 2. Roteia strings seguras (ex: "gold", "population") para as referências literais de matrizes ECS (`economy.gold`, `population.total`).
 3. Varre o array de índices passados e aplica uma operação algébrica pre-compilada (`add`, `set`, `subtract`).
 **Status:** Concluído. O "Modo Deus" agora funciona em toda a sua glória. Se o usuário clicar em `+10k Ouro`, a UI injeta os índices pela ponte, o Worker processa e as matrizes explodem de valor no exato pulso de 250ms seguinte, com zero chance de race condition.
+
+---
+
+## Entrada: 47
+
+**Data:** 23/03/2024
+
+### Validação Final do Motor Cartográfico e Ciclo de Tempo
+Após a refatoração da geração dos Vector Tiles (MVT) para forçar a Especificação V2 e a filtragem das zonas marítimas ("Expurgo Oceânico"), os testes E2E e os logs de sistema atestaram sucesso total:
+1. **Redução de Carga (RAM/CPU):** O Motor ECS agora aloca e processa apenas **19.472 entidades** (terra firme e costas), reduzindo o uso estrutural de memória em 68% por ignorar mais de 40.000 hexágonos oceânicos matematicamente inúteis.
+2. **Compatibilidade de Hardware:** O aviso crítico do decodificador MapLibre (`Spec V2`) desapareceu, atestando que a Placa de Vídeo está assumindo o desenho do globo em aceleração nativa total.
+3. **Teoria da Relatividade (Dilatação do Tempo):** Os multiplicadores de velocidade (`0.5x`, `1x`, `4x`) e `Pause` foram validados sob stress. O Worker ajusta seus cálculos físicos perfeitamente à velocidade exigida, e durante paralisias, mantém o *Heartbeat* constante sem sujar a economia.
+**Status:** Milestone Base de Mundo e Motor Físico oficialmente concluído e lacrado.
+**Próximo Alvo:** Rota Crítica Fase 1 (Alvo A) - Integração da infraestrutura de Bônus Passivos (Tecnologia) ao motor de cálculo de alta performance do WebWorker.
+
+---
+
+## Entrada: 48
+
+**Data:** 23/03/2024
+
+### Conclusão do Motor de Regras e Início das Mecânicas Sociais
+A **Fase 1 (Motor de Regras)** foi concluída com sucesso absoluto. O Sistema de Desastres (Alvo B) foi acoplado à `TickPipeline` da simulação Orientada a Objetos. Eventos orgânicos ("Seca", "Praga") agora enviam danos matemáticos em tempo real (via `APPLY_ECS_EFFECTS`) para as matrizes de alta performance do Worker, provando que o Motor de Alto Nível e o Motor Físico estão em perfeita sinergia de leitura e escrita.
+
+**Próximo Alvo:** Avanço para a **Fase 2: Profundidade Sistêmica**. O primeiro passo é o **Alvo A: Religião**. Vamos implementar os "Poderes Divinos" (Bênçãos e Maldições), permitindo que o jogador gaste a reserva de Fé nativa do Worker para injetar milagres na malha do ECS.
+
+---
+
+## Entrada: 49
+
+**Data:** 23/03/2024
+
+### Bug Resolvido: A Bomba Multiplicadora ECS e o Rateio Proporcional
+Durante o teste da habilidade "Bênção da Colheita" que consome Fé e dá Comida, detectamos um erro de transposição matemática no ECS. O comando `APPLY_ECS_EFFECTS` cobrava o valor *integral* de CADA hexágono (-500 Fé x 1760 províncias), o que obliterava a reserva do jogador imediatamente.
+
+**Decisão de Game Design e Arquitetura:**
+Optamos pelo "Rateio Proporcional". Recursos imateriais como Fé ou Legitimidade não ficam em um "Cofre Físico na Capital".
+Foram criadas duas novas operações no `simulation.worker.ts`:
+1. `subtract_empire_total`: O WebWorker calcula o total de fé na malha, descobre o percentual que a "magia" representa (ex: 25%) e aplica um debuff percentual simétrico sobre todas as províncias simultaneamente.
+2. `add_empire_total`: Fatia a bênção pelo número de propriedades antes de somar.
+O bug foi varrido. O botão de Milagre opera magicamente sem corromper a economia ou afetar a estabilidade do Worker.
