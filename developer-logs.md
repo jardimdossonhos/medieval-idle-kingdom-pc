@@ -611,3 +611,26 @@ Após diversas iterações para balancear performance e fidelidade visual, o usu
 
 **Conclusão do Milestone:** 
 O mundo agora carrega instantaneamente via *Vector Tiles*, exige recursos computacionais minúsculos da suíte de Testes/Node.js, representa os polos e continentes de forma contínua e a geografia respeita a malha navegável real. A etapa de base cartográfica do projeto está oficialmente **concluída** e documentada em `map-generation-issues.md` (como resolvido) e `map-data.md`.
+
+---
+
+## Entrada: 40
+
+**Data:** 19/03/2024
+
+### Auditoria Arquitetural: Estabelecimento da Rota Crítica de Desenvolvimento
+Após a conclusão do Milestone Geográfico (Entrada 39), foi realizada uma análise profunda baseada na Engenharia de Software sobre qual deveria ser a ordem de implementação das robustas features planejadas para o futuro (Tecnologia, Diplomacia, Mapa Estratégico, Eras).
+
+**Veredito e Formalização:**
+Constatou-se que tentar aplicar Camadas Visuais ao mapa agora seria um erro de design (tentar apresentar dados que ainda não existem matematicamente). Foi formalizada a **Rota Crítica** no `ARCHITECTURE.md` (Seção 6.0), determinando o pipeline estrito: Infraestrutura Lógica (Bônus Tecnológicos e Danos ECS) -> Mecânicas Geradoras de Dados (Religião e Diplomacia) -> Apresentação Final Visual (Camadas do Mapa) -> Expansão de Escopo (Eras). O próximo alvo imediato é integrar o `technology-effects-service` na Thread Principal ao motor ECS do Worker.
+
+---
+
+## Entrada: 41
+
+**Data:** 19/03/2024
+
+### Decisão de UX e Ferramentas Internas (O Modo Deus)
+Em conjunto com o início da Fase 1 (Infraestrutura de Efeitos e Tecnologia), foi decidido extinguir o painel de Debug fixo da tela principal, pois ele quebra a imersão. No lugar, será construído um **Modo Deus (Console de Dev)**.
+
+**Engenharia Oculta:** O acesso se dará através de 5 cliques sucessivos na versão do jogo. Este módulo funcionará como o painel mestre de trapaças e testes vitais para o desenvolvedor gerenciar balanceamento, permitindo forçar fome (zerando comida via Worker), dar saltos de milênios, ou desbloquear o late-game instantaneamente. O desenvolvimento deste painel atuará como o teste perfeito para validar a nova arquitetura do canal de danos/bônus instantâneos que será enviada para o Worker (ECS).

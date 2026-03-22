@@ -145,6 +145,31 @@ O salvamento se tornará uma operação transacional que requisita o estado ao i
 
 Esta seção descreve as próximas grandes funcionalidades e suas diretrizes arquiteturais.
 
+### 6.0. Roteiro de Execução (A Rota Crítica)
+
+Para garantir a integridade da base de código e evitar retrabalho, o desenvolvimento seguirá uma ordem estritamente baseada no Gráfico de Dependências (Infraestrutura -> Mecânica -> Apresentação -> Metagame):
+
+*   **Fase 1: Infraestrutura de Efeitos (O Motor de Regras)**
+    *   **Alvo A: Reforma do Sistema de Tecnologia (6.2).** Implementar o cálculo de "Modificadores Passivos" (ex: +10% Comida) no motor ECS, conectando a árvore de tecnologias atual à simulação.
+    *   **Alvo B: Sistema de Desastres e Crises (6.3).** Criar o canal de comunicação reversa (`APPLY_ECS_EFFECTS`), permitindo que a Thread Principal aplique danos instantâneos (Ativos) na Memória do Worker (ex: Terremoto reduz população).
+*   **Fase 2: Profundidade Sistêmica (As Mecânicas Sociais)**
+    *   **Alvo A: Religião (6.4).** Consome a Fase 1. Usar a infraestrutura de modificadores passivos para dar buffs aos devotos e a infraestrutura de crises para gastar Fé lançando Maldições.
+    *   **Alvo B: Diplomacia e Guerra (6.5).** Consome a Fase 1. Estados de bloqueio comercial, alianças e o desgaste ativo de tropas via ECS.
+*   **Fase 3: O Tabuleiro Vivo (Apresentação Visual)**
+    *   **Alvo Único: Camadas do Mapa Estratégico (6.1).** Com as mecânicas gerando dados ricos, o renderizador WebGL (MapLibre) receberá as rotinas para pintar a tela com as zonas de influência diplomática, religiosa e rotas comerciais oceânicas.
+*   **Fase 4: A Visão Épica (Metagame)**
+    *   **Alvo Único: Multi-Eras (6.7) e UI Dinâmica (6.8).** Com a base matemática inquebrável, implementar a passagem de tempo, mutação das labels de recursos e a interface preditiva final.
+
+### 6.0.1. Ferramentas de Desenvolvedor (Modo Deus)
+
+Para auxiliar no balanceamento de longo prazo e limpar a UI para o jogador final, o painel de debug estático será substituído por um **Developer Console ("Modo Deus")** oculto.
+*   **Acesso:** Abordagem "Android-style". O menu é ativado exclusivamente ao clicar rápida e sequencialmente **5 vezes** sobre a label de Versão do jogo na interface.
+*   **Utilidade Estrutural:** O Modo Deus servirá como o grande ambiente de testes para o canal `APPLY_ECS_EFFECTS`.
+*   **Capacidades Planejadas:**
+    *   **Recursos & Demografia:** Injeção massiva ou dizimação (zerar recursos/matar população) para engatilhar cenários de crise.
+    *   **Meta & Tempo:** Desbloqueio imediato de toda a árvore de Tecnologias, saltos de Eras e manipulação de saltos no relógio da simulação (Time Travel).
+    *   **Estado & Debug:** Monitoramento de saúde do Worker, FPS e Hard Reset profundo de Banco de Dados.
+
 ### 6.1. Camadas do Mapa Estratégico
 
 O mapa é a principal ferramenta de visualização do jogador. As seguintes camadas estão planejadas para fornecer insights estratégicos:
