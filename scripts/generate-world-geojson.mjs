@@ -1,4 +1,4 @@
-﻿import { existsSync } from "node:fs";
+﻿﻿import { existsSync } from "node:fs";
 import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -133,13 +133,13 @@ function createEconomicValues(regionId, zone) {
 }
 
 async function fetchLandMask() {
-  const cachePath = path.resolve(__dirname, "ne_50m_land.geojson");
+  const cachePath = path.resolve(__dirname, "ne_10m_land.geojson");
   if (existsSync(cachePath)) {
     console.log("Lendo máscara de terra do cache local...");
     return JSON.parse(await readFile(cachePath, "utf-8"));
   }
-  console.log("Baixando polígonos de continentes (Terra Firme) do Natural Earth (~2MB)...");
-  const res = await fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson");
+  console.log("Baixando polígonos de alta resolução (10m) do Natural Earth (~7MB)...");
+  const res = await fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_land.geojson");
   const data = await res.json();
   await writeFile(cachePath, JSON.stringify(data));
   return data;
@@ -231,14 +231,31 @@ async function buildWorldArtifacts() {
         }
       }
 
-      // Manual patches for straits.
-      // Strait of Gibraltar
-      if (lat > 35.5 && lat < 36.5 && safeLon > -6.2 && safeLon < -5.0) {
+      // PATCHES MANUAIS: Abertura forçada de estreitos críticos.
+      // Como os hexágonos têm ~150km de largura, o centro matemático deles
+      // frequentemente cai na costa, fundindo os continentes. 
+      // Estas caixas forçam os hexágonos daquela área a serem mares navegáveis.
+      
+      // Estreito de Gibraltar (Península Ibérica / África)
+      if (lat >= 35.0 && lat <= 36.8 && safeLon >= -6.5 && safeLon <= -4.5) {
         isWater = true;
       }
-      // Bab-el-Mandeb Strait (Red Sea opening)
-      if (lat > 12.2 && lat < 13.0 && safeLon > 43.1 && safeLon < 43.6) {
+      // Estreito de Bab-el-Mandeb (Mar Vermelho / Golfo de Áden)
+      if (lat >= 11.5 && lat <= 13.5 && safeLon >= 42.5 && safeLon <= 44.5) {
         isWater = true;
+      }
+      // Estreito de Ormuz (Golfo Pérsico)
+      if (lat >= 25.5 && lat <= 27.5 && safeLon >= 55.5 && safeLon <= 57.5) {
+        isWater = true;
+      }
+      // Bósforo / Dardanelos (Mar Negro / Mediterrâneo)
+      if (lat >= 40.0 && lat <= 41.5 && safeLon >= 26.0 && safeLon <= 29.5) {
+        isWater = true;
+      }
+      
+      // Istmo do Panamá (Conexão forçada entre Américas)
+      if (lat >= 7.5 && lat <= 9.5 && safeLon >= -82.5 && safeLon <= -77.0) {
+        isWater = false;
       }
 
       let biome = "ocean";
@@ -312,12 +329,16 @@ async function buildWorldArtifacts() {
     }
   }
 
+  // O "Expurgo Oceânico": O ECS (Motor) vai ignorar o oceano profundo, 
+  // mantendo-o apenas no GeoJSON (Vector Tiles) para a GPU desenhar o mar visual.
+  const landRegions = regions.filter(r => !r.isWater);
+
   return {
     geojson,
     definitions: {
       mapId: "world_countries_v1",
       source: "procedural-hexgrid",
-      regions
+      regions: landRegions
     }
   };
 }

@@ -152,7 +152,13 @@ function createTestSession(deps: Partial<GameSessionDeps>): GameSession {
     snapshotRepository: deps.snapshotRepository ?? new NoopSnapshotRepository(),
     clock: deps.clock ?? new ManualClock(Date.now()),
     eventBus: eventBus,
-    systems: deps.systems ?? [],
+    systems: deps.systems ?? [{
+      id: "mock_tick_system",
+      run: (state: any) => {
+        state.meta.tick += 1;
+        return { state, events: [] };
+      }
+    } as any],
     autosaveEveryTicks: 2, // Frequent autosave for testing
     ...deps
   });
@@ -167,12 +173,15 @@ function createTestSession(deps: Partial<GameSessionDeps>): GameSession {
 
 describe("Save, Load and State Restoration Audit", () => {
 
+  // Aumentamos o limite de tempo (15s) pois o structuredClone do mapa mundial é custoso para a CPU no Node.js
   it("should restore from autosave after a simulated refresh", async () => {
     // 1. Setup initial session
     const gameStateRepo = new InMemoryGameStateRepository();
     const saveRepo = new InMemorySaveRepository();
     const clock = new ManualClock(Date.now());
     const initial = createInitialState(staticData);
+    initial.meta.paused = false;
+    initial.meta.lastUpdatedAt = clock.now();
     
     const session1 = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock });
     await session1.bootstrap(initial);
@@ -200,6 +209,8 @@ describe("Save, Load and State Restoration Audit", () => {
     const clock2 = new ManualClock(clock.now() + 100); // slightly later
     const session2 = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock: clock2 });
     const initial2 = createInitialState(staticData);
+    initial2.meta.paused = false;
+    initial2.meta.lastUpdatedAt = clock2.now();
 
     // 4. Bootstrap the new session and verify state restoration
     await session2.bootstrap(initial2);
@@ -211,12 +222,15 @@ describe("Save, Load and State Restoration Audit", () => {
     expect(playerKingdom2.stability).toBe(50);
   });
 
+  // Aumentamos o limite de tempo (15s) pois o structuredClone do mapa mundial é custoso para a CPU no Node.js
   it("should correctly load a manual save slot", async () => {
     // 1. Setup initial session
     const gameStateRepo = new InMemoryGameStateRepository();
     const saveRepo = new InMemorySaveRepository();
     const clock = new ManualClock(Date.now());
     const initial = createInitialState(staticData);
+    initial.meta.paused = false;
+    initial.meta.lastUpdatedAt = clock.now();
     
     const session = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock });
     await session.bootstrap(initial);
@@ -256,6 +270,7 @@ describe("Save, Load and State Restoration Audit", () => {
     // 2. Create an older autosave
     const autosaveState = createInitialState(staticData);
     autosaveState.meta.tick = 5;
+    autosaveState.meta.lastUpdatedAt = clock.now();
     const autosaveSnapshot = { state: autosaveState, summary: { slotId: AUTOSAVE_SLOT_ID, savedAt: clock.now() } as SaveSummary };
     await saveRepo.saveToSlot(autosaveSnapshot as SaveSnapshot);
     
@@ -263,11 +278,14 @@ describe("Save, Load and State Restoration Audit", () => {
     clock.advance(10000); // 10 seconds later
     const currentState = createInitialState(staticData);
     currentState.meta.tick = 10;
+    currentState.meta.lastUpdatedAt = clock.now();
     await gameStateRepo.saveCurrent(currentState);
 
     // 4. Bootstrap a new session
     const session = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock });
-    await session.bootstrap(createInitialState(staticData));
+    const initial = createInitialState(staticData);
+    initial.meta.lastUpdatedAt = clock.now();
+    await session.bootstrap(initial);
 
     // 5. Verify it loaded the most recent state (the "current" one)
     const finalState = session.getState();

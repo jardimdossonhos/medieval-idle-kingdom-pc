@@ -269,6 +269,10 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     3.  A travessia e controle destas zonas serão estritamente atrelados a bloqueios da Árvore de Tecnologia Naval (permitindo o desenvolvimento fiel da Era das Grandes Navegações).
     4.  **Regra de Ouro (Sedes Terrestres):** Nenhuma nação, agrupamento ou entidade política poderá ter sua capital/sede em uma Zona Marítima. O berço da civilização e o controle administrativo central devem ser estritamente terrestres.
 *   **Impacto Sistêmico do Clima:** Os biomas não serão puramente cosméticos. Regiões desérticas terão penalidades massivas em agricultura (Comida) e regiões gélidas sofrerão limites duros de População e maior atrito militar (Manpower), exigindo tecnologias de adaptação.
+*   **Costura de Grafo e Limites Polares (Visão de Globo):** 
+    1.  **East-West:** O mapa visual repete infinitamente, mas futuramente o gerador criará uma "Costura de Grafo" (Graph Stitching), adicionando os IDs da borda asiática na lista de vizinhos da borda americana, permitindo a circum-navegação matemática.
+    2.  **North-South:** Os polos foram intencionalmente cortados (latitudes -65 / +75). Eles não se conectam "por cima". Em vez de uma parede invisível, as zonas de extremo norte (Tundra) aplicarão Atrito de Neve mortal, punindo exércitos e barrando a expansão organicamente.
+*   **Patches Geográficos:** Como usamos Hexágonos largos (~150km) para manter a performance alta, eles falham em representar com fidelidade istmos ou estreitos reais muito finos. O gerador de mapas emprega Bounding Boxes manuais para forçar e corrigir passagens navais críticas (Gibraltar, Bósforo, Ormuz) e pontes de terra (Panamá).
 
 ### 6.7. Visão Épica: Da Aurora Humana à Infinidade (Multi-Eras)
 

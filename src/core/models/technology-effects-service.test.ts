@@ -1,7 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { calculateTechnologyBonuses, getTechnologyBonus } from "./technology-effects-service";
 import type { TechnologyState } from "../models/technology";
 import { TechnologyDomain } from "../models/enums";
+
+vi.mock("../data/technology-tree", () => {
+  return {
+    getTechnologyNode: (id: string) => {
+      if (id === "agri_basics") {
+        return { id, effects: [{ target: "economy.food_production_multiplier", value: 0.1 }, { target: "population.growth_rate_multiplier", value: 0.05 }] };
+      }
+      if (id === "crop_rotation") {
+        return { id, effects: [{ target: "economy.food_production_multiplier", value: 0.15 }, { target: "economy.tax_income_multiplier", value: 0.05 }] };
+      }
+      if (id === "trade_charters") {
+        return { id, effects: [{ target: "economy.trade_income_multiplier", value: 0.15 }, { target: "stability_additive", value: 5 }] };
+      }
+      if (id === "provincial_courts") {
+        return { id, effects: [{ target: "stability_additive", value: 10 }, { target: "administration.capacity_additive", value: 10 }] };
+      }
+      return undefined;
+    }
+  };
+});
 
 describe("Technology Effects Service", () => {
   describe("calculateTechnologyBonuses", () => {

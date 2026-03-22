@@ -1,26 +1,27 @@
-﻿# Dados de mapa (Milestone 2)
+﻿﻿# Dados de mapa (Milestone 2)
 
 Arquivo principal:
-- `public/assets/maps/world-countries-v1.geojson`
+- `public/assets/maps/world-countries-v1.geojson` (Renderização Base)
 
 Arquivo fallback:
 - `public/assets/maps/world-countries-v0.geojson`
 
 Status atual:
-- `v1` é gerado automaticamente a partir de `world-atlas/countries-50m.json`.
-- Total atual: **241 países**.
+- `v1` é gerado procedimentalmente em formato Hexagonal (Grid).
+- Base de dados topológica: **Natural Earth 1:10m** (`ne_10m_land.geojson`).
+- Total de células processadas: **~62.400 hexágonos** fatiados em *Vector Tiles* (MVT).
 - Países da campanha inicial são mapeados para `regionId` existentes (`r_iberia_north`, etc.).
-- Países fora da campanha aparecem no mapa com status "Fora da campanha inicial" ao clicar.
+- O *Expurgo Oceânico* garante que a GameSession e o Worker ECS enxerguem apenas a Terra Firme, otimizando o uso de RAM, enquanto o MapLibre renderiza todo o oceano.
 
 ## Origem e licença
-- Fonte: pacote `world-atlas` (derivado de Natural Earth, uso aberto para dados geográficos públicos).
-- Uso no projeto: conversão TopoJSON -> GeoJSON para render local-first em MapLibre.
+- Fonte Primária: Polígonos baseados no **Natural Earth** (Uso em Domínio Público).
+- Uso no projeto: Procedural Hexgrid Generator -> Mapbox Vector Tiles (`vt-pbf`).
 
 ## Pipeline de geração
-1. Instalar dependências (`topojson-client`, `world-atlas`).
+1. Instalar dependências (`@turf/turf`, `geojson-vt`, `vt-pbf`).
 2. Rodar:
    - `npm run map:build`
-3. O script `scripts/generate-world-geojson.mjs` gera/atualiza `public/assets/maps/world-countries-v1.geojson`.
+3. O script baixa o modelo 10m (se não estiver em cache) e constrói o mundo em `public/assets/tiles/`.
 
 ## Propriedades esperadas por feature
 - `regionId`: ID estável usado pelo jogo

@@ -13,7 +13,7 @@ export function calculateTechnologyBonuses(state: TechnologyState): CalculatedTe
 
   for (const techId of state.unlocked) {
     const node = getTechnologyNode(techId);
-    if (!node || !node.effects) {
+    if (!node || !Array.isArray(node.effects)) {
       continue;
     }
 
