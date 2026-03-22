@@ -49,8 +49,6 @@ Todo imposto arrecadado vai para um "Pote de Orçamento". Você deve dividir 100
 
 ## 4. Salvamento e Proteção de Dados (Persistência)
 
-> ⚠️ **Atenção:** A funcionalidade de salvar e carregar jogos está passando por uma reestruturação crítica. Foram identificados problemas que podem levar à perda de progresso ou à impossibilidade de carregar um jogo salvo. A correção está em andamento.
-
 O jogo foi projetado para rodar localmente no seu navegador.
 *   **Autosave:** O jogo salva a si mesmo automaticamente a cada 5 ciclos (5 segundos).
 *   **Atualizar a Página (F5 / Auto-Boot):** O jogo suporta carregamento direto. Apertar F5, fechar ou reabrir a aba fará a engine pular o menu inicial e reconectar automaticamente na sua simulação exata, sem perda de recursos ou moedas.

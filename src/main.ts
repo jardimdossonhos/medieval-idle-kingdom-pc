@@ -11,6 +11,7 @@ import {
   type RuntimeMetrics,
   type TechnologyChoice
 } from "./application/game-session";
+import { GodModeConsole } from "./application/god-mode";
 import { AutomationLevel, ResourceType, TechnologyDomain } from "./core/models/enums";
 import { createDefaultSimulationSystems } from "./core/simulation/create-default-systems";
 import type { SaveSummary } from "./core/contracts/game-ports";
@@ -66,8 +67,7 @@ interface UiRefs {
   profileEmailInput: HTMLInputElement;
   profileIdValue: HTMLElement;
   profileSaveButton: HTMLButtonElement;
-  debugLogStateButton: HTMLButtonElement | null;
-  debugAddGoldButton: HTMLButtonElement | null;
+  appVersion: HTMLElement;
   tabButtons: HTMLButtonElement[];
   tabPanels: HTMLElement[];
   splashScreen: HTMLElement;
@@ -326,7 +326,7 @@ async function bootstrapApp(): Promise<void> {
     <main class="app-shell">
       <header class="app-header card">
         <div class="header-title">
-          <h1>Epochs Idle PC</h1>
+          <h1>Epochs Idle PC <span id="app-version" style="font-size: 14px; color: #666; font-weight: normal; user-select: none;">v0.1.0</span></h1>
           <p>Grand strategy idle local-first com foco em decisões de alto nível.</p>
         </div>
         <div class="status-grid">
@@ -517,15 +517,6 @@ async function bootstrapApp(): Promise<void> {
           <p class="hint-text">Este perfil local prepara o caminho para autenticação e sincronização entre dispositivos no multiplayer futuro.</p>
         </article>
       </section>
-
-      ${showDevMetrics ? `
-      <section class="dev-overlay card">
-        <h3>Painel de Depuração</h3>
-        <div class="action-grid">
-          <button id="debug-log-state">Log GameState</button>
-          <button id="debug-add-gold">Adicionar 1000 Ouro</button>
-        </div>
-      </section>` : ""}
     </main>
   `;
 
@@ -582,8 +573,7 @@ async function bootstrapApp(): Promise<void> {
     profileEmailInput: queryElement(appRoot, "#profile-email-input"),
     profileIdValue: queryElement(appRoot, "#profile-id-value"),
     profileSaveButton: queryElement(appRoot, "#profile-save-btn"),
-    debugLogStateButton: queryOptionalElement(appRoot, "#debug-log-state"),
-    debugAddGoldButton: queryOptionalElement(appRoot, "#debug-add-gold"),
+    appVersion: queryElement(appRoot, "#app-version"),
     tabButtons: Array.from(appRoot.querySelectorAll<HTMLButtonElement>(".tab-btn")),
     tabPanels: Array.from(appRoot.querySelectorAll<HTMLElement>(".tab-panel")),
     splashScreen: queryElement(appRoot, "#splash-screen"),
@@ -1853,21 +1843,7 @@ async function bootstrapApp(): Promise<void> {
     showToast("Perfil local salvo.");
   });
 
-  if (ui.debugLogStateButton) {
-    ui.debugLogStateButton.addEventListener("click", () => {
-      console.log("DEBUG: Current GameState", session.getState());
-      showToast("GameState atual logado no console.");
-    });
-  }
-
-  if (ui.debugAddGoldButton) {
-    ui.debugAddGoldButton.addEventListener("click", () => {
-      const player = getPlayerKingdom(session.getState());
-      player.economy.stock.gold += 1000;
-      showToast("+1000 de ouro adicionado para depuração.");
-    });
-  }
-
+  new GodModeConsole(ui.appVersion);
   syncProfileUi();
 
   // Check for sync state first and move it to async if it exists

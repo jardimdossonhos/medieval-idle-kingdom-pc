@@ -1,11 +1,5 @@
 ﻿﻿﻿﻿# Epochs Idle
 
-> ⚠️ **Aviso Importante** ⚠️
-> 
-> O sistema de persistência (salvar/carregar) está sob uma refatoração crítica para corrigir instabilidades. A causa raiz foi identificada e uma solução robusta está sendo implementada.
-> 
-> Para uma análise técnica completa do problema e da nova arquitetura de persistência, consulte a seção **"Análise de Falhas Críticas de Persistência"** no documento `ARCHITECTURE.md`.
-
 Browser-first grand strategy idle game architecture focused on local simulation depth.
 
 ## Stage status
