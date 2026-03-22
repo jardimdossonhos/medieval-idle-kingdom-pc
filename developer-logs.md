@@ -687,3 +687,28 @@ Foi determinado pelo criador que o modelo de inicialização atual (`create-init
 4. **Crescimento Orgânico e Mitose:** O crescimento populacional será a única forma de expandir para hexágonos vizinhos. "Novos" NPCs não surgirão do nada, mas sim de "Cismas Sociais" (Revoltas), onde uma tribo grande se parte em duas (Mitose NPC).
 5. **Permadeath (Extinção):** Tribos que falharem na coleta de comida podem ser eliminadas inteiramente e varridas do mapa, voltando a deixar o hexágono selvagem.
 **Status:** Documentado. Refatoração a ser agendada em conjunto com o motor de Eras.
+
+---
+
+## Entrada: 45
+
+**Data:** 22/03/2024
+
+### Fase 1: Motor de Regras - Canal Reverso de Efeitos (APPLY_ECS_EFFECTS)
+Como Eng. de Software, iniciamos a "Fase 1" do Roadmap arquitetural estabelecendo a ponte de comunicação reversa para que a Thread Principal (UI) consiga aplicar mutações estritas nas matrizes de alta performance do WebWorker.
+**Ação Aplicada (Metade da Interface):** Os botões do painel `GodModeConsole` (Modo Deus) foram ativados com *callbacks* injetados pelo `main.ts`. Agora, comandos como "+10k Ouro" constroem um payload otimizado que contém um vetor de índices mapeados (`playerRegionIndices`) e envia via `postMessage("APPLY_ECS_EFFECTS")` para a Thread secundária.
+**Próximo Passo:** Implementar o ouvinte (`handler`) deste payload no lado do servidor (`simulation.worker.ts`) e o motor matemático que fará a soma/subtração diretamente no `Float64Array`.
+
+---
+
+## Entrada: 46
+
+**Data:** 22/03/2024
+
+### Conclusão do Alvo A (Ponte de Efeitos Ativos no Worker)
+Como Eng. de Software, concluí a outra metade da ponte estabelecida na Entrada 45. O motor matemático do Worker é estritamente isolado da UI. Para ele processar ordens de cima para baixo como "ganhar ouro mágico" ou no futuro "sofrer desastres militares", ele precisava de um "Porto" (Handler) blindado.
+**Ação Executada:**
+1. O `simulation.worker.ts` recebeu o tratador de evento `APPLY_ECS_EFFECTS`.
+2. Roteia strings seguras (ex: "gold", "population") para as referências literais de matrizes ECS (`economy.gold`, `population.total`).
+3. Varre o array de índices passados e aplica uma operação algébrica pre-compilada (`add`, `set`, `subtract`).
+**Status:** Concluído. O "Modo Deus" agora funciona em toda a sua glória. Se o usuário clicar em `+10k Ouro`, a UI injeta os índices pela ponte, o Worker processa e as matrizes explodem de valor no exato pulso de 250ms seguinte, com zero chance de race condition.

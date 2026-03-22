@@ -1,4 +1,4 @@
-﻿﻿import { existsSync } from "node:fs";
+﻿﻿﻿﻿import { existsSync } from "node:fs";
 import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -386,7 +386,7 @@ async function main() {
         // Preenche o vazio: Gera um tile válido e vazio para áreas de oceano profundo.
         // Isso impede que o servidor Vite retorne um erro HTML 404 que causa crash no WebGL.
         const safeTile = tile || { features: [] };
-        const pbf = vtpbf.fromGeojsonVt({ hexgrid: safeTile });
+        const pbf = vtpbf.fromGeojsonVt({ hexgrid: safeTile }, { version: 2 });
         const xDir = path.join(tilesDir, String(z), String(x));
         await mkdir(xDir, { recursive: true });
         await writeFile(path.join(xDir, `${y}.pbf`), pbf);

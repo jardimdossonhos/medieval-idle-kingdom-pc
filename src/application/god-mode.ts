@@ -6,7 +6,10 @@ export class GodModeConsole {
   private readonly CLICKS_REQUIRED = 5;
   private readonly CLICK_TIMEOUT_MS = 500; // Tempo máximo entre cliques
 
-  constructor(private triggerElement: HTMLElement) {
+  constructor(
+    private triggerElement: HTMLElement,
+    private onCommand: (command: string) => void
+  ) {
     this.setupTrigger();
   }
 
@@ -111,5 +114,10 @@ export class GodModeConsole {
         if (targetContent) targetContent.style.display = "block";
       });
     });
+
+    this.panelElement.querySelector("#btn-gold-10k")?.addEventListener("click", () => this.onCommand("gold_10k"));
+    this.panelElement.querySelector("#btn-food-10k")?.addEventListener("click", () => this.onCommand("food_10k"));
+    this.panelElement.querySelector("#btn-ruin-economy")?.addEventListener("click", () => this.onCommand("ruin_economy"));
+    this.panelElement.querySelector("#btn-unlock-all-tech")?.addEventListener("click", () => this.onCommand("unlock_tech"));
   }
 }

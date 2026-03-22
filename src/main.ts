@@ -1853,7 +1853,44 @@ async function bootstrapApp(): Promise<void> {
     showToast("Perfil local salvo.");
   });
 
-  new GodModeConsole(ui.appVersion);
+  new GodModeConsole(ui.appVersion, (command) => {
+    const state = session.getState();
+    if (!state) return;
+    
+    const player = getPlayerKingdom(state);
+    const playerRegionIndices = getPlayerRegionIndicesCached(state, player);
+
+    switch (command) {
+      case "gold_10k":
+        simulationWorker.postMessage({
+          type: "APPLY_ECS_EFFECTS",
+          payload: { target: "gold", operation: "add", value: 10000, indices: playerRegionIndices }
+        });
+        showToast("Modo Deus: +10.000 Ouro injetado.");
+        break;
+      case "food_10k":
+        simulationWorker.postMessage({
+          type: "APPLY_ECS_EFFECTS",
+          payload: { target: "food", operation: "add", value: 10000, indices: playerRegionIndices }
+        });
+        showToast("Modo Deus: +10.000 Comida injetada.");
+        break;
+      case "ruin_economy":
+        simulationWorker.postMessage({
+          type: "APPLY_ECS_EFFECTS",
+          payload: { target: "gold", operation: "set", value: 0, indices: playerRegionIndices }
+        });
+        simulationWorker.postMessage({
+          type: "APPLY_ECS_EFFECTS",
+          payload: { target: "food", operation: "set", value: 0, indices: playerRegionIndices }
+        });
+        showToast("Modo Deus: APOCALIPSE. Recursos zerados.");
+        break;
+      case "unlock_tech":
+        showToast("Modo Deus: Desbloqueio requer rotina na GameSession. Em breve.");
+        break;
+    }
+  });
   syncProfileUi();
 
   // Check for sync state first and move it to async if it exists
