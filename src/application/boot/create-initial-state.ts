@@ -1,4 +1,4 @@
-﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
+﻿﻿﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
 import {
   ArmyPosture,
   AutomationLevel,
@@ -8,11 +8,9 @@ import {
   ReligiousPolicy,
   ResourceType,
   TechnologyDomain,
-  TreatyType,
   VictoryPath
 } from "../../core/models/enums";
 import type { EcsState, GameState, KingdomState } from "../../core/models/game-state";
-import { buildTreatyId, sortUniqueIds } from "../../core/models/identifiers";
 import type { NpcBehaviorState } from "../../core/models/npc";
 import type { PopulationState } from "../../core/models/population";
 import type { StaticWorldData } from "../../core/models/static-world-data";
@@ -139,17 +137,6 @@ const KINGDOM_BLUEPRINTS: KingdomBlueprint[] = [
   }
 ];
 
-const OWNER_OVERRIDES: Record<string, string> = {
-  r_iberia_north: "k_player",
-  r_iberia_south: "k_player",
-  r_gallia_west: "k_rival_north",
-  r_italia_north: "k_rival_north",
-  r_maghreb_west: "k_rival_south",
-  r_maghreb_east: "k_rival_south",
-  r_anatolia_west: "k_rival_east",
-  r_levant_coast: "k_rival_east"
-};
-
 function hashString(input: string): number {
   let hash = 0;
   for (let index = 0; index < input.length; index += 1) {
@@ -232,14 +219,14 @@ function createBasePopulation(total: number): PopulationState {
   };
 }
 
-function createBaseEconomy(seedGold: number): EconomyState {
+function createBaseEconomy(): EconomyState {
   const stock = createEmptyStock();
-  stock[ResourceType.Gold] = seedGold;
-  stock[ResourceType.Food] = 1_200;
-  stock[ResourceType.Wood] = 850;
-  stock[ResourceType.Iron] = 360;
-  stock[ResourceType.Faith] = 210;
-  stock[ResourceType.Legitimacy] = 66;
+  stock[ResourceType.Gold] = 0;
+  stock[ResourceType.Food] = 250;
+  stock[ResourceType.Wood] = 100;
+  stock[ResourceType.Iron] = 0;
+  stock[ResourceType.Faith] = 10;
+  stock[ResourceType.Legitimacy] = 10;
 
   return {
     stock,
@@ -348,10 +335,9 @@ function createKingdom(
   ownedRegionCount: number,
   stateFaith: ReligionId
 ): KingdomState {
-  const populationBase = blueprint.isPlayer ? 2_300_000 : 1_600_000;
-  const populationTotal = populationBase + ownedRegionCount * 130_000;
-  const seedGold = (blueprint.isPlayer ? 360 : 290) + ownedRegionCount * 3;
-  const armyManpower = (blueprint.isPlayer ? 21_000 : 17_000) + ownedRegionCount * 120;
+  const isNature = blueprint.id === "k_nature";
+  const populationTotal = isNature ? 0 : 20; // A aurora da humanidade começa com uma minúscula tribo de 20 pessoas
+  const armyManpower = isNature ? 0 : 5; // Apenas uns poucos caçadores/guerreiros
 
   return {
     id: blueprint.id,
@@ -359,17 +345,14 @@ function createKingdom(
     adjective: blueprint.adjective,
     isPlayer: blueprint.isPlayer,
     capitalRegionId,
-    economy: createBaseEconomy(seedGold),
+    economy: createBaseEconomy(),
     population: createBasePopulation(populationTotal),
     technology: {
-      unlocked: ["agri_basics", "militia_drill"],
-      activeResearchId: "ledger_admin",
+      unlocked: isNature ? [] : ["agri_basics"], // Apenas a base tribal destrancada
+      activeResearchId: isNature ? null : "militia_drill",
       researchGoalId: null,
       accumulatedResearch: 0,
-      researchRate: 1,
-      researchFocus: TechnologyDomain.Administration,
-      doctrineMilitary: "levy_discipline",
-      doctrineAdministration: "crown_stewardship"
+      researchFocus: TechnologyDomain.Administration
     },
     religion: {
       stateFaith,
@@ -383,21 +366,21 @@ function createKingdom(
       holyWarCooldownUntil: 0
     },
     military: {
-      posture: ArmyPosture.Balanced,
+      posture: ArmyPosture.Defensive, // Tribos nascentes são defensivas
       recruitmentPriority: 0.52,
       offensiveFocus: blueprint.isPlayer ? 0.47 : 0.51,
       targetRegionIds: [],
-      armies: [
+      armies: isNature ? [] : [
         {
           id: `${blueprint.id}_army_1`,
           stationedRegionId: capitalRegionId,
           manpower: armyManpower,
-          quality: blueprint.isPlayer ? 0.56 : 0.5,
-          morale: blueprint.isPlayer ? 0.64 : 0.59,
-          supply: 0.73
+          quality: 0.1,
+          morale: 0.5,
+          supply: 1
         }
       ],
-      reserveManpower: Math.round(armyManpower * 3.5),
+      reserveManpower: isNature ? 0 : 15,
       militaryTechLevel: 1
     },
     diplomacy: {
@@ -434,8 +417,8 @@ function createKingdom(
       [VictoryPath.DynasticLegacy]: 0
     },
     legitimacy: blueprint.isPlayer ? 64 : 58,
-    stability: blueprint.isPlayer ? 60 : 56,
-    npc: blueprint.isPlayer
+    stability: isNature ? 100 : (blueprint.isPlayer ? 60 : 56),
+    npc: blueprint.isPlayer || isNature
       ? undefined
       : createNpcBehavior(blueprint.archetype ?? NpcArchetype.Opportunist, blueprint.strategicGoal ?? "equilibrio_regional")
   };
@@ -451,56 +434,33 @@ function listDefinitionsSorted(staticData: StaticWorldData): RegionDefinition[] 
     .map((regionId) => staticData.definitions[regionId]);
 }
 
-function assignRegionOwners(definitions: RegionDefinition[], kingdomIds: string[]): Record<string, string> {
-  const nonPlayerIds = kingdomIds.filter((id) => id !== "k_player").sort();
-  const protectedIds = new Set(Object.keys(OWNER_OVERRIDES));
+function assignRegionOwners(definitions: RegionDefinition[], blueprints: KingdomBlueprint[]): { ownerByRegionId: Record<string, string>, capitalByOwner: Record<string, string> } {
   const ownerByRegionId: Record<string, string> = {};
+  const capitalByOwner: Record<string, string> = {};
 
+  // 1. O globo inteiro começa pertencendo à natureza absoluta (Vazio populacional)
   for (const definition of definitions) {
-    const overrideOwner = OWNER_OVERRIDES[definition.id];
-    if (overrideOwner) {
-      ownerByRegionId[definition.id] = overrideOwner;
-      continue;
-    }
-
-    const hash = hashString(definition.id);
-    ownerByRegionId[definition.id] = nonPlayerIds[hash % nonPlayerIds.length] ?? "k_rival_north";
+    ownerByRegionId[definition.id] = "k_nature";
   }
 
-  for (const kingdomId of kingdomIds) {
-    const hasAny = Object.keys(ownerByRegionId)
-      .sort()
-      .some((regionId) => ownerByRegionId[regionId] === kingdomId);
+  // 2. Filtramos apenas zonas de terra férteis/temperadas para dar chance de sobrevivência inicial
+  const landDefs = definitions.filter(d => !d.isWater && d.biome !== "tundra" && d.biome !== "desert");
+  const validSpawns = landDefs.length >= blueprints.length ? landDefs : definitions.filter(d => !d.isWater);
+  
+  // 3. Espaçamos as tribos geograficamente ao redor do globo matemático
+  const step = Math.floor(validSpawns.length / blueprints.length);
 
-    if (hasAny) {
-      continue;
+  for (let i = 0; i < blueprints.length; i++) {
+    const blueprint = blueprints[i];
+    const assignedRegion = validSpawns[i * step] ?? validSpawns[0];
+    
+    if (assignedRegion) {
+      ownerByRegionId[assignedRegion.id] = blueprint.id;
+      capitalByOwner[blueprint.id] = assignedRegion.id;
     }
-
-    const byOwner = new Map<string, string[]>();
-    for (const regionId of Object.keys(ownerByRegionId).sort()) {
-      const owner = ownerByRegionId[regionId];
-      const list = byOwner.get(owner) ?? [];
-      list.push(regionId);
-      byOwner.set(owner, list);
-    }
-
-    const donor = [...byOwner.entries()]
-      .filter(([owner]) => owner !== "k_player")
-      .sort((left, right) => right[1].length - left[1].length)[0];
-
-    if (!donor) {
-      continue;
-    }
-
-    const transferable = donor[1].find((regionId) => !protectedIds.has(regionId));
-    if (!transferable) {
-      continue;
-    }
-
-    ownerByRegionId[transferable] = kingdomId;
   }
 
-  return ownerByRegionId;
+  return { ownerByRegionId, capitalByOwner };
 }
 
 function buildOwnerIndex(ownerByRegionId: Record<string, string>): Map<string, string[]> {
@@ -516,42 +476,17 @@ function buildOwnerIndex(ownerByRegionId: Record<string, string>): Map<string, s
   return byOwner;
 }
 
-function selectCapitalRegionId(
-  blueprint: KingdomBlueprint,
-  definitionsById: Record<string, RegionDefinition>,
-  ownedRegionIds: string[]
-): string {
-  if (ownedRegionIds.includes(blueprint.preferredCapitalRegionId)) {
-    return blueprint.preferredCapitalRegionId;
-  }
-
-  const fallback = [...ownedRegionIds]
-    .sort((left, right) => {
-      const leftValue = definitionsById[left]?.strategicValue ?? 0;
-      const rightValue = definitionsById[right]?.strategicValue ?? 0;
-      if (rightValue !== leftValue) {
-        return rightValue - leftValue;
-      }
-      return left.localeCompare(right);
-    })[0];
-
-  if (fallback) {
-    return fallback;
-  }
-
-  return blueprint.preferredCapitalRegionId;
-}
-
 function createRegionState(
   definition: RegionDefinition,
   ownerId: string,
   ownerFaith: ReligionId,
   staticData: StaticWorldData
 ): RegionState {
+  const isNature = ownerId === "k_nature";
   const seed = hashString(definition.id);
-  const unrest = 0.08 + ((seed % 23) / 100);
+  const unrest = isNature ? 0 : 0.08 + ((seed % 23) / 100); // A natureza não se revolta
   const autonomy = 0.2 + ((Math.floor(seed / 13) % 22) / 100);
-  const devastation = ((Math.floor(seed / 31) % 7) / 100);
+  const devastation = isNature ? 0 : ((Math.floor(seed / 31) % 7) / 100);
   const assimilation = 0.74 + ((Math.floor(seed / 47) % 23) / 100);
   const zoneFaith = religionByZone(definition.zone, staticData);
   const dominantFaith = ownerFaith;
@@ -561,7 +496,7 @@ function createRegionState(
     : zoneFaith;
   const rawMinorityShare = 0.12 + ((Math.floor(seed / 97) % 18) / 100);
   const minorityShare = clamp(Math.min(rawMinorityShare, 0.95 - dominantShare), 0.08, 0.38);
-  const faithUnrest = clamp(
+  const faithUnrest = isNature ? 0 : clamp(
     0.05 + minorityShare * 0.42 + (dominantFaith === zoneFaith ? 0 : 0.08) + ((Math.floor(seed / 131) % 6) / 100),
     0,
     1
@@ -606,7 +541,7 @@ function createWorldState(
 }
 
 function createSeedRelations(state: GameState): void {
-  const ids = Object.keys(state.kingdoms).sort();
+  const ids = Object.keys(state.kingdoms).filter(id => id !== "k_nature").sort();
 
   for (const id of ids) {
     const kingdom = state.kingdoms[id];
@@ -638,47 +573,27 @@ function createSeedRelations(state: GameState): void {
   }
 }
 
-function createSeedTreaty(state: GameState, now: number): void {
-  const player = state.kingdoms.k_player;
-  const south = state.kingdoms.k_rival_south;
-
-  if (!player || !south) {
-    return;
-  }
-
-  const parties = sortUniqueIds([player.id, south.id]);
-  const signedAt = now - 1000 * 60 * 60;
-  const treaty = {
-    id: buildTreatyId(TreatyType.Peace, parties, signedAt),
-    type: TreatyType.Peace,
-    parties,
-    signedAt,
-    expiresAt: now + 1000 * 60 * 60 * 6,
-    terms: {
-      borderFreeze: true,
-      warReparations: 0
-    }
-  };
-
-  player.diplomacy.treaties.push(treaty);
-  south.diplomacy.treaties.push(treaty);
-}
-
-function createKingdoms(ownerByRegionId: Record<string, string>, staticData: StaticWorldData): Record<string, KingdomState> {
+function createKingdoms(ownerByRegionId: Record<string, string>, capitalByOwner: Record<string, string>, staticData: StaticWorldData): Record<string, KingdomState> {
   const definitionsById = toDefinitionMap(listDefinitionsSorted(staticData));
   const byOwner = buildOwnerIndex(ownerByRegionId);
   const kingdoms: Record<string, KingdomState> = {};
 
   for (const blueprint of KINGDOM_BLUEPRINTS) {
     const ownedRegions = byOwner.get(blueprint.id) ?? [];
-    const capitalRegionId = selectCapitalRegionId(blueprint, definitionsById, ownedRegions);
+    const capitalRegionId = capitalByOwner[blueprint.id] ?? blueprint.preferredCapitalRegionId;
     const capitalZone = definitionsById[capitalRegionId]?.zone ?? "europe";
-    const zoneFaith = religionByZone(capitalZone, staticData);
-    const stateFaith = pickDeterministicReligion(staticData, `${blueprint.id}:${capitalRegionId}`, null);
-    const preferredFaith = blueprint.isPlayer ? "imperial_church" : zoneFaith;
-    const chosenFaith = staticData.religions[preferredFaith] ? preferredFaith : stateFaith;
+    const chosenFaith = staticData.religions["imperial_church"] ? "imperial_church" : religionByZone(capitalZone, staticData);
     kingdoms[blueprint.id] = createKingdom(blueprint, capitalRegionId, ownedRegions.length, chosenFaith);
   }
+
+  // Entidade de contenção global (Terra Selvagem)
+  kingdoms["k_nature"] = createKingdom({
+    id: "k_nature",
+    name: "Terra Selvagem",
+    adjective: "Selvagem",
+    isPlayer: false,
+    preferredCapitalRegionId: "r_hex_0"
+  }, "r_hex_0", 0, "ancestral_cults");
 
   return kingdoms;
 }
@@ -686,9 +601,9 @@ function createKingdoms(ownerByRegionId: Record<string, string>, staticData: Sta
 export function createInitialState(staticData: StaticWorldData = createStaticWorldData()): GameState {
   const now = Date.now();
   const definitions = listDefinitionsSorted(staticData);
-  const kingdomIds = KINGDOM_BLUEPRINTS.map((entry) => entry.id).sort();
-  const ownerByRegionId = assignRegionOwners(definitions, kingdomIds);
-  const kingdoms = createKingdoms(ownerByRegionId, staticData);
+  const { ownerByRegionId, capitalByOwner } = assignRegionOwners(definitions, KINGDOM_BLUEPRINTS);
+  const kingdoms = createKingdoms(ownerByRegionId, capitalByOwner, staticData);
+  
   const faithByKingdomId = Object.fromEntries(
     Object.keys(kingdoms)
       .sort()
@@ -697,17 +612,31 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
 
   const totalEntities = definitions.length;
 
-  // Define os valores iniciais para a simulação do ECS no Worker
+  // FAGULHA VITAL (AURORA DA HUMANIDADE): Preenche 99% das matrizes ECS com ZERO para o terreno vazio
   const ecsState: EcsState = {
-    gold: new Array(totalEntities).fill(0).map(() => 100 + Math.random() * 400),
-    food: new Array(totalEntities).fill(0).map(() => 50 + Math.random() * 150),
-    wood: new Array(totalEntities).fill(0).map(() => 50 + Math.random() * 150),
-    iron: new Array(totalEntities).fill(0).map(() => 20 + Math.random() * 80),
-    faith: new Array(totalEntities).fill(0).map(() => 50 + Math.random() * 100),
-    legitimacy: new Array(totalEntities).fill(0).map(() => 50 + Math.random() * 100),
-    populationTotal: new Array(totalEntities).fill(0).map(() => 150000 + Math.random() * 300000),
-    populationGrowthRate: new Array(totalEntities).fill(0).map(() => 0.0001 + Math.random() * 0.0001)
+    gold: new Array(totalEntities).fill(0),
+    food: new Array(totalEntities).fill(0),
+    wood: new Array(totalEntities).fill(0),
+    iron: new Array(totalEntities).fill(0),
+    faith: new Array(totalEntities).fill(0),
+    legitimacy: new Array(totalEntities).fill(0),
+    populationTotal: new Array(totalEntities).fill(0),
+    populationGrowthRate: new Array(totalEntities).fill(0)
   };
+
+  for (let i = 0; i < totalEntities; i++) {
+    const def = definitions[i];
+    const ownerId = ownerByRegionId[def.id] ?? "k_nature";
+
+    if (ownerId !== "k_nature" && !def.isWater) {
+      ecsState.populationTotal[i] = 20; // 20 nômades exatos por hexágono capital
+      ecsState.populationGrowthRate[i] = 0.003; // Crescimento biológico (rápido no começo para impulsionar a tribo)
+      ecsState.food[i] = 250;
+      ecsState.wood[i] = 100;
+      ecsState.faith[i] = 10;
+      ecsState.legitimacy[i] = 10;
+    }
+  }
 
   const state: GameState = {
     meta: {
@@ -740,8 +669,8 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
     events: [
       {
         id: "evt_seed_campaign_start",
-        title: "As Coroas do Mundo Entram em Movimento",
-        details: "A campanha mundial foi iniciada com todas as regioes ativas no mapa.",
+        title: "A Aurora da Civilização",
+        details: "A humanidade encontra-se na sua infância. Pequenos grupos começam a dominar a arte da sobrevivência.",
         severity: "info",
         occurredAt: now
       }
@@ -757,7 +686,6 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
   };
 
   createSeedRelations(state);
-  createSeedTreaty(state, now);
 
   for (const regionId of Object.keys(state.world.regions).sort()) {
     const region = state.world.regions[regionId];

@@ -923,7 +923,7 @@ async function bootstrapApp(): Promise<void> {
         faith: Array.from(new Float64Array(len).fill(50)) as any,
         legitimacy: Array.from(new Float64Array(len).fill(50)) as any,
         populationTotal: Array.from(new Float64Array(len).fill(5000)) as any,
-        populationGrowthRate: Array.from(new Float64Array(len).fill(0.015)) as any
+        populationGrowthRate: Array.from(new Float64Array(len).fill(0.00015)) as any
       };
     } else {
       // Vacina: Se o save veio com População morta (artefato de testes antigos), revive o mundo
@@ -931,7 +931,7 @@ async function bootstrapApp(): Promise<void> {
       if (!pop || pop[0] === 0 || pop[0] === undefined) {
         Diagnostic.warn("PERS-003", "Fagulha Vital: Save antigo corrompido detectado (População Morta). Injetando reinicialização demográfica nas matrizes.");
         state.ecs.populationTotal = Array.from(new Float64Array(len).fill(5000)) as any;
-        state.ecs.populationGrowthRate = Array.from(new Float64Array(len).fill(0.015)) as any;
+        state.ecs.populationGrowthRate = Array.from(new Float64Array(len).fill(0.00015)) as any;
       }
     }
 
@@ -1757,7 +1757,9 @@ async function bootstrapApp(): Promise<void> {
             // exibe uma cor média em vez do cinza de pobreza extrema.
             regionWealthRatio[def.id] = 0.3;
           } else {
-            regionWealthRatio[def.id] = Math.max(0, Math.min(1, (goldData[i] - minGold) / range));
+            let ratio = (goldData[i] - minGold) / range;
+            if (!Number.isFinite(ratio)) ratio = 0; // Proteção WebGL (Evita mapa cinza/rosa por NaN)
+            regionWealthRatio[def.id] = Math.max(0, Math.min(1, ratio));
           }
         }
       }
