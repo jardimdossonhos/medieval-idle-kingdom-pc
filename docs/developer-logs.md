@@ -753,3 +753,30 @@ Foram criadas duas novas operações no `simulation.worker.ts`:
 1. `subtract_empire_total`: O WebWorker calcula o total de fé na malha, descobre o percentual que a "magia" representa (ex: 25%) e aplica um debuff percentual simétrico sobre todas as províncias simultaneamente.
 2. `add_empire_total`: Fatia a bênção pelo número de propriedades antes de somar.
 O bug foi varrido. O botão de Milagre opera magicamente sem corromper a economia ou afetar a estabilidade do Worker.
+
+---
+
+## Entrada: 50
+
+**Data:** 23/03/2024
+
+### Problema de UX: Ilusão de Latência em Bônus Ativos vs Geração Passiva
+Foi reportado que a UI não refletia visualmente a cobrança da ação "Bênção da Colheita" (-500 Fé), permitindo o *spam* do botão apesar de os logs confirmarem a comunicação perfeita e o débito acontecendo no ECS.
+
+### Análise e Correção (Optimistic UI):
+O Worker estava calculando a subtração corretamente. Entretanto, como a simulação corria em `4x speed`, a geração passiva de Fé de centenas de províncias cobria a despesa de 500 no mesmo exato *Tick* em que o custo era aplicado. Quando a UI recebia o novo estado (250ms depois), o valor havia crescido em vez de encolhido.
+**Solução:** Implementação de `Optimistic UI Update` no botão. O evento de clique agora desconta estaticamente o valor da variável local (`playerFaithCache`) e atualiza o elemento do DOM imediatamente *antes* de disparar o IPC para o Worker. Isso cria o feedback tátil instantâneo da cobrança para o jogador e bloqueia a "metralhadora" de envios ilegais.
+
+---
+
+## Entrada: 51
+
+**Data:** 23/03/2024
+
+### Organização e Atualização da Documentação Oficial
+Foi identificada a necessidade de alinhar a documentação do projeto com o estado atual altamente otimizado e funcional da base de código, além da centralização dos artefatos em uma pasta dedicada.
+
+### Ações Executadas:
+1. **Limpeza do README:** O aviso crítico de falha no sistema de Save/Load foi removido, pois o sistema provou-se 100% estável. A referência do mapa foi atualizada de "países estáticos" para "Malha Hexagonal Procedural" (`Turf.js`).
+2. **Manual do Usuário:** O `manual.md` foi limpo (remoção dos avisos de instabilidade) e atualizado com a instrução do novo Sistema de Religião (Poderes Divinos Ativos).
+3. **Migração para Pasta `/docs`:** Recomendada a transição física dos arquivos soltos (`ARCHITECTURE.md`, `CODEBASE_MAP.md`, `developer-logs.md`, `manual.md`) para o diretório `/docs`, mantendo apenas o `README.md` na raiz, conforme as melhores práticas de Engenharia de Software.

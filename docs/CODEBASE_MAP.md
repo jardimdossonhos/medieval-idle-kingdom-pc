@@ -1,6 +1,6 @@
 # 🗺️ Mapa Mental e Arquitetura da Base de Código (Deep Dive)
 
-Este documento mapeia a utilidade de **toda a extensão da árvore de diretórios e padrões de arquivos** do projeto `epochs-idle-pc` (abrangendo seus mais de 1.000 arquivos). 
+Este documento mapeia a utilidade de **toda a extensão da árvore de diretórios e padrões de arquivos** do projeto `medieval-idle-kingdom-pc` (abrangendo seus mais de 1.000 arquivos). 
 Devido ao rigor da **Clean Architecture** e **Threads Separadas (Web Worker)**, use este guia como bússola para entender onde inserir novos códigos e prever o impacto das suas alterações.
 
 ---
@@ -111,11 +111,11 @@ Centenas de megabytes rodando a cada segundo em arrays coladas e contínuas na M
     *   `game-session.ts` (Aplica a lógica de negócios, paga custos do ECS copiados e salva logs)
     *   `models/events.ts` (Se o edito logar um evento)
 
-**Cenário C: Alterar o mapa geo-político (Ex: Separar um país em dois):**
-    *   Editar e gerar via `scripts/generate-world-geojson.mjs`
-    *   O build reescreverá `generated/world-definitions-v1.ts`
-    *   O ECS alocará +1 de espaço nativamente.
-    *   *Risco*: Saves antigos serão quebrados por desalinhamento de indexação. Use migrações de save ou versões isoladas de campanha.
+**Cenário C: Alterar propriedades da malha hexagonal do mundo (Clima, Tamanho do Tabuleiro):**
+    *   Alterar a lógica procedural (Turf.js) no `scripts/generate-world-geojson.mjs`.
+    *   Rodar `npm run map:build` para fatiar o mundo e gerar os Vector Tiles (`.pbf`).
+    *   O build reescreverá `world-definitions-v1.ts`. O ECS ajustará automaticamente a memória RAM com base no tamanho novo do Array.
+    *   *Risco*: Qualquer alteração na quantidade de zonas geográficas corrompe os Saves antigos devido ao desalinhamento estrutural dos índices. O jogo precisará ser recomeçado.
 
 ---
 > ⚠️ **Nota Crítica de Refatoração:** A arquitetura multithread exige espelhamento exato do Estado. Sempre valide o recarregamento do Browser (F5) para atestar a "Persistência ECS" após mexer em qualquer tipo, Array ou Interface do `core/models`.

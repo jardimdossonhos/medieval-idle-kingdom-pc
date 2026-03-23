@@ -1,6 +1,6 @@
 # Manual do Usuário e Guia de Testes (Criador)
 
-Bem-vindo ao **Epochs Idle**. Este manual tem o objetivo de eliminar a "caixa preta" do jogo. Ele explica as regras de funcionamento, os significados visuais e as mecânicas exatas para que você possa jogar, testar e guiar o desenvolvimento com clareza.
+Bem-vindo ao **Medieval Idle Kingdom**. Este manual tem o objetivo de eliminar a "caixa preta" do jogo. Ele explica as regras de funcionamento, os significados visuais e as mecânicas exatas para que você possa jogar, testar e guiar o desenvolvimento com clareza.
 
 ---
 
@@ -39,7 +39,14 @@ Todo imposto arrecadado vai para um "Pote de Orçamento". Você deve dividir 100
 
 ---
 
-## 3. Painel Militar e Diplomacia
+## 3. Religião e Poderes Divinos
+
+O jogo possui um sistema de **Fé** que se acumula passivamente com o tempo, especialmente se você isentar o clero de impostos.
+*   **Poderes Divinos (Ações Ativas):** Você pode canalizar a Fé acumulada para realizar "Milagres". Exemplo:
+    *   *Bênção da Colheita (-500 Fé):* Injeta imediatamente uma vasta quantidade de Comida na simulação.
+*   A interface reflete o custo instantaneamente (*Optimistic UI*), impedindo o uso caso não haja fé suficiente e protegendo a economia do jogo.
+
+## 4. Painel Militar e Diplomacia
 
 *   **Pontuação Militar (Military Power):** É um número matemático que resume a sua força bélica total. Ele é calculado somando a quantidade de soldados ativos (Manpower), o nível da sua Tecnologia Militar e os Bônus de Qualidade de Tropa. A Inteligência Artificial (NPCs) usa este número para decidir se vai te atacar ou se deve ter medo de você.
 *   **Reserva (Manpower):** Soldados disponíveis para repor as baixas após uma guerra.
@@ -47,7 +54,7 @@ Todo imposto arrecadado vai para um "Pote de Orçamento". Você deve dividir 100
 
 ---
 
-## 4. Salvamento e Proteção de Dados (Persistência)
+## 5. Salvamento e Proteção de Dados (Persistência)
 
 O jogo foi projetado para rodar localmente no seu navegador.
 *   **Autosave:** O jogo salva a si mesmo automaticamente a cada 5 ciclos (5 segundos).
@@ -57,7 +64,7 @@ O jogo foi projetado para rodar localmente no seu navegador.
 
 ---
 
-## 5. Guia para o Criador / Testador (Uso do Painel Dev)
+## 6. Guia para o Criador / Testador (Uso do Painel Dev)
 
 Ao rodar o jogo localmente com `npm run dev`, você terá acesso ao **Painel de Depuração** no canto inferior da tela. Este painel existe apenas para testar sistemas sem precisar esperar horas.
 

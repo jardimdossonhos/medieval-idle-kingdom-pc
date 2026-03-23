@@ -1997,14 +1997,22 @@ async function bootstrapApp(): Promise<void> {
       if (indices.length === 0) return;
       
       if (playerFaithCache >= 500) {
-        // Subtrai 500 de Fé de todo o império (Custo Proporcional Percentual)
+        // 1. Atualização Otimista (Optimistic UI): Dá o feedback visual instantâneo e impede spam de cliques
+        playerFaithCache -= 500;
+        const faithEl = appRoot!.querySelector("#faith-pool-value");
+        if (faithEl) faithEl.textContent = formatNumber(playerFaithCache);
+        const faithListEl = ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="faith"]`);
+        if (faithListEl) faithListEl.textContent = `Fé: ${formatNumber(playerFaithCache)}`;
+
+        // 2. Subtrai 500 de Fé reais da Memória RAM do império (Custo Proporcional Percentual)
         simulationWorker.postMessage({
           type: "APPLY_ECS_EFFECTS",
           payload: { target: "faith", operation: "subtract_empire_total", value: 500, indices }
         });
         
-        flashUIElement(appRoot!.querySelector("#faith-pool-value"), "#ff3333");
-        // Invoca a Bênção para explodir +2.000 de Comida Instantânea
+        flashUIElement(faithEl as HTMLElement, "#ff3333");
+        
+        // 3. Invoca a Bênção para explodir +2.000 de Comida Instantânea
         eventBus.publish({ type: "religion.blessing", payload: { kingdomId: player.id, amount: 2000 } } as any);
       } else {
         showToast("Fé insuficiente. Seus sacerdotes não foram ouvidos.");

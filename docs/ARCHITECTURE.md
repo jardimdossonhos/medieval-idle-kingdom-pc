@@ -252,7 +252,7 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     4.  **Sistema de Bênçãos e Maldições (Poderes Divinos):**
         *   Criar um novo `ReligionPowerSystem` na `TickPipeline`.
         *   Permitir que o jogador gaste grandes quantidades de `Fé` para ativar "Poderes Divinos" como ações especiais.
-        *   **Bênçãos (em si mesmo):** Bônus temporários para economia, população ou militar.
+        *   **Bênçãos (em si mesmo):** Bônus diretos (ex: Bênção da Colheita) utilizando Padrão *Optimistic UI* na interface para mitigar a latência entre a ação do clique e a resposta do Worker.
         *   **Maldições (em um rival):** Efeitos negativos temporários na estabilidade, economia ou população de um inimigo. Isso utilizará o canal de comunicação `APPLY_ECS_EFFECTS` para o Worker.
     5.  **Integração com a Árvore Tecnológica:**
         *   A árvore de tecnologia religiosa se tornará crucial, desbloqueando novos Poderes Divinos, aumentando a eficácia dos missionários e podendo mitigar as penalidades de conversão religiosa.

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿# Epochs Idle
+﻿﻿﻿﻿# Medieval Idle Kingdom
 
 Browser-first grand strategy idle game architecture focused on local simulation depth.
 
@@ -51,13 +51,13 @@ npm run desktop:dist
 
 Saída do pacote:
 
- - `release/Epochs Idle Setup *.exe`
- - `release/Epochs Idle *.exe` (portable)
+- `release/Medieval Idle Kingdom Setup *.exe`
+- `release/Medieval Idle Kingdom *.exe` (portable)
 
 Persistência desktop:
 
 - os saves deixam de depender de `IndexedDB`
-- o app grava JSON local em `%APPDATA%/Epochs Idle/game-data`
+- o app grava JSON local em `%APPDATA%/Medieval Idle Kingdom/game-data`
 - isso prepara import/export, backup e futura sincronização LAN/internet
 
 Para testar no celular (mesma rede local):
@@ -68,7 +68,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 ## World map data source
 
-- Source: `world-atlas` (`countries-50m`) and `topojson-client` neighbors.
+- Source: Procedural Hexagonal Grid (`@turf/turf`) intersected with `natural-earth-vector` (`ne_50m_land`).
 - Generated outputs:
   - `public/assets/maps/world-countries-v1.geojson`
   - `public/assets/maps/world-definitions-v1.json`
@@ -82,12 +82,13 @@ npm run dev -- --host 0.0.0.0 --port 5173
 - `src/infrastructure`: adapters (save, clock, sync, rendering)
 - `src/ui`: screen/view-model contracts
 - `desktop`: shell Electron, preload bridge e persistência local em arquivo
-- `docs`: architecture and execution plan
+- `docs`: Manuais, logs de desenvolvedor, arquitetura e execução.
 
 ## Mapa Mental e Arquitetura
 
 Este repositório possui regras estritas de Clean Architecture e separação de Threads (UI e Web Workers). 
 Antes de contribuir ou alterar mecânicas do jogo, é **altamente recomendável** que você consulte os guias oficiais:
 
-- 📄 Mapa Mental da Base de Código (CODEBASE_MAP.md): Descubra a dependência entre todos os arquivos e saiba exatamente quais arquivos editar (Cheat Sheets de impacto) ao adicionar recursos, sistemas e telas.
-- 📄 Arquitetura Central (ARCHITECTURE.md): Detalhamento do princípio Local-First, ECS e persistência.
+- 📄 Mapa Mental da Base de Código (`docs/CODEBASE_MAP.md`): Descubra a dependência entre todos os arquivos.
+- 📄 Arquitetura Central (`docs/ARCHITECTURE.md`): Detalhamento do princípio Local-First, ECS e persistência.
+- 📄 Diário de Bordo (`docs/developer-logs.md`): Histórico de bugs e decisões.
