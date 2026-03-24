@@ -780,3 +780,26 @@ Foi identificada a necessidade de alinhar a documentação do projeto com o esta
 1. **Limpeza do README:** O aviso crítico de falha no sistema de Save/Load foi removido, pois o sistema provou-se 100% estável. A referência do mapa foi atualizada de "países estáticos" para "Malha Hexagonal Procedural" (`Turf.js`).
 2. **Manual do Usuário:** O `manual.md` foi limpo (remoção dos avisos de instabilidade) e atualizado com a instrução do novo Sistema de Religião (Poderes Divinos Ativos).
 3. **Migração para Pasta `/docs`:** Recomendada a transição física dos arquivos soltos (`ARCHITECTURE.md`, `CODEBASE_MAP.md`, `developer-logs.md`, `manual.md`) para o diretório `/docs`, mantendo apenas o `README.md` na raiz, conforme as melhores práticas de Engenharia de Software.
+
+---
+
+## Entrada: 52
+
+**Data:** 25/03/2024
+
+### Diagnóstico de Telemetria: A "Aurora da Humanidade" e Edge Cases de Renderização
+Após a aplicação da matemática de freio populacional e calendário histórico, um diagnóstico de métricas capturou comportamentos anômalos na engine e WebGL:
+
+1. **Bug da Tela Rosa (MapLibre):** Ao trocar camadas do mapa (ex: Camada de Religião), a tela exibia tons cinzas/rosas de alerta.
+   *Causa:* O renderizador enviava strings vazias `""` como cor para o shader WebGL (no caso de água ou ausência de fés), o que quebra o parser da placa de vídeo.
+   *Ação Pendente:* Aplicar fallback estrito de cor transparente (`rgba(0,0,0,0)`) no `maplibre-world-renderer.ts`.
+2. **Falso-Positivo na Fagulha Vital (Anti-Corrupção):** A UI reportou `Save antigo corrompido detectado` no boot e injetou 5000 habitantes no mundo inteiro.
+   *Causa:* A proteção antiga lia a entidade `[0]` para aferir se o mundo estava morto (`população === 0`). Mas no novo escopo geográfico da "Aurora", a entidade 0 (`r_hex_0`) é um oceano sem habitantes por design. O sistema entrava em pânico falso.
+   *Ação Pendente:* Ajustar a segurança no `main.ts` para ignorar oceanos ou verificar o somatório real.
+3. **Performance (Core Web Vitals):** 
+   * LCP (0.85s) e banco de dados cravado em excelentes ~17.8MB para todo o escopo global. 
+   * O tempo de simulação multithread (`[WRK-ADT]`) está perfeitamente estável na casa dos ~250ms por pulso, blindando a CPU.
+   * *Alerta de UX:* INP (Interaction to Next Paint) atingiu 288ms em trocas rápidas de aba/camada do mapa.
+
+### Atualização de Rota (Prioridades Imediatas):
+Antes de progredirmos com as mecânicas das Eras e a Árvore de Tecnologias, a prioridade máxima é a faxina cirúrgica dessas heranças de código e a correção do renderizador, estabilizando o baseline da Campanha Limpa.

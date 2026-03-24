@@ -63,6 +63,7 @@ interface UiRefs {
   devOfflineValue: HTMLElement | null;
   mapCanvas: HTMLElement;
   mapLayerSelect: HTMLSelectElement;
+  mapLegend: HTMLElement;
   resourceList: HTMLElement;
   riskList: HTMLElement;
   explainList: HTMLElement;
@@ -133,6 +134,22 @@ function queryOptionalElement<T extends Element>(root: ParentNode, selector: str
 
 function formatNumber(value: number, decimals = 0): string {
   const safeValue = decimals === 0 ? Math.floor(value) : value;
+  const absValue = Math.abs(safeValue);
+
+  // Compactação de numeração estilo RPG (K, M, B, T) para Late-Game
+  if (absValue >= 1_000_000_000_000) {
+    return (safeValue / 1_000_000_000_000).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + "T";
+  }
+  if (absValue >= 1_000_000_000) {
+    return (safeValue / 1_000_000_000).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + "B";
+  }
+  if (absValue >= 1_000_000) {
+    return (safeValue / 1_000_000).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + "M";
+  }
+  if (absValue >= 1_000) {
+    return (safeValue / 1_000).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + "K";
+  }
+
   return new Intl.NumberFormat("pt-BR", { 
     minimumFractionDigits: decimals, 
     maximumFractionDigits: decimals 
@@ -321,6 +338,12 @@ async function bootstrapApp(): Promise<void> {
       .splash-form label { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.2rem; font-weight: bold; color: #ccc; }
       .splash-form input, .splash-form select { width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, #444); color: white; border-radius: 4px; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+      
+      /* Map Legend Styles */
+      .map-legend { position: absolute; bottom: 20px; left: 20px; background: rgba(20, 20, 25, 0.9); border: 1px solid var(--border-color, #444); border-radius: 8px; padding: 12px; font-size: 0.85rem; color: #ddd; z-index: 10; pointer-events: none; backdrop-filter: blur(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+      .map-legend-title { font-weight: bold; margin-bottom: 8px; color: #fff; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 4px; }
+      .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+      .legend-color { width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.15); box-sizing: border-box; }
     </style>
     <div id="splash-screen" class="splash-overlay">
       <div class="splash-card card">
@@ -376,7 +399,7 @@ async function bootstrapApp(): Promise<void> {
       </section>
 
       <section class="map-workspace">
-        <article class="card map-card">
+        <article class="card map-card" style="display: flex; flex-direction: column;">
           <div class="map-toolbar">
             <h2>Mapa estratégico</h2>
             <label>
@@ -392,7 +415,10 @@ async function bootstrapApp(): Promise<void> {
             </label>
           </div>
           <p class="map-hint">Use scroll/pinch para zoom e arraste para mover o mapa.</p>
-          <div id="map-canvas" class="map-canvas"></div>
+          <div style="position: relative; flex: 1; min-height: 450px; display: flex; flex-direction: column; border-radius: 6px; overflow: hidden;">
+            <div id="map-canvas" class="map-canvas" style="flex: 1; width: 100%;"></div>
+            <div id="map-legend" class="map-legend"></div>
+          </div>
         </article>
 
         <aside class="side-column">
@@ -573,6 +599,7 @@ async function bootstrapApp(): Promise<void> {
     devOfflineValue: queryOptionalElement(appRoot, "#dev-offline"),
     mapCanvas: queryElement(appRoot, "#map-canvas"),
     mapLayerSelect: queryElement(appRoot, "#map-layer-select"),
+    mapLegend: queryElement(appRoot, "#map-legend"),
     resourceList: queryElement(appRoot, "#resource-list"),
     riskList: queryElement(appRoot, "#risk-list"),
     explainList: queryElement(appRoot, "#explain-list"),
@@ -928,10 +955,29 @@ async function bootstrapApp(): Promise<void> {
     } else {
       // Vacina: Se o save veio com População morta (artefato de testes antigos), revive o mundo
       const pop = state.ecs.populationTotal as any;
-      if (!pop || pop[0] === 0 || pop[0] === undefined) {
-        Diagnostic.warn("PERS-003", "Fagulha Vital: Save antigo corrompido detectado (População Morta). Injetando reinicialização demográfica nas matrizes.");
-        state.ecs.populationTotal = Array.from(new Float64Array(len).fill(5000)) as any;
-        state.ecs.populationGrowthRate = Array.from(new Float64Array(len).fill(0.00015)) as any;
+      let isWorldDead = true;
+      
+      if (pop && pop.length > 0) {
+        for (let i = 0; i < Math.min(pop.length, len); i++) {
+          if (pop[i] > 0) {
+            isWorldDead = false;
+            break;
+          }
+        }
+      }
+
+      if (isWorldDead) {
+        Diagnostic.warn("PERS-003", "Fagulha Vital: Save antigo corrompido detectado (Mundo Morto). Injetando sobreviventes apenas em terra firme.");
+        const safePop = new Float64Array(len);
+        const safeGrowth = new Float64Array(len);
+        for (let i = 0; i < len; i++) {
+          if (STATIC_IS_WATER[i] === 0) {
+            safePop[i] = 5000;
+            safeGrowth[i] = 0.00015;
+          }
+        }
+        state.ecs.populationTotal = Array.from(safePop) as any;
+        state.ecs.populationGrowthRate = Array.from(safeGrowth) as any;
       }
     }
 
@@ -1735,8 +1781,8 @@ async function bootstrapApp(): Promise<void> {
     // 3. Calcula a Riqueza Econômica Relativa com base nos dados do Worker (ECS)
     const goldData = currentSimulationState.goldData;
     if (goldData && goldData.length > 0) {
-      let maxGold = Number.MIN_VALUE;
-      let minGold = Number.MAX_VALUE;
+      let maxGold = Number.NEGATIVE_INFINITY;
+      let minGold = Number.POSITIVE_INFINITY;
 
       for (let i = 0; i < goldData.length; i++) {
         if (goldData[i] > maxGold) {
@@ -1876,6 +1922,61 @@ async function bootstrapApp(): Promise<void> {
     item.appendChild(deleteButton);
     return item;
   }
+  
+  function updateMapLegend(layer: string): void {
+    if (!ui.mapLegend) return;
+    let html = "";
+    switch(layer) {
+      case "owner":
+        html = `
+          <div class="map-legend-title">Domínio Estratégico</div>
+          <div class="legend-item"><span class="legend-color" style="background: #3b453b;"></span> Terra Selvagem (Inabitada)</div>
+          <div class="legend-item"><span class="legend-color" style="background: #8d816e;"></span> Reinos e Tribos NPC</div>
+          <div class="legend-item"><span class="legend-color" style="background: #ffffff; height: 3px;"></span> Fronteira Selecionada</div>
+        `;
+        break;
+      case "unrest":
+        html = `
+          <div class="map-legend-title">Instabilidade Civil</div>
+          <div class="legend-item"><span class="legend-color" style="background: #3e6b57;"></span> Calmo (0%)</div>
+          <div class="legend-item"><span class="legend-color" style="background: #bb7a2a;"></span> Tensão Média (~45%)</div>
+          <div class="legend-item"><span class="legend-color" style="background: #ad2a24;"></span> Rebelião Iminente (75%+)</div>
+        `;
+        break;
+      case "war":
+        html = `
+          <div class="map-legend-title">Estado de Conflito</div>
+          <div class="legend-item"><span class="legend-color" style="background: #8d816e; opacity: 0.5;"></span> Paz / Sem Disputa</div>
+          <div class="legend-item"><span class="legend-color" style="background: #a31f1f; border: 1px dashed #fff;"></span> Guerra Ativa / Fronteira em Cerco</div>
+        `;
+        break;
+      case "religion":
+        html = `
+          <div class="map-legend-title">Religiões Dominantes</div>
+          <div class="legend-item"><span class="legend-color" style="background: #4a463c;"></span> Cultos Ancestrais (Nativos)</div>
+          <div class="legend-item"><span class="legend-color" style="background: #75624a;"></span> Fé Estrangeira</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: #999;">Cores Vivas = Alta conversão</div>
+        `;
+        break;
+      case "economy":
+        html = `
+          <div class="map-legend-title">Riqueza Relativa</div>
+          <div class="legend-item"><span class="legend-color" style="background: #8d816e;"></span> Pobreza / Subsistência</div>
+          <div class="legend-item"><span class="legend-color" style="background: #cca43b;"></span> Economia Estável</div>
+          <div class="legend-item"><span class="legend-color" style="background: #f2d067;"></span> Polo de Riqueza Global</div>
+        `;
+        break;
+      case "diplomacy":
+        html = `
+          <div class="map-legend-title">Postura Diplomática</div>
+          <div class="legend-item"><span class="legend-color" style="background: #3e6b8c;"></span> Você e Aliados</div>
+          <div class="legend-item"><span class="legend-color" style="background: #a32a2a;"></span> Inimigos Declarados</div>
+          <div class="legend-item"><span class="legend-color" style="background: #8d816e;"></span> Países Neutros</div>
+        `;
+        break;
+    }
+    ui.mapLegend.innerHTML = html;
+  }
 
   function renderState(state: GameState): void {
     // Limpa o cache todo início de render (1x por segundo) para forçar recálculo caso tenha anexado territórios
@@ -1958,6 +2059,7 @@ async function bootstrapApp(): Promise<void> {
     const state = session.getState();
     mapRenderer.setLayer(layer);
     mapRenderer.render(state.world, state.kingdoms, buildMapRenderContext(state));
+    updateMapLegend(layer);
   });
 
   for (const input of governmentInputs) {
@@ -2208,6 +2310,7 @@ async function bootstrapApp(): Promise<void> {
     const finalState = await session.bootstrap(bootState);
     
     mapRenderer.setLayer("owner");
+    updateMapLegend("owner");
     await mapRenderer.mount(finalState.world, finalState.kingdoms);
 
     session.subscribe((state) => {

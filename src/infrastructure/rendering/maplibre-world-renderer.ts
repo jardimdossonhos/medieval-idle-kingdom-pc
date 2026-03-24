@@ -1,4 +1,4 @@
-import maplibregl, { type GeoJSONSource, type Map } from "maplibre-gl";
+import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import type { KingdomState } from "../../core/models/game-state";
 import type { StaticWorldData } from "../../core/models/static-world-data";
@@ -31,12 +31,12 @@ const WAR_MARKER_SOURCE_ID = "war-markers";
 const WAR_MARKER_LAYER_ID = "war-markers-circle";
 
 export class MapLibreWorldRenderer implements GameMapRenderer {
-  private map: Map | null = null;
+  private map: MapLibreMap | null = null;
   private layerMode: MapLayerMode = "owner";
   private selectedRegionId: string | null = null;
   private mounted = false;
   private featureStateCache: string[] = [];
-  private featureStateQueue: Array<{ id: number; state: any }> = [];
+  private featureStateQueue: Map<number, any> = new Map();
   private animationFrameId: number | null = null;
 
   constructor(
@@ -80,6 +80,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
 
     if (!this.mounted) {
       await this.mountLayers();
+      this.applyLayerMode();
       this.mounted = true;
     }
 
@@ -115,11 +116,6 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       : new Set<string>();
     const animationClockMs = context?.animationClockMs ?? (typeof performance !== "undefined" ? performance.now() : Date.now());
 
-    const isEconomyLayer = this.layerMode === "economy";
-    const isReligionLayer = this.layerMode === "religion";
-    const isUnrestLayer = this.layerMode === "unrest";
-    const isDiplomacyLayer = this.layerMode === "diplomacy";
-
     // Usa o array de definições puro como fonte da iteração de estados
     for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
       const def = WORLD_DEFINITIONS_V1[i];
@@ -137,21 +133,18 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       if (!region) {
         const hash = `empty|${selected}|${pulse}|${contested}`;
         if (this.featureStateCache[numericId] !== hash) {
-          this.featureStateQueue.push({
-            id: numericId,
-            state: {
-              ownerColor: "#857a67",
-              faithColor: "#6f6352",
-              unrest: 0,
-              contested,
-              recentlyCaptured: 0,
-              pulse,
-              selected,
-              isAllied: 0,
-              isEnemy: 0,
-              wealthRatio: 0,
-              dominantShare: 0
-            }
+          this.featureStateQueue.set(numericId, {
+            ownerColor: "#857a67",
+            faithColor: "#6f6352",
+            unrest: 0,
+            contested,
+            recentlyCaptured: 0,
+            pulse,
+            selected,
+            isAllied: 0,
+            isEnemy: 0,
+            wealthRatio: 0,
+            dominantShare: 0
           });
           this.featureStateCache[numericId] = hash;
         }
@@ -161,33 +154,36 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       const owner = kingdoms[region.ownerId];
       const ownerColor = colorForKingdom(owner?.id ?? region.ownerId);
       
-      // Extração preguiçosa: Só envia para a Placa de Vídeo o que a camada atual exige
-      const unrest = isUnrestLayer ? region.unrest : 0;
-      const wealthRatio = isEconomyLayer ? (context?.regionWealthRatio?.[regionId] ?? 0) : 0;
-      const isAllied = isDiplomacyLayer && playerAlliedRegionIds.has(regionId) ? 1 : 0;
-      const isEnemy = isDiplomacyLayer && playerEnemyRegionIds.has(regionId) ? 1 : 0;
-      const faithColor = isReligionLayer ? colorForFaith(region.dominantFaith, this.staticData) : "";
-      const dominantShare = isReligionLayer ? region.dominantShare : 0;
+      // Extração Total (Eager Loading): Garante troca de camadas O(1) instantânea na interface
+      const unrest = Number.isFinite(region.unrest) ? region.unrest : 0;
+      const rawWealth = context?.regionWealthRatio?.[regionId];
+      const wealthRatio = Number.isFinite(rawWealth) ? rawWealth! : 0;
+      const isAllied = playerAlliedRegionIds.has(regionId) ? 1 : 0;
+      const isEnemy = playerEnemyRegionIds.has(regionId) ? 1 : 0;
+      const faithColor = colorForFaith(region.dominantFaith, this.staticData);
+      const dominantShare = Number.isFinite(region.dominantShare) ? region.dominantShare : 0;
 
-      // Assinatura de estado (String leve para verificação em cache)
-      const hash = `${ownerColor}|${selected}|${pulse}|${contested}|${unrest}|${wealthRatio}|${isAllied}|${isEnemy}|${faithColor}|${dominantShare}`;
+      // Quantização do Hash: Impede que frações decimais gerem recálculos exaustivos na GPU
+      const qUnrest = Math.round(unrest * 50) || 0;
+      const qWealth = Math.round(wealthRatio * 50) || 0;
+      const qDominant = Math.round(dominantShare * 50) || 0;
+
+      // Assinatura de estado quantizada
+      const hash = `${ownerColor}|${selected}|${pulse}|${contested}|${qUnrest}|${qWealth}|${isAllied}|${isEnemy}|${faithColor}|${qDominant}`;
 
       if (this.featureStateCache[numericId] !== hash) {
-        this.featureStateQueue.push({
-          id: numericId,
-          state: {
-            ownerColor,
-            faithColor,
-            unrest,
-            contested,
-            recentlyCaptured: isRecentlyCaptured ? 1 : 0,
-            pulse,
-            selected,
-            isAllied,
-            isEnemy,
-            wealthRatio,
-            dominantShare
-          }
+        this.featureStateQueue.set(numericId, {
+          ownerColor,
+          faithColor,
+          unrest,
+          contested,
+          recentlyCaptured: isRecentlyCaptured ? 1 : 0,
+          pulse,
+          selected,
+          isAllied,
+          isEnemy,
+          wealthRatio,
+          dominantShare
         });
         this.featureStateCache[numericId] = hash;
       }
@@ -197,7 +193,6 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       ? context.activeWarMarkerRegionIds
       : Array.from(contestedRegionIds).sort();
     this.updateWarMarkers(markerRegions);
-    this.applyLayerMode();
   }
 
   destroy(): void {
@@ -213,15 +208,17 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
 
   private startQueueProcessor() {
     const process = () => {
-      // A Placa de Vídeo precisa respirar. Reduzido para 25 por frame (~1.500/segundo).
-      // Isso garante 60 FPS cravados e impede o congelamento do DOM/CPU.
-      if (this.map && this.map.getSource(SOURCE_ID) && this.featureStateQueue.length > 0) {
-        const batch = this.featureStateQueue.splice(0, 25); 
-        
-        for (const item of batch) {
-          this.map.setFeatureState({ source: SOURCE_ID, sourceLayer: "hexgrid", id: item.id }, item.state);
+      // A Placa de Vídeo precisa respirar, mas a fila deve ser rápida.
+      if (this.map && this.map.getSource(SOURCE_ID) && this.featureStateQueue.size > 0) {
+        let count = 0;
+        for (const [id, state] of this.featureStateQueue.entries()) {
+          this.map.setFeatureState({ source: SOURCE_ID, sourceLayer: "hexgrid", id }, state);
+          this.featureStateQueue.delete(id);
+          count++;
+          // Lote de 250/frame (~15.000/s) varre o mundo inteiro em menos de 1 segundo
+          if (count >= 250) break;
         }
-        this.map.triggerRepaint(); // Força a placa de vídeo a desenhar os novos hexágonos instantaneamente
+        this.map.triggerRepaint();
       }
       this.animationFrameId = requestAnimationFrame(process);
     };
@@ -541,12 +538,18 @@ function buildPulse(clockMs: number, regionId: string): number {
 }
 
 function colorForKingdom(kingdomId: string): string {
+  if (!kingdomId) return "rgba(0,0,0,0)";
+  if (kingdomId === "k_nature") return "#3b453b"; // Verde Musgo Escuro para a Natureza Selvagem
+
   const palette = ["#8f5b3c", "#4f6d52", "#5d5277", "#9b6c2e", "#435b78", "#7d4f5f"];
   const hash = kingdomId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return palette[hash % palette.length];
 }
 
 function colorForFaith(faithId: string, staticData?: StaticWorldData): string {
+  if (!faithId) return "rgba(0,0,0,0)";
+  if (faithId === "ancestral_cults") return "#4a463c"; // Marrom Seco para Tribos Iniciais
+
   const staticColor = staticData?.religions[faithId]?.color;
   if (typeof staticColor === "string" && staticColor.length > 0) {
     return staticColor;

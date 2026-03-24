@@ -20,7 +20,7 @@ let world: World | null = null;
 let economy: EconomyComponent | null = null;
 let population: PopulationComponent | null = null;
 let geography: { isWater: Uint8Array; biome: Uint8Array } | null = null;
-const economySystem = new EconomySystem(1.5);
+const economySystem = new EconomySystem();
 const populationSystem = new PopulationSystem();
 
 const activeEntities: number[] = [];
@@ -79,7 +79,7 @@ function startClock(): void {
     if (economy && population) {
       if (!isPaused && speedMultiplier > 0) {
         const gameDeltaTime = deltaTimeSeconds * speedMultiplier;
-        economySystem.update(gameDeltaTime, economy, activeEntities, activeModifiers);
+        economySystem.update(gameDeltaTime, economy, population, activeEntities, activeModifiers);
         // Bypass local de tipagem para PopulationSystem aceitar o novo 4º argumento (Modificadores)
         (populationSystem as any).update(gameDeltaTime, population, activeEntities, activeModifiers);
       }
@@ -87,11 +87,6 @@ function startClock(): void {
       debugTickCount++;
       if (debugTickCount % 40 === 0) { // Log aprox a cada 10s reais
         DiagnosticWorker.trace("WRK-ADT", `Tick Físico ${debugTickCount} processado.`, { speed: `${speedMultiplier}x`, deltaMs: deltaTimeSeconds });
-        DiagnosticWorker.trace("WRK-ADT", `Entidade[0] Espelho -> Ouro: ${economy.gold[0].toFixed(1)} | População: ${Math.floor(population.total[0])}`);
-        
-        if (population.total[0] === 0 && population.growthRate[0] === 0) {
-           DiagnosticWorker.warn("WRK-ERR", "Mundo inerte. Entidade[0] aponta População 0 no meio do ciclo de processamento.");
-        }
       }
 
       const message: TickMessage = {
