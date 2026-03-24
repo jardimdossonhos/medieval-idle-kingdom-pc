@@ -22,6 +22,12 @@ Como a base de código emprega separação estrita de camadas e processamento em
 
 Para isso, o projeto mantém o documento obrigatório **`CODEBASE_MAP.md`**. Ele funciona como um "Mapa Mental" detalhando 100% dos arquivos do projeto, suas responsabilidades, integrações e, mais importante, o **Raio de Impacto** de cada arquivo. Todo desenvolvedor deve consultar o Mapa antes de criar, excluir ou modificar lógicas do jogo.
 
+### 1.2 Política de Zero-Presunção (Engenharia Baseada em Evidências)
+
+Para manter a estabilidade da base de código e evitar "remendos" que escalonam problemas sistêmicos, o desenvolvimento deste projeto obedece a uma regra de conduta inegociável: **Jamais presuma o estado de um contrato, tipagem ou arquivo de arquitetura.**
+*   **Verificação Obrigatória:** Nenhuma linha de código deve ser escrita (ou refatorada) com base em suposições ou convenções genéricas de mercado se o arquivo de contrato original (interface, classe base ou hook) não tiver sido lido previamente.
+*   **Solicitação Ativa (Fail-Fast):** Se uma dependência cruzada, interface ou lógica de terceiros não estiver disponível no contexto de desenvolvimento imediato, a execução da tarefa deve ser **pausada e paralisada imediatamente**. O desenvolvedor ou assistente deve solicitar acesso explícito aos arquivos ausentes antes de sugerir qualquer alteração de código. Tentativas de "adivinhação" (guessing) de APIs violam este princípio e inserem débito técnico inaceitável.
+
 ## 2. Estrutura de Diretórios
 
 A organização do projeto reflete os princípios da Arquitetura Limpa.

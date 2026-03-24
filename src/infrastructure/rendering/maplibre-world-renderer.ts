@@ -29,6 +29,8 @@ const CONTESTED_LAYER_ID = "countries-contested";
 const BORDER_LAYER_ID = "countries-border";
 const WAR_MARKER_SOURCE_ID = "war-markers";
 const WAR_MARKER_LAYER_ID = "war-markers-circle";
+const CAPITAL_MARKER_SOURCE_ID = "capital-markers";
+const CAPITAL_MARKER_LAYER_ID = "capital-markers-circle";
 
 export class MapLibreWorldRenderer implements GameMapRenderer {
   private map: MapLibreMap | null = null;
@@ -192,6 +194,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       ? context.activeWarMarkerRegionIds
       : Array.from(contestedRegionIds).sort();
     this.updateWarMarkers(markerRegions);
+    this.updateCapitalMarkers(kingdoms);
   }
 
   destroy(): void {
@@ -254,7 +257,14 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
     if (!this.map.getSource(WAR_MARKER_SOURCE_ID)) {
       this.map.addSource(WAR_MARKER_SOURCE_ID, {
         type: "geojson",
-        data: emptyWarMarkerCollection() as unknown as FeatureCollection
+        data: emptyMarkerCollection() as unknown as FeatureCollection
+      });
+    }
+
+    if (!this.map.getSource(CAPITAL_MARKER_SOURCE_ID)) {
+      this.map.addSource(CAPITAL_MARKER_SOURCE_ID, {
+        type: "geojson",
+        data: emptyMarkerCollection() as unknown as FeatureCollection
       });
     }
 
@@ -357,6 +367,28 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           "circle-opacity": 0.88,
           "circle-stroke-color": "#f7d9a4",
           "circle-stroke-width": 1.1
+        }
+      });
+    }
+
+    if (!this.map.getLayer(CAPITAL_MARKER_LAYER_ID)) {
+      this.map.addLayer({
+        id: CAPITAL_MARKER_LAYER_ID,
+        type: "circle",
+        source: CAPITAL_MARKER_SOURCE_ID,
+        paint: {
+          "circle-color": "#d4af37", // Dourado sólido para a coroa
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            1.3, 2.5,
+            4, 4.5,
+            7, 6.5
+          ],
+          "circle-opacity": 0.95,
+          "circle-stroke-color": "#111111",
+          "circle-stroke-width": 1.5
         }
       });
     }
@@ -522,9 +554,42 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       features
     } as unknown as FeatureCollection);
   }
+
+  private updateCapitalMarkers(kingdoms: Record<string, KingdomState>): void {
+    if (!this.map) return;
+
+    const source = this.map.getSource(CAPITAL_MARKER_SOURCE_ID) as GeoJSONSource | undefined;
+    if (!source) return;
+
+    const features: WarMarkerFeature[] = [];
+    for (const kingdomId in kingdoms) {
+      if (kingdomId === "k_nature") continue; // A Terra Selvagem não tem capital
+      
+      const kingdom = kingdoms[kingdomId];
+      const def = this.staticData?.definitions[kingdom.capitalRegionId];
+      if (!def) continue;
+
+      features.push({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [def.center.x, def.center.y] as [number, number]
+        },
+        properties: {
+          regionId: kingdom.capitalRegionId,
+          label: "CAPITAL"
+        }
+      });
+    }
+
+    source.setData({
+      type: "FeatureCollection",
+      features
+    } as unknown as FeatureCollection);
+  }
 }
 
-function emptyWarMarkerCollection(): WarMarkerFeatureCollection {
+function emptyMarkerCollection(): WarMarkerFeatureCollection {
   return {
     type: "FeatureCollection",
     features: []

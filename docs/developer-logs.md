@@ -854,3 +854,28 @@ Antes de progredirmos com as mecânicas das Eras e a Árvore de Tecnologias, a p
 1. A UI não exibe mais a variável crua `meta.tick`.
 2. A função `formatCalendarTime` calcula `Tick / 12` para extrair um "Ano Histórico" elegante, complementado pela Era atual da simulação (Ex: `Ano 205 (Era da Aurora)`).
 3. O manifesto da Campanha (`create-initial-state.ts`) foi renomeado de "Coroas do Mundo / Ano 1100" para "Aurora da Humanidade / Ano 1".
+
+---
+
+## Entrada: 56
+
+**Data:** 25/03/2024
+
+### Criação do MigrationSystem e Proteção de Threads (Boas Práticas)
+**O Desafio:** Viabilizar a mecânica de expansão populacional orgânica da tribo para hexágonos vizinhos sem enviar a árvore política (`neighbors` e `ownerId`) para a memória do Worker, o que destruiria a performance Data-Oriented.
+
+**A Engenharia Implementada (Solução Transacional):**
+1. **Desacoplamento:** O Worker continua estritamente cego para política, sendo apenas o detentor do "Total Demográfico".
+2. **Pooling Moderado:** Criado o `MigrationSystem` na Thread Principal (POO). Ele varre a memória e avalia Hexágonos Vizinhos, mas executa **apenas 1 vez por ano** (`tick % 12 === 0`), protegendo absurdamente a CPU e mitigando erros de leitura do *Event Loop*.
+3. **Transação via MessageBroker:** Quando uma região atinge 150 habitantes (Carrying Capacity Tribal), o POO toma posse da terra vizinha, injeta a fé, e publica o evento `population.migration`. O `main.ts` intercepta o evento e dispara duas mensagens atômicas ao Worker (`subtract` na origem, `add` na fronteira), mantendo o ecossistema ECS asséptico e 100% funcional.
+
+---
+
+## Entrada: 57
+
+**Data:** 25/03/2024
+
+### Falha de Contrato e o Estabelecimento da Regra Inegociável (Zero-Presunção)
+**O Incidente:** Durante a implementação do `MigrationSystem`, ocorreram três falhas consecutivas de compilação do TypeScript (`update does not exist`, `execute does not exist`). 
+**A Causa Raiz:** O assistente técnico tentou "adivinhar" (presumir) o formato da interface base `SimulationSystem` através de padrões comuns da indústria, em vez de ler estritamente o arquivo `tick-pipeline.ts` original que não constava no seu contexto de visão. Isso gerou remendos sucessivos e quebrou o fluxo de trabalho.
+**A Regra Inegociável Estabelecida:** Adicionada a seção "1.2 Política de Zero-Presunção" ao `ARCHITECTURE.md`. Fica terminantemente proibido presumir contratos, nomes de métodos, interfaces ou comportamentos arquiteturais. Se uma informação, contrato ou arquivo não estiver perfeitamente legível, o desenvolvimento deve sofrer um *Code Freeze* imediato e a documentação/arquivo deve ser solicitada. A engenharia deste projeto passa a operar 100% baseada em evidências.

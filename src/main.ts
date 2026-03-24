@@ -792,7 +792,9 @@ async function bootstrapApp(): Promise<void> {
     systems: createDefaultSimulationSystems({
       npcDecisionService,
       diplomacyResolver,
-      warResolver
+      warResolver,
+      eventBus,
+      staticData: staticWorldData
     }),
     autosaveEveryTicks: 5,
     maxOfflineTicks: 12_000,
@@ -1112,6 +1114,43 @@ async function bootstrapApp(): Promise<void> {
     const foodEl = ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="food"]`);
     flashUIElement(foodEl, "#00ff00");
     showToast(`As colheitas de ${state.kingdoms[kingdomId]?.name} florescem (+${formatNumber(event.payload.amount)} Comida)!`);
+  });
+
+  // Escuta as Ordens Sociais (Migração Orgânica) e converte em mutações de Worker
+  eventBus.subscribe("population.migration", (event: any) => {
+    const state = session.getState();
+    if (!state) return;
+    const { sourceId, targetId, amount, kingdomId } = event.payload;
+    const sourceIdx = REGION_INDEX_MAP.get(sourceId);
+    const targetIdx = REGION_INDEX_MAP.get(targetId);
+
+    if (sourceIdx !== undefined && targetIdx !== undefined) {
+      // O trânsito atômico exige dedução da origem e injeção no alvo
+      simulationWorker.postMessage({
+        type: "APPLY_ECS_EFFECTS",
+        payload: { target: "population", operation: "subtract", value: amount, indices: [sourceIdx] }
+      });
+      simulationWorker.postMessage({
+        type: "APPLY_ECS_EFFECTS",
+        payload: { target: "population", operation: "add", value: amount, indices: [targetIdx] }
+      });
+
+      // Atualiza o Motor com as capacidades geográficas da nova região
+      syncModifiersToWorker(state);
+
+      // Log narrativo se for a sua civilização que migrou
+      if (state.kingdoms[kingdomId]?.isPlayer) {
+        const def = staticWorldData.definitions[targetId];
+        state.events.unshift({
+          id: `mig_${state.meta.tick}_${targetId}`,
+          title: "Expansão Tribal Orgânica",
+          details: `O excesso populacional transbordou as fronteiras, assentando os nossos nômades na região de ${def?.name ?? targetId}.`,
+          severity: "info",
+          occurredAt: Date.now()
+        });
+        if (state.events.length > 50) state.events.pop(); // Limpeza de Memória
+      }
+    }
   });
 
   // highlight-end

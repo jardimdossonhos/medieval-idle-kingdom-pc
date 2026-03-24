@@ -1,8 +1,10 @@
 ﻿import type { DiplomacyResolver, INpcDecisionService, WarResolver } from "../contracts/services";
+import type { StaticWorldData } from "../models/static-world-data";
 import type { SimulationSystem } from "./tick-pipeline";
 import { createAdministrationSystem } from "./systems/administration-system";
 import { createAutomationSystem } from "./systems/automation-system";
 import { createDiplomacySystem } from "./systems/diplomacy-system";
+import { createMigrationSystem } from "./systems/migration-system";
 import { createEconomySystem } from "./systems/economy-system";
 import { createEventLogSystem } from "./systems/event-log-system";
 import { createNpcDecisionSystem } from "./systems/npc-decision-system";
@@ -17,10 +19,13 @@ export interface SimulationServices {
   npcDecisionService: INpcDecisionService;
   diplomacyResolver: DiplomacyResolver;
   warResolver: WarResolver;
+  eventBus: { publish: (event: any) => void };
+  staticData: StaticWorldData;
 }
 
 export function createDefaultSimulationSystems(services: SimulationServices): SimulationSystem[] {
   return [
+    createMigrationSystem(services.staticData, services.eventBus),
     createAutomationSystem(),
     createEconomySystem(),
     createPopulationSystem(),
