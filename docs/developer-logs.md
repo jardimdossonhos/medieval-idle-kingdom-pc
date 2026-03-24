@@ -803,3 +803,40 @@ Após a aplicação da matemática de freio populacional e calendário históric
 
 ### Atualização de Rota (Prioridades Imediatas):
 Antes de progredirmos com as mecânicas das Eras e a Árvore de Tecnologias, a prioridade máxima é a faxina cirúrgica dessas heranças de código e a correção do renderizador, estabilizando o baseline da Campanha Limpa.
+
+---
+
+## Entrada: 53
+
+**Data:** 25/03/2024
+
+### UX Aprimorada e Pivô de Game Design (O Verdadeiro Início do Mundo)
+**1. A Legenda e o Renderizador:** A UI foi polida com a adição de uma Legenda Dinâmica de vidro (`backdrop-filter`) flutuante. Foi solucionado um bug de CSS onde a legenda sumia se o painel lateral ficasse longo (ancorando-a diretamente ao flexbox do Canvas do MapLibre).
+
+**2. O Fim da Artificialidade Demográfica (Aprendizado Registrado):**
+*O Problema:* O script de geração estava espalhando 12 impérios uniformemente por todo o globo e enchendo o mapa desde o Ano 0. Isso destruía a imersão de "Surgimento da Civilização" e parecia muito artificial.
+*A Solução Algorítmica:* A matriz de NPCs iniciais foi dizimada. Agora o jogo começa com **Apenas 1 jogador e 4 NPCs**.
+*   **Espalhamento Fiel (Berços da Civilização):** Os 4 NPCs são hardcoded para nascerem em bolsões que representam berços da humanidade (Mesopotâmia, Egito/Nilo, Vale do Indo, Rio Amarelo).
+*   **Clusters Nômades:** Em vez de receberem 1 hexágono, a lógica de `spawnCluster` garante que cada pequena tribo domine de 1 a 3 hexágonos vizinhos interligados, somando ~20 pessoas por terreno.
+*   **A Grande Terra Selvagem:** Os outros ~19.450 hexágonos da malha pertencem à "Terra Selvagem" (`k_nature`), pintando o mundo de verde e entregando um mapa gigante, virgem e inabitado, pronto para expansão futura baseada apenas em crescimento orgânico demográfico e colonização.
+
+**Status:** Implementado e lacrado. O jogo agora passa o "feeling" perfeito da Idade da Pedra / Aurora Humana.
+
+---
+
+## Entrada: 54
+
+**Data:** 25/03/2024
+
+### Diagnóstico e Solução: O Bug do Equador e a Matriz Embaralhada
+**1. O Colapso Visual do WebGL (Linha de Corte):**
+*Sintoma:* A Placa de Vídeo parava de renderizar o mapa subitamente a partir de certa latitude (cortando a Austrália, América do Sul e África pela metade). O resto do mundo ficava com a cor de fundo (Cinza/Oceano).
+*Causa:* Ausência de um ID primário estrito. Em Vector Tiles (`.pbf`), cada polígono precisa de um `ID` numérico oficial. Como o `promoteId` não havia sido declarado na fonte do MapLibre, a GPU tentava inventar IDs dinâmicos, o que estourava o limite da sua pilha de memória, abortando a pintura do globo no meio do caminho.
+*Correção:* Instrução `promoteId: "regionId"` adicionada ao `maplibre-world-renderer.ts`, ensinando o WebGL a usar nossa propriedade como chave e mapear perfeitamente as 62.000 regiões.
+
+**2. A Ilusão da Demografia Aleatória (Desalinhamento de ECS):**
+*Sintoma:* Ao iniciar o jogo, as tribos pareciam estar espalhadas em lugares totalmente aleatórios, longe dos berços históricos selecionados, parecendo que o mundo ainda nascia cheio.
+*Causa:* Erro de ponteiro de memória em `create-initial-state.ts`. O loop que preenchia as matrizes do Worker (`ecsState`) estava usando uma lista em **Ordem Alfabética** (ex: `r_hex_0`, `r_hex_1`, `r_hex_10`), mas a UI lia a matriz em **Ordem Geográfica**. O dado gerado para o Egito estava caindo numa praia deserta da Rússia.
+*Correção:* A rotina de preenchimento inicial foi refatorada para iterar estritamente sobre a constante universal geográfica (`WORLD_DEFINITIONS_V1`), cravando a paridade 1:1 entre a memória RAM do Worker e o mapa do jogador.
+
+**Status:** Milestone de mapa global procedural e inicialização da Era Humana 100% estabilizado e lacrado. Visão do globo de ponta a ponta sem cortes.

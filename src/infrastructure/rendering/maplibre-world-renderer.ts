@@ -35,8 +35,8 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
   private layerMode: MapLayerMode = "owner";
   private selectedRegionId: string | null = null;
   private mounted = false;
-  private featureStateCache: string[] = [];
-  private featureStateQueue: Map<number, any> = new Map();
+  private featureStateCache: Map<string, string> = new Map();
+  private featureStateQueue: Map<string, any> = new Map();
   private animationFrameId: number | null = null;
 
   constructor(
@@ -121,7 +121,6 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       const def = WORLD_DEFINITIONS_V1[i];
       if (def.isWater) continue; // Pula os oceanos instantaneamente (ganho massivo de FPS)
 
-      const numericId = i;
       const regionId = def.id;
       const region = world.regions[regionId];
       
@@ -132,8 +131,8 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
 
       if (!region) {
         const hash = `empty|${selected}|${pulse}|${contested}`;
-        if (this.featureStateCache[numericId] !== hash) {
-          this.featureStateQueue.set(numericId, {
+        if (this.featureStateCache.get(regionId) !== hash) {
+          this.featureStateQueue.set(regionId, {
             ownerColor: "#857a67",
             faithColor: "#6f6352",
             unrest: 0,
@@ -146,7 +145,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
             wealthRatio: 0,
             dominantShare: 0
           });
-          this.featureStateCache[numericId] = hash;
+          this.featureStateCache.set(regionId, hash);
         }
         continue;
       }
@@ -171,8 +170,8 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       // Assinatura de estado quantizada
       const hash = `${ownerColor}|${selected}|${pulse}|${contested}|${qUnrest}|${qWealth}|${isAllied}|${isEnemy}|${faithColor}|${qDominant}`;
 
-      if (this.featureStateCache[numericId] !== hash) {
-        this.featureStateQueue.set(numericId, {
+      if (this.featureStateCache.get(regionId) !== hash) {
+        this.featureStateQueue.set(regionId, {
           ownerColor,
           faithColor,
           unrest,
@@ -185,7 +184,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           wealthRatio,
           dominantShare
         });
-        this.featureStateCache[numericId] = hash;
+        this.featureStateCache.set(regionId, hash);
       }
     }
 
@@ -247,7 +246,8 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       this.map.addSource(SOURCE_ID, {
         type: "vector",
         tiles: [buildTileUrl()],
-        maxzoom: 5
+        maxzoom: 5,
+        promoteId: "regionId"
       });
     }
 

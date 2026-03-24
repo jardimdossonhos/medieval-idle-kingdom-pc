@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
+﻿﻿﻿﻿﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
 import {
   ArmyPosture,
   AutomationLevel,
@@ -17,6 +17,7 @@ import type { StaticWorldData } from "../../core/models/static-world-data";
 import type { ReligionId } from "../../core/models/types";
 import type { RegionDefinition, RegionState, RegionZone, WorldState } from "../../core/models/world";
 import { createStaticWorldData } from "./static-world-data";
+import { WORLD_DEFINITIONS_V1 } from "./generated/world-definitions-v1";
 
 interface KingdomBlueprint {
   id: string;
@@ -31,109 +32,46 @@ interface KingdomBlueprint {
 const KINGDOM_BLUEPRINTS: KingdomBlueprint[] = [
   {
     id: "k_player",
-    name: "Coroa da Ibéria",
-    adjective: "Iberico",
+    name: "Primeira Tribo",
+    adjective: "Primordial",
     isPlayer: true,
-    preferredCapitalRegionId: "r_iberia_north"
+    preferredCapitalRegionId: "" // Será injetado dinamicamente via UI no main.ts
   },
   {
-    id: "k_rival_north",
-    name: "Reino da Galia",
-    adjective: "Galico",
+    id: "k_npc_1",
+    name: "Povo de Uruk",
+    adjective: "Mesopotâmico",
     isPlayer: false,
-    preferredCapitalRegionId: "r_gallia_west",
+    preferredCapitalRegionId: "",
     archetype: NpcArchetype.Expansionist,
-    strategicGoal: "expandir_fronteira_ocidental"
+    strategicGoal: "dominar_rios"
   },
   {
-    id: "k_rival_east",
-    name: "Imperio da Anatolia",
-    adjective: "Anatolio",
+    id: "k_npc_2",
+    name: "Tribos do Nilo",
+    adjective: "Egípcio",
     isPlayer: false,
-    preferredCapitalRegionId: "r_anatolia_west",
-    archetype: NpcArchetype.Opportunist,
-    strategicGoal: "projetar_forca_levantina"
-  },
-  {
-    id: "k_rival_south",
-    name: "Sultanato do Magrebe",
-    adjective: "Magrebino",
-    isPlayer: false,
-    preferredCapitalRegionId: "r_maghreb_west",
-    archetype: NpcArchetype.Mercantile,
-    strategicGoal: "dominar_rotas_comerciais"
-  },
-  {
-    id: "k_northern_union",
-    name: "Uniao do Norte",
-    adjective: "Nortenho",
-    isPlayer: false,
-    preferredCapitalRegionId: "c_826",
+    preferredCapitalRegionId: "",
     archetype: NpcArchetype.Defensive,
-    strategicGoal: "balancear_poder_europeu"
+    strategicGoal: "proteger_deserto"
   },
   {
-    id: "k_steppe_khanate",
-    name: "Canato da Estepe",
-    adjective: "Estepario",
+    id: "k_npc_3",
+    name: "Civilização de Harappa",
+    adjective: "Indo",
     isPlayer: false,
-    preferredCapitalRegionId: "c_643",
-    archetype: NpcArchetype.Revanchist,
-    strategicGoal: "retomar_territorios_historicos"
+    preferredCapitalRegionId: "",
+    archetype: NpcArchetype.Mercantile,
+    strategicGoal: "rotas_comerciais"
   },
   {
-    id: "k_atlantic_compact",
-    name: "Compacto Atlantico",
-    adjective: "Atlantico",
+    id: "k_npc_4",
+    name: "Clãs Xia",
+    adjective: "Sínico",
     isPlayer: false,
-    preferredCapitalRegionId: "c_840",
+    preferredCapitalRegionId: "",
     archetype: NpcArchetype.Diplomatic,
-    strategicGoal: "hegemonia_maritima"
-  },
-  {
-    id: "k_andean_assembly",
-    name: "Assembleia Andina",
-    adjective: "Andino",
-    isPlayer: false,
-    preferredCapitalRegionId: "c_076",
-    archetype: NpcArchetype.Defensive,
-    strategicGoal: "proteger_blocos_montanhosos"
-  },
-  {
-    id: "k_savanna_caliphate",
-    name: "Califado da Savana",
-    adjective: "Savanico",
-    isPlayer: false,
-    preferredCapitalRegionId: "c_566",
-    archetype: NpcArchetype.Treacherous,
-    strategicGoal: "coletar_tributos_regionais"
-  },
-  {
-    id: "k_indic_league",
-    name: "Liga do Indico",
-    adjective: "Indico",
-    isPlayer: false,
-    preferredCapitalRegionId: "c_356",
-    archetype: NpcArchetype.Mercantile,
-    strategicGoal: "maximizar_fluxo_comercial"
-  },
-  {
-    id: "k_celestial_dynasty",
-    name: "Dinastia Celestial",
-    adjective: "Celestial",
-    isPlayer: false,
-    preferredCapitalRegionId: "c_156",
-    archetype: NpcArchetype.Expansionist,
-    strategicGoal: "consolidar_hemisferio_oriental"
-  },
-  {
-    id: "k_oceanic_shogunate",
-    name: "Xogunato Oceanico",
-    adjective: "Oceanico",
-    isPlayer: false,
-    preferredCapitalRegionId: "c_392",
-    archetype: NpcArchetype.Opportunist,
-    strategicGoal: "controlar_arquipelagos"
+    strategicGoal: "mandato_do_ceu"
   }
 ];
 
@@ -434,29 +372,60 @@ function listDefinitionsSorted(staticData: StaticWorldData): RegionDefinition[] 
     .map((regionId) => staticData.definitions[regionId]);
 }
 
-function assignRegionOwners(definitions: RegionDefinition[], blueprints: KingdomBlueprint[]): { ownerByRegionId: Record<string, string>, capitalByOwner: Record<string, string> } {
+function assignRegionOwners(
+  definitions: RegionDefinition[], 
+  playerStartRegionId?: string
+): { ownerByRegionId: Record<string, string>, capitalByOwner: Record<string, string> } {
   const ownerByRegionId: Record<string, string> = {};
   const capitalByOwner: Record<string, string> = {};
+  const defsById = toDefinitionMap(definitions);
 
   // 1. O globo inteiro começa pertencendo à natureza absoluta (Vazio populacional)
   for (const definition of definitions) {
     ownerByRegionId[definition.id] = "k_nature";
   }
 
-  // 2. Filtramos apenas zonas de terra férteis/temperadas para dar chance de sobrevivência inicial
-  const landDefs = definitions.filter(d => !d.isWater && d.biome !== "tundra" && d.biome !== "desert");
-  const validSpawns = landDefs.length >= blueprints.length ? landDefs : definitions.filter(d => !d.isWater);
-  
-  // 3. Espaçamos as tribos geograficamente ao redor do globo matemático
-  const step = Math.floor(validSpawns.length / blueprints.length);
-
-  for (let i = 0; i < blueprints.length; i++) {
-    const blueprint = blueprints[i];
-    const assignedRegion = validSpawns[i * step] ?? validSpawns[0];
+  // Função interna para criar "Clusters" (Tribos unidas de 2 a 3 hexágonos)
+  function spawnCluster(kingdomId: string, centerId: string) {
+    const center = defsById[centerId];
+    if (!center || center.isWater) return;
     
-    if (assignedRegion) {
-      ownerByRegionId[assignedRegion.id] = blueprint.id;
-      capitalByOwner[blueprint.id] = assignedRegion.id;
+    ownerByRegionId[centerId] = kingdomId;
+    capitalByOwner[kingdomId] = centerId;
+    
+    let clusterSize = 1;
+    const targetSize = 2 + Math.floor(Math.random() * 2); // Nasce dominando de 2 a 3 territórios vizinhos
+    
+    for (const neighborId of center.neighbors) {
+      if (clusterSize >= targetSize) break;
+      const nDef = defsById[neighborId];
+      if (nDef && !nDef.isWater && ownerByRegionId[neighborId] === "k_nature") {
+        ownerByRegionId[neighborId] = kingdomId;
+        clusterSize++;
+      }
+    }
+  }
+  
+  // 2. Alocar a Tribo do Jogador
+  let playerStart = playerStartRegionId;
+  if (!playerStart) {
+    const fallbacks = definitions.filter(d => !d.isWater && d.biome === "temperate");
+    playerStart = fallbacks[0]?.id;
+  }
+  if (playerStart) {
+    spawnCluster("k_player", playerStart);
+  }
+
+  // 3. Alocar as Antigas Tribos Históricas da IA
+  const npcZones = ["near_east", "north_africa", "south_asia", "east_asia"];
+  for (let i = 1; i <= 4; i++) {
+    const npcId = `k_npc_${i}`;
+    const targetZone = npcZones[i - 1];
+    const validSpawns = definitions.filter(d => !d.isWater && d.zone === targetZone && ownerByRegionId[d.id] === "k_nature");
+    if (validSpawns.length > 0) {
+      // Tenta cair pelo centro da região em vez de nas pontas extremas
+      const start = validSpawns[Math.floor(validSpawns.length / 2)].id;
+      spawnCluster(npcId, start);
     }
   }
 
@@ -529,7 +498,7 @@ function createWorldState(
 
   for (const regionId of Object.keys(definitions).sort()) {
     const definition = definitions[regionId];
-    const ownerId = ownerByRegionId[regionId] ?? "k_rival_north";
+    const ownerId = ownerByRegionId[regionId] ?? "k_nature";
     const ownerFaith = faithByKingdomId[ownerId] ?? religionByZone(definition.zone, staticData);
     regions[regionId] = createRegionState(definition, ownerId, ownerFaith, staticData);
   }
@@ -598,10 +567,10 @@ function createKingdoms(ownerByRegionId: Record<string, string>, capitalByOwner:
   return kingdoms;
 }
 
-export function createInitialState(staticData: StaticWorldData = createStaticWorldData()): GameState {
+export function createInitialState(staticData: StaticWorldData = createStaticWorldData(), playerStartRegionId?: string): GameState {
   const now = Date.now();
   const definitions = listDefinitionsSorted(staticData);
-  const { ownerByRegionId, capitalByOwner } = assignRegionOwners(definitions, KINGDOM_BLUEPRINTS);
+  const { ownerByRegionId, capitalByOwner } = assignRegionOwners(definitions, playerStartRegionId);
   const kingdoms = createKingdoms(ownerByRegionId, capitalByOwner, staticData);
   
   const faithByKingdomId = Object.fromEntries(
@@ -610,7 +579,7 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
       .map((kingdomId) => [kingdomId, kingdoms[kingdomId].religion.stateFaith] as const)
   );
 
-  const totalEntities = definitions.length;
+  const totalEntities = WORLD_DEFINITIONS_V1.length;
 
   // FAGULHA VITAL (AURORA DA HUMANIDADE): Preenche 99% das matrizes ECS com ZERO para o terreno vazio
   const ecsState: EcsState = {
@@ -625,7 +594,7 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
   };
 
   for (let i = 0; i < totalEntities; i++) {
-    const def = definitions[i];
+    const def = WORLD_DEFINITIONS_V1[i];
     const ownerId = ownerByRegionId[def.id] ?? "k_nature";
 
     if (ownerId !== "k_nature" && !def.isWater) {

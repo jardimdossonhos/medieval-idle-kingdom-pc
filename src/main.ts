@@ -2278,22 +2278,15 @@ async function bootstrapApp(): Promise<void> {
     await (persistence.saveRepository as any).clearAll();
     await persistence.gameStateRepository.clearCurrent();
     
-    const freshState = createInitialState(staticWorldData);
     const selectedRegionId = ui.splashCountrySelect.value;
-    const ownerId = freshState.world.regions[selectedRegionId]?.ownerId;
+    const freshState = createInitialState(staticWorldData, selectedRegionId);
 
-    if (ownerId) {
-      for (const kid of Object.keys(freshState.kingdoms)) {
-        freshState.kingdoms[kid].isPlayer = false;
-      }
-      if (freshState.kingdoms[ownerId]) {
-        freshState.kingdoms[ownerId].isPlayer = true;
-        const def = WORLD_DEFINITIONS_V1.find(d => d.id === selectedRegionId);
-        if (def) {
-          freshState.kingdoms[ownerId].name = `Império de ${def.name}`;
-          freshState.kingdoms[ownerId].adjective = def.name;
-        }
-      }
+    const playerKingdom = freshState.kingdoms["k_player"];
+    if (playerKingdom) {
+      const def = WORLD_DEFINITIONS_V1.find(d => d.id === selectedRegionId);
+      const monarchName = ui.splashMonarchInput.value.trim() || "Soberano";
+      playerKingdom.name = `Tribo de ${monarchName}`;
+      playerKingdom.adjective = def ? def.name : "Nativo";
     }
 
     await persistence.gameStateRepository.saveCurrent(freshState);
