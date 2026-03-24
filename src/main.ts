@@ -400,7 +400,8 @@ async function bootstrapApp(): Promise<void> {
             <option value="0.5">0.5x</option>
             <option value="1" selected>1x</option>
             <option value="2">2x</option>
-            <option value="4">4x</option>
+            <option value="5">5x</option>
+            <option value="10">10x</option>
           </select>
         </label>
         <button id="open-saves-btn">Menu de saves</button>
@@ -871,6 +872,7 @@ async function bootstrapApp(): Promise<void> {
       "economy.food_production_multiplier": new Float64Array(expectedLength),
       "economy.tax_income_multiplier": new Float64Array(expectedLength),
       "population.growth_rate_multiplier": new Float64Array(expectedLength),
+      "population.carrying_capacity_multiplier": new Float64Array(expectedLength),
     };
 
     const kingdomBonuses = new Map<string, Map<string, number>>();
@@ -888,6 +890,7 @@ async function bootstrapApp(): Promise<void> {
           modifiers["economy.food_production_multiplier"][i] = bonuses.get("economy.food_production_multiplier") ?? 0;
           modifiers["economy.tax_income_multiplier"][i] = bonuses.get("economy.tax_income_multiplier") ?? 0;
           modifiers["population.growth_rate_multiplier"][i] = bonuses.get("population.growth_rate_multiplier") ?? 0;
+          modifiers["population.carrying_capacity_multiplier"][i] = bonuses.get("population.carrying_capacity_multiplier") ?? 0;
         }
       }
     }
@@ -1440,10 +1443,24 @@ async function bootstrapApp(): Promise<void> {
       ? `${minorityFaith?.name ?? region.minorityFaith} (${formatNumber(region.minorityShare * 100)}%)`
       : "Sem minoria relevante";
 
+    // Tradução e mapeamento de dados do Bioma
+    const biomeLabels: Record<string, string> = { ocean: "Oceano", desert: "Deserto", tundra: "Tundra", temperate: "Temperado", tropical: "Tropical" };
+    const biomeCapacity: Record<string, number> = { ocean: 0, desert: 50, tundra: 20, temperate: 250, tropical: 150 };
+    const regionBiomeLabel = biomeLabels[regionDef.biome] ?? "Desconhecido";
+    const baseCapacity = biomeCapacity[regionDef.biome] ?? 0;
+
+    // Extração populacional local (do ECS)
+    const regionIndex = REGION_INDEX_MAP.get(selectedRegionId);
+    const currentPop = (regionIndex !== undefined && currentSimulationState.populationTotalData) 
+      ? currentSimulationState.populationTotalData[regionIndex] 
+      : 0;
+
     ui.regionInfo.innerHTML = `
       <div class="summary-grid">
         <span>Nome</span><strong>${regionDef.name}</strong>
         <span>Dono</span><strong>${ownerName}</strong>
+        <span>Bioma</span><strong>${regionBiomeLabel}</strong>
+        <span>População</span><strong>${formatNumber(currentPop)} / ${formatNumber(baseCapacity)} (Máx. Natural)</strong>
         <span>Fé dominante</span><strong>${dominantFaith?.name ?? region.dominantFaith} (${formatNumber(region.dominantShare * 100)}%)</strong>
         <span>Minoria religiosa</span><strong>${minorityText}</strong>
         <span>Tensão de fé</span><strong>${formatNumber(region.faithUnrest * 100)}%</strong>

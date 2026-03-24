@@ -230,7 +230,7 @@ export class GameSession {
 
   setSpeed(multiplier: number): void {
     const state = this.requireState();
-    state.meta.speedMultiplier = Math.max(0.5, Math.min(8, multiplier));
+    state.meta.speedMultiplier = Math.max(0.5, Math.min(10, multiplier));
     this.recordPlayerCommand("session.speed", { speedMultiplier: state.meta.speedMultiplier });
     this.persistCurrent();
     this.emitState();

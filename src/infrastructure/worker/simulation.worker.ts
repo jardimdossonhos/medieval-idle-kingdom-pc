@@ -76,12 +76,11 @@ function startClock(): void {
     const deltaTimeSeconds = Math.max(0, (nowMs - lastTickMs) / 1_000);
     lastTickMs = nowMs;
 
-    if (economy && population) {
+    if (economy && population && geography) {
       if (!isPaused && speedMultiplier > 0) {
         const gameDeltaTime = deltaTimeSeconds * speedMultiplier;
         economySystem.update(gameDeltaTime, economy, population, activeEntities, activeModifiers);
-        // Bypass local de tipagem para PopulationSystem aceitar o novo 4º argumento (Modificadores)
-        (populationSystem as any).update(gameDeltaTime, population, activeEntities, activeModifiers);
+        populationSystem.update(gameDeltaTime, population, activeEntities, activeModifiers, geography.biome);
       }
 
       debugTickCount++;
