@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
+﻿﻿﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
 import type {
   CommandLogRepository,
   GameStateRepository,
@@ -46,7 +46,7 @@ type StateListener = (state: GameState) => void;
 export type DiplomaticActionType = "alliance" | "non_aggression" | "peace" | "tribute" | "embargo" | "war";
 export type ReligiousActionType = "send_missionaries";
 
-export type RegionActionType = "invest_agriculture" | "invest_infrastructure" | "garrison" | "pacify";
+export type RegionActionType = "invest_agriculture" | "invest_infrastructure" | "garrison" | "pacify" | "change_capital";
 
 export interface PlayerActionResult {
   ok: boolean;
@@ -554,6 +554,10 @@ export class GameSession {
       return { ok: false, message: "Você só pode administrar regiões próprias." };
     }
 
+    if (actionType === "change_capital" && player.capitalRegionId === regionId) {
+      return { ok: false, message: "Esta região já é a capital do reino." };
+    }
+
     region.actionCooldowns = region.actionCooldowns ?? {};
     const cooldownUntil = region.actionCooldowns[actionType] ?? 0;
     if (cooldownUntil > now) {
@@ -592,6 +596,10 @@ export class GameSession {
         region.assimilation = this.round(this.clamp(region.assimilation + 0.03, 0, 1));
         region.autonomy = this.round(this.clamp(region.autonomy + 0.02, 0, 1));
         player.stability = this.round(this.clamp(player.stability + 0.8, 0, 100));
+        break;
+      case "change_capital":
+        player.capitalRegionId = regionId;
+        region.unrest = 0; // Uma nova sede do governo sempre inicia pacificada
         break;
     }
 
@@ -1064,7 +1072,7 @@ export class GameSession {
     }
   }
 
-  private getRegionActionConfig(actionType: RegionActionType): {
+  public getRegionActionConfig(actionType: RegionActionType): {
     label: string;
     cooldownMs: number;
     cost: Partial<Record<ResourceType, number>>;
@@ -1107,6 +1115,15 @@ export class GameSession {
             [ResourceType.Gold]: 24,
             [ResourceType.Faith]: 16,
             [ResourceType.Legitimacy]: 3
+          }
+        };
+      case "change_capital":
+        return {
+          label: "Transferência de sede governamental",
+          cooldownMs: 60_000,
+          cost: {
+            [ResourceType.Gold]: 150,
+            [ResourceType.Legitimacy]: 10
           }
         };
     }

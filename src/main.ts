@@ -1454,23 +1454,34 @@ async function bootstrapApp(): Promise<void> {
       </div>
     `;
 
-    const actions: Array<{ id: RegionActionType; label: string }> = [
-      { id: "invest_agriculture", label: "Investir em agricultura" },
-      { id: "invest_infrastructure", label: "Investir em infraestrutura" },
-      { id: "garrison", label: "Reforçar guarnição" },
-      { id: "pacify", label: "Pacificar" }
-    ];
-
     ui.regionActions.innerHTML = "";
 
-    for (const action of actions) {
-      const button = document.createElement("button");
-      button.textContent = action.label;
-      button.addEventListener("click", () => {
-        const result = session.executeRegionAction(selectedRegionId ?? "", action.id);
-        showToast(result.message);
-      });
-      ui.regionActions.appendChild(button);
+    if (isPlayer) {
+      const actions: Array<{ id: RegionActionType; label: string }> = [
+        { id: "invest_agriculture", label: "Investir em agricultura" },
+        { id: "invest_infrastructure", label: "Investir em infraestrutura" },
+        { id: "garrison", label: "Reforçar guarnição" },
+        { id: "pacify", label: "Pacificar" }
+      ];
+
+      if (region.regionId !== owner.capitalRegionId) {
+        actions.push({ id: "change_capital", label: "Mudar Sede (Tornar Capital)" });
+      }
+
+      for (const action of actions) {
+        const config = session.getRegionActionConfig(action.id);
+        const costStrings = Object.entries(config.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+
+        const button = document.createElement("button");
+        button.innerHTML = `<span>${action.label}</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${costStrings.join(", ")}</small>`;
+        button.addEventListener("click", () => {
+          const result = session.executeRegionAction(selectedRegionId ?? "", action.id);
+          showToast(result.message);
+        });
+        ui.regionActions.appendChild(button);
+      }
+    } else {
+      ui.regionActions.innerHTML = "<p class='hint-text'>Esta região não pertence ao seu império. Ações bloqueadas.</p>";
     }
   }
 

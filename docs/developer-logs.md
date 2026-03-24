@@ -879,3 +879,21 @@ Antes de progredirmos com as mecânicas das Eras e a Árvore de Tecnologias, a p
 **O Incidente:** Durante a implementação do `MigrationSystem`, ocorreram três falhas consecutivas de compilação do TypeScript (`update does not exist`, `execute does not exist`). 
 **A Causa Raiz:** O assistente técnico tentou "adivinhar" (presumir) o formato da interface base `SimulationSystem` através de padrões comuns da indústria, em vez de ler estritamente o arquivo `tick-pipeline.ts` original que não constava no seu contexto de visão. Isso gerou remendos sucessivos e quebrou o fluxo de trabalho.
 **A Regra Inegociável Estabelecida:** Adicionada a seção "1.2 Política de Zero-Presunção" ao `ARCHITECTURE.md`. Fica terminantemente proibido presumir contratos, nomes de métodos, interfaces ou comportamentos arquiteturais. Se uma informação, contrato ou arquivo não estiver perfeitamente legível, o desenvolvimento deve sofrer um *Code Freeze* imediato e a documentação/arquivo deve ser solicitada. A engenharia deste projeto passa a operar 100% baseada em evidências.
+
+---
+
+## Entrada: 58
+
+**Data:** 25/03/2024
+
+### Marcadores de Capital, Nomadismo Administrativo e Coerência de UI
+**1. Renderização de Capitais (WebGL):**
+Para viabilizar a localização tática dos impérios na vastidão do mapa gerado, foi inserida uma nova camada vetorial (`CAPITAL_MARKER_LAYER_ID`) no `MapLibreWorldRenderer`. Ela desenha um ponto dourado (Coroa) perfeitamente escalável sobre a `capitalRegionId` de cada império vivo, operando em tempo real com custo de performance O(K).
+
+**2. Nomadismo Administrativo (Mudar Sede):**
+A mecânica de "Mudar Capital" foi implementada com sucesso no Orquestrador (`GameSession`). O jogador agora pode clicar em uma terra recém-anexada e transferir a sede do governo para lá pagando 150 de Ouro e 10 de Legitimidade. A ação atualiza o ponteiro central e o WebGL reflete o salto do marcador instantaneamente.
+
+**3. Blindagem de UX (Contexto de Interface):**
+O painel de Ações Regionais sofria de desconexão de domínio (exibia opções como "Pacificar" em terras inabitadas ou inimigas). 
+*   *Correção de Acesso:* A UI agora audita a propriedade (`isPlayer`) e bloqueia os botões, exibindo uma mensagem de proibição caso o hexágono não pertença ao reino.
+*   *Transparência de Custos:* A API do jogo (`getRegionActionConfig`) foi tornada pública para a interface gráfica. O `main.ts` agora lê essa configuração e injeta o preço exato no subtítulo de cada botão regional, eliminando a adivinhação e o "clique cego".
