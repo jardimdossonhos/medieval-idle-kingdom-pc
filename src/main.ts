@@ -156,6 +156,15 @@ function formatNumber(value: number, decimals = 0): string {
   }).format(safeValue);
 }
 
+function formatCalendarTime(tick: number): string {
+  // Diluição do tempo: 12 ciclos do Worker = 1 Ano de Simulação
+  const year = Math.floor(tick / 12) + 1;
+  
+  // Futuramente, esta string mudará baseada nas Tecnologias descobertas (Ex: Era do Bronze)
+  const eraName = "Era da Aurora"; 
+  return `Ano ${formatNumber(year)} (${eraName})`;
+}
+
 function formatDate(value: number): string {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
@@ -375,7 +384,7 @@ async function bootstrapApp(): Promise<void> {
         </div>
         <div class="status-grid">
           <div><span>Jogador</span><strong id="player-value">-</strong></div>
-          <div><span>Ciclo</span><strong id="tick-value">0</strong></div>
+          <div><span>Época</span><strong id="tick-value">Ano 1</strong></div>
           <div><span>Atualizado</span><strong id="updated-value">-</strong></div>
           <div><span>Estado</span><strong id="status-value">Pausado</strong></div>
           <div><span>Vitória</span><strong id="victory-value">Ainda não alcançada</strong></div>
@@ -559,7 +568,7 @@ async function bootstrapApp(): Promise<void> {
           </div>
           <div class="summary-grid">
             <span>ID local</span><strong id="profile-id-value">-</strong>
-            <span>Ciclo da simulação</span><strong>1 ciclo = 1 tick do reino</strong>
+            <span>Tempo da simulação</span><strong>12 ciclos = 1 Ano Histórico</strong>
             <span>Observação multiplayer</span><strong>Conta ainda local-first (sem login online)</strong>
           </div>
           ${
@@ -1121,7 +1130,7 @@ async function bootstrapApp(): Promise<void> {
 
   function renderHeader(state: GameState): void {
     ui.playerValue.textContent = profile.name;
-    ui.tickValue.textContent = String(state.meta.tick);
+    ui.tickValue.textContent = formatCalendarTime(state.meta.tick);
     ui.updatedValue.textContent = formatDate(state.meta.lastUpdatedAt);
     ui.statusValue.textContent = state.meta.paused ? "Pausado" : "Executando";
     ui.pauseButton.textContent = state.meta.paused ? "Retomar" : "Pausar";
@@ -1846,7 +1855,7 @@ async function bootstrapApp(): Promise<void> {
     metadata.className = "save-meta";
     metadata.innerHTML = `
       <strong>${slot.slotId}</strong>
-      <span>${slot.playerKingdomName} • Ciclo ${slot.tick}</span>
+      <span>${slot.playerKingdomName} • ${formatCalendarTime(slot.tick)}</span>
       <span>${formatDate(slot.savedAt)}</span>
       <span>Territórios: ${slot.territoryCount} | Militar: ${formatNumber(slot.militaryPower)}</span>
     `;
@@ -1863,7 +1872,7 @@ async function bootstrapApp(): Promise<void> {
       }
 
       const player = Object.values(saveState.kingdoms).find(k => k.isPlayer);
-      const ciclo = saveState.meta.tick;
+      const ciclo = formatCalendarTime(saveState.meta.tick);
       const tecnologias = player?.technology.unlocked.length ?? 0;
       const territorios = Object.values(saveState.world.regions).filter(r => r.ownerId === player?.id).length;
       

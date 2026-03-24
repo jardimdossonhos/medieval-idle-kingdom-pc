@@ -840,3 +840,17 @@ Antes de progredirmos com as mecânicas das Eras e a Árvore de Tecnologias, a p
 *Correção:* A rotina de preenchimento inicial foi refatorada para iterar estritamente sobre a constante universal geográfica (`WORLD_DEFINITIONS_V1`), cravando a paridade 1:1 entre a memória RAM do Worker e o mapa do jogador.
 
 **Status:** Milestone de mapa global procedural e inicialização da Era Humana 100% estabilizado e lacrado. Visão do globo de ponta a ponta sem cortes.
+
+---
+
+## Entrada: 55
+
+**Data:** 25/03/2024
+
+### Pivô de Design: Omissão Estratégica da Névoa de Guerra e Início da Fase 4
+**Decisão Arquitetural:** O plano original previa a criação da *Fog of War* (Névoa de Guerra) imediata para complementar a "Era da Aurora". Decidimos estrategicamente postergar esta feature. Ocultar o mapa agora criaria uma caixa preta inaceitável para o debug sistêmico: precisamos observar a AI se espalhando organicamente pelo mundo para atestar que as dinâmicas de expansão não estão quebradas.
+
+**Ação Executada (Implementação do Calendário):** Conforme seção 6.7 da Arquitetura, iniciamos a conversão do "Tempo de Máquina" para "Tempo Imersivo".
+1. A UI não exibe mais a variável crua `meta.tick`.
+2. A função `formatCalendarTime` calcula `Tick / 12` para extrair um "Ano Histórico" elegante, complementado pela Era atual da simulação (Ex: `Ano 205 (Era da Aurora)`).
+3. O manifesto da Campanha (`create-initial-state.ts`) foi renomeado de "Coroas do Mundo / Ano 1100" para "Aurora da Humanidade / Ano 1".

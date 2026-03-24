@@ -620,10 +620,10 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
       lastClosedAt: null
     },
     campaign: {
-      id: "campaign_world_thrones",
-      name: "Coroas do Mundo",
+      id: "campaign_dawn_of_man",
+      name: "A Aurora da Humanidade",
       mapId: staticData.mapId,
-      startDateIso: "1100-01-01",
+      startDateIso: "0001-01-01",
       victoryTargets: [
         { path: VictoryPath.TerritorialDomination, threshold: 0.55 },
         { path: VictoryPath.DiplomaticHegemony, threshold: 0.65 },
