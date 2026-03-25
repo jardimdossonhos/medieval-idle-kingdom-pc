@@ -286,8 +286,8 @@ function createKingdom(
     economy: createBaseEconomy(),
     population: createBasePopulation(populationTotal),
     technology: {
-      unlocked: isNature ? [] : ["agri_basics"], // Apenas a base tribal destrancada
-      activeResearchId: isNature ? null : "militia_drill",
+      unlocked: isNature ? [] : ["fire_mastery"], // O fogo é o berço de tudo
+      activeResearchId: isNature ? null : "bone_tools",
       researchGoalId: null,
       accumulatedResearch: 0,
       researchFocus: TechnologyDomain.Administration

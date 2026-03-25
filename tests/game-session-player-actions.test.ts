@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+﻿﻿import { describe, expect, it } from "vitest";
 import { createInitialState } from "../src/application/boot/create-initial-state";
 import { createStaticWorldData } from "../src/application/boot/static-world-data";
 import { GameSession } from "../src/application/game-session";
@@ -28,6 +28,18 @@ class InMemoryGameStateRepository implements GameStateRepository {
   }
 
   async clearCurrent(): Promise<void> {
+    this.state = null;
+  }
+
+  saveCurrentSync(state: GameState): void {
+    this.state = structuredClone(state);
+  }
+
+  loadCurrentSync(): GameState | null {
+    return this.state ? structuredClone(this.state) : null;
+  }
+
+  clearCurrentSync(): void {
     this.state = null;
   }
 }
@@ -208,19 +220,19 @@ describe("GameSession player actions", () => {
     await session.bootstrap(initial);
 
     const choices = session.listTechnologyChoices();
-    const active = choices.find((choice) => choice.id === "ledger_admin");
-    const available = choices.find((choice) => choice.id === "trade_charters");
-    const locked = choices.find((choice) => choice.id === "siege_engineering");
+    const active = choices.find((choice) => choice.id === "bone_tools");
+    const available = choices.find((choice) => choice.id === "animism");
+    const locked = choices.find((choice) => choice.id === "sedentism");
 
     expect(active?.status).toBe("active");
     expect(available?.status).toBe("available");
     expect(locked?.status).toBe("locked");
 
-    const success = session.setResearchTarget("trade_charters");
-    const failure = session.setResearchTarget("siege_engineering");
+    const success = session.setResearchTarget("animism");
+    const failure = session.setResearchTarget("sedentism");
 
     expect(success.ok).toBe(true);
-    expect(session.getState().kingdoms.k_player.technology.activeResearchId).toBe("trade_charters");
+    expect(session.getState().kingdoms.k_player.technology.activeResearchId).toBe("animism");
     expect(failure.ok).toBe(false);
   });
 });

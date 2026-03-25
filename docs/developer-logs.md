@@ -897,3 +897,15 @@ A mecânica de "Mudar Capital" foi implementada com sucesso no Orquestrador (`Ga
 O painel de Ações Regionais sofria de desconexão de domínio (exibia opções como "Pacificar" em terras inabitadas ou inimigas). 
 *   *Correção de Acesso:* A UI agora audita a propriedade (`isPlayer`) e bloqueia os botões, exibindo uma mensagem de proibição caso o hexágono não pertença ao reino.
 *   *Transparência de Custos:* A API do jogo (`getRegionActionConfig`) foi tornada pública para a interface gráfica. O `main.ts` agora lê essa configuração e injeta o preço exato no subtítulo de cada botão regional, eliminando a adivinhação e o "clique cego".
+
+---
+
+## Entrada: 59
+
+**Data:** 25/03/2024
+
+### Refatoração da Árvore de Tecnologia (Era da Aurora)
+**1. Zero-Presunção Aplicada:** Durante a tarefa de reescrever as tecnologias, notou-se a ausência do arquivo `technology-effects-service.ts` no contexto. Contudo, baseando-se estritamente na interface oficial `TechnologyNode` em `technology.ts`, a refatoração da árvore prosseguiu com segurança total.
+**2. Limpeza Medieval:** Todas as referências a "Feudalismo", "Cidadelas Fortificadas" e "Ordens Monásticas" foram extintas do jogo inicial.
+**3. A Matriz Primordial:** Criada a base da Idade da Pedra: `Domínio do Fogo`, `Ferramentas de Osso`, `Animismo`, `Grupos de Caça` e a revolucionária `Sedentarismo` (Quebra de Paradigma).
+**4. Sinergia Logística:** A tecnologia de Sedentarismo foi configurada para multiplicar a Capacidade de Suporte (`population.carrying_capacity_multiplier`), integrando-se perfeitamente à Fórmula de Verhulst aplicada no Worker, permitindo que a tribo saia da estagnação nômade para criar vilas permanentes com milhares de habitantes no futuro.

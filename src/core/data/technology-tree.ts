@@ -1,216 +1,85 @@
-﻿import { TechnologyDomain } from "../models/enums";
+﻿﻿import { TechnologyDomain } from "../models/enums";
 import type { TechnologyNode, TechnologyState } from "../models/technology";
 
 const NODES: TechnologyNode[] = [
   {
-    id: "agri_basics",
+    id: "fire_mastery",
     domain: TechnologyDomain.Economy,
-    name: "Técnicas Agrárias Básicas",
+    name: "Domínio do Fogo",
+    description: "O controle das chamas permite cozinhar alimentos e afastar predadores nas noites escuras, garantindo a sobrevivência inicial da tribo.",
     required: [],
-    cost: 80,
-    effects: {
-      "economy.foodStock": 40,
-      "population.growthRate": 0.00001
-    }
+    cost: 40,
+    effects: [
+      { target: "economy.food_production_multiplier", value: 0.10, type: "multiplier" },
+      { target: "population.growth_rate_multiplier", value: 0.05, type: "multiplier" }
+    ]
   },
   {
-    id: "crop_rotation",
-    domain: TechnologyDomain.Economy,
-    name: "Rotação de Culturas",
-    required: ["agri_basics"],
-    cost: 125,
-    effects: {
-      "economy.foodStock": 70,
-      "economy.goldStock": 12
-    }
-  },
-  {
-    id: "trade_charters",
-    domain: TechnologyDomain.Economy,
-    name: "Cartas de Comércio",
-    required: ["agri_basics"],
-    cost: 130,
-    effects: {
-      "economy.goldStock": 45,
-      "stability": 0.35
-    }
-  },
-  {
-    id: "militia_drill",
-    domain: TechnologyDomain.Military,
-    name: "Treino de Milícia",
-    required: [],
-    cost: 90,
-    effects: {
-      "military.techLevel": 0.08,
-      "military.reserveManpower": 1500
-    }
-  },
-  {
-    id: "steel_forging",
-    domain: TechnologyDomain.Military,
-    name: "Forja de Aço",
-    required: ["militia_drill"],
-    cost: 150,
-    effects: {
-      "military.techLevel": 0.16,
-      "economy.ironStock": 40
-    }
-  },
-  {
-    id: "siege_engineering",
+    id: "bone_tools",
     domain: TechnologyDomain.Engineering,
-    name: "Engenharia de Cerco",
-    required: ["steel_forging"],
-    cost: 190,
-    effects: {
-      "military.techLevel": 0.22,
-      "economy.woodStock": -20,
-      "economy.ironStock": -15
-    }
+    name: "Ferramentas de Osso",
+    description: "Utensílios rústicos extraídos de carcaças melhoram a eficiência e o rendimento da coleta de recursos naturais pelo bando.",
+    required: [],
+    cost: 60,
+    effects: [
+      { target: "economy.tax_income_multiplier", value: 0.05, type: "multiplier" }
+    ]
   },
   {
-    id: "ledger_admin",
-    domain: TechnologyDomain.Administration,
-    name: "Contabilidade da Coroa",
+    id: "animism",
+    domain: TechnologyDomain.Religion,
+    name: "Animismo (Xamanismo)",
+    description: "A crença primeva de que espíritos habitam os rios, as feras e as montanhas, unindo a tribo sob um propósito espiritual comum.",
     required: [],
+    cost: 70,
+    effects: [
+      { target: "religion.cohesion", value: 0.10, type: "additive" },
+      { target: "legitimacy", value: 5, type: "additive" }
+    ]
+  },
+  {
+    id: "hunting_parties",
+    domain: TechnologyDomain.Military,
+    name: "Grupos de Caça",
+    description: "A organização tática dos coletores em patrulhas de caça serve como a primeira linha militar de defesa contra ameaças rivais.",
+    required: ["fire_mastery"],
     cost: 85,
-    effects: {
-      "administration.capacity": 6,
-      "administration.corruption": -0.015
-    }
+    effects: [
+      { target: "military.reserveManpower", value: 50, type: "additive" }
+    ]
   },
   {
-    id: "cadastral_registry",
+    id: "oral_tradition",
     domain: TechnologyDomain.Administration,
-    name: "Cadastro Territorial",
-    required: ["ledger_admin"],
-    cost: 135,
-    effects: {
-      "administration.capacity": 10,
-      "administration.corruption": -0.025,
-      "stability": 0.45
-    }
-  },
-  {
-    id: "provincial_courts",
-    domain: TechnologyDomain.Administration,
-    name: "Cortes Provinciais",
-    required: ["cadastral_registry"],
-    cost: 175,
-    effects: {
-      "administration.capacity": 14,
-      "administration.corruption": -0.03,
-      "stability": 0.8
-    }
-  },
-  {
-    id: "state_cathedral",
-    domain: TechnologyDomain.Religion,
-    name: "Catedral de Estado",
-    required: [],
+    name: "Tradição Oral",
+    description: "A passagem de mitos e táticas pelo boca a boca através das gerações cria os primeiros laços sociais capazes de conter mais habitantes.",
+    required: ["animism"],
     cost: 100,
-    effects: {
-      "religion.authority": 0.03,
-      "religion.cohesion": 0.02,
-      "legitimacy": 0.9
-    }
+    effects: [
+      { target: "administration.capacity", value: 10, type: "additive" }
+    ]
   },
   {
-    id: "monastic_orders",
-    domain: TechnologyDomain.Religion,
-    name: "Ordens Monásticas",
-    required: ["state_cathedral"],
-    cost: 145,
-    effects: {
-      "religion.authority": 0.05,
-      "religion.tolerance": 0.02,
-      "economy.faithStock": 25
-    }
-  },
-  {
-    id: "religious_treatises",
-    domain: TechnologyDomain.Religion,
-    name: "Tratados Teológicos",
-    required: ["monastic_orders"],
-    cost: 185,
-    effects: {
-      "religion.cohesion": 0.04,
-      "legitimacy": 1.2,
-      "stability": 0.55
-    }
-  },
-  {
-    id: "road_network",
-    domain: TechnologyDomain.Logistics,
-    name: "Rede de Estradas",
-    required: ["ledger_admin"],
-    cost: 130,
-    effects: {
-      "economy.goldStock": 20,
-      "military.reserveManpower": 800,
-      "stability": 0.2
-    }
-  },
-  {
-    id: "relay_stations",
-    domain: TechnologyDomain.Logistics,
-    name: "Estações de Revezamento",
-    required: ["road_network"],
-    cost: 165,
-    effects: {
-      "economy.goldStock": 25,
-      "administration.capacity": 6,
-      "technology.researchRate": 0.03
-    }
-  },
-  {
-    id: "river_ports",
-    domain: TechnologyDomain.Logistics,
-    name: "Portos Fluviais",
-    required: ["trade_charters", "road_network"],
-    cost: 180,
-    effects: {
-      "economy.goldStock": 50,
-      "economy.foodStock": 30,
-      "stability": 0.35
-    }
-  },
-  {
-    id: "stone_quarries",
+    id: "sedentism",
     domain: TechnologyDomain.Engineering,
-    name: "Pedreiras de Cantaria",
-    required: ["crop_rotation"],
-    cost: 140,
-    effects: {
-      "economy.woodStock": 15,
-      "administration.capacity": 4,
-      "stability": 0.25
-    }
+    name: "Sedentarismo (Quebra de Paradigma)",
+    description: "O abandono definitivo da vida estritamente nômade. Permite a construção de assentamentos, multiplicando o teto populacional da terra.",
+    required: ["fire_mastery", "bone_tools"],
+    cost: 250,
+    effects: [
+      { target: "population.carrying_capacity_multiplier", value: 2.0, type: "multiplier" }
+    ]
   },
   {
-    id: "fortified_citadels",
-    domain: TechnologyDomain.Engineering,
-    name: "Cidadelas Fortificadas",
-    required: ["stone_quarries", "steel_forging"],
-    cost: 200,
-    effects: {
-      "military.techLevel": 0.2,
-      "stability": 1,
-      "economy.goldStock": -25
-    }
-  },
-  {
-    id: "hydraulic_irrigation",
-    domain: TechnologyDomain.Engineering,
-    name: "Irrigação Hidráulica",
-    required: ["stone_quarries"],
-    cost: 170,
-    effects: {
-      "economy.foodStock": 80,
-      "population.growthRate": 0.000015,
-      "stability": 0.2
-    }
+    id: "basic_agriculture",
+    domain: TechnologyDomain.Economy,
+    name: "Agricultura Primitiva",
+    description: "O cultivo intencional de sementes nos vales fluviais garante uma explosão de safras em relação à mera coleta.",
+    required: ["sedentism"],
+    cost: 380,
+    effects: [
+      { target: "economy.food_production_multiplier", value: 0.40, type: "multiplier" }
+    ]
   }
 ];
 

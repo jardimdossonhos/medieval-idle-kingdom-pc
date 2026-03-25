@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+﻿﻿import { describe, expect, it } from "vitest";
 import { createInitialState } from "../src/application/boot/create-initial-state";
 import { createStaticWorldData } from "../src/application/boot/static-world-data";
 import { GameSession } from "../src/application/game-session";
@@ -28,6 +28,18 @@ class InMemoryGameStateRepository implements GameStateRepository {
   }
 
   async clearCurrent(): Promise<void> {
+    this.state = null;
+  }
+
+  saveCurrentSync(state: GameState): void {
+    this.state = structuredClone(state);
+  }
+
+  loadCurrentSync(): GameState | null {
+    return this.state ? structuredClone(this.state) : null;
+  }
+
+  clearCurrentSync(): void {
     this.state = null;
   }
 }
