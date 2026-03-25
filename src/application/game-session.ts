@@ -46,7 +46,7 @@ type StateListener = (state: GameState) => void;
 export type DiplomaticActionType = "alliance" | "non_aggression" | "peace" | "tribute" | "embargo" | "war";
 export type ReligiousActionType = "send_missionaries";
 
-export type RegionActionType = "invest_agriculture" | "invest_infrastructure" | "garrison" | "pacify" | "change_capital";
+export type RegionActionType = "invest_agriculture" | "invest_infrastructure" | "garrison" | "pacify" | "change_capital" | "colonize";
 
 export interface PlayerActionResult {
   ok: boolean;
@@ -550,8 +550,18 @@ export class GameSession {
       return { ok: false, message: "Região inválida." };
     }
 
-    if (region.ownerId !== player.id) {
+    if (actionType !== "colonize" && region.ownerId !== player.id) {
       return { ok: false, message: "Você só pode administrar regiões próprias." };
+    }
+
+    if (actionType === "colonize") {
+      if (region.ownerId !== "k_nature") {
+        return { ok: false, message: "Você só pode colonizar terras selvagens." };
+      }
+      const isAdjacent = regionDef.neighbors.some(nid => state.world.regions[nid]?.ownerId === player.id);
+      if (!isAdjacent) {
+        return { ok: false, message: "A região precisa fazer fronteira com o seu império." };
+      }
     }
 
     if (actionType === "change_capital" && player.capitalRegionId === regionId) {
@@ -600,6 +610,23 @@ export class GameSession {
       case "change_capital":
         player.capitalRegionId = regionId;
         region.unrest = 0; // Uma nova sede do governo sempre inicia pacificada
+        break;
+      case "colonize":
+        region.ownerId = player.id;
+        region.controllerId = player.id;
+        region.dominantFaith = player.religion.stateFaith;
+        region.unrest = 0;
+        region.devastation = 0;
+        // Envia o transbordo populacional para o Worker via EventBus
+        this.deps.eventBus.publish({
+          type: "population.migration",
+          payload: {
+            sourceId: player.capitalRegionId,
+            targetId: regionId,
+            amount: 50,
+            kingdomId: player.id
+          }
+        } as any);
         break;
     }
 
@@ -937,7 +964,7 @@ export class GameSession {
     state.events = [entry, ...state.events].slice(0, 180);
   }
 
-  private getDiplomaticConfig(
+  public getDiplomaticConfig(
     state: GameState,
     playerId: string,
     targetId: string,
@@ -1126,6 +1153,15 @@ export class GameSession {
             [ResourceType.Legitimacy]: 10
           }
         };
+      case "colonize":
+        return {
+          label: "Fundar Colônia",
+          cooldownMs: 15_000,
+          cost: {
+            [ResourceType.Gold]: 20,
+            [ResourceType.Food]: 50
+          }
+        };
     }
   }
 
@@ -1250,7 +1286,7 @@ export class GameSession {
     };
   }
 
-  private getReligiousActionConfig(
+  public getReligiousActionConfig(
     actorKingdomId: string,
     targetKingdomId: string,
     _actionType: ReligiousActionType

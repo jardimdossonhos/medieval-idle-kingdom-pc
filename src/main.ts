@@ -1434,6 +1434,7 @@ async function bootstrapApp(): Promise<void> {
       return;
     }
 
+    const player = getPlayerKingdom(state);
     const owner = state.kingdoms[region.ownerId];
     const isPlayer = owner?.isPlayer;
     const ownerName = owner ? `${owner.name}${isPlayer ? " (Você)" : ""}` : "-";
@@ -1497,8 +1498,49 @@ async function bootstrapApp(): Promise<void> {
         });
         ui.regionActions.appendChild(button);
       }
+    } else if (region.ownerId === "k_nature") {
+      const isAdjacent = regionDef.neighbors.some(nid => state.world.regions[nid]?.ownerId === player.id);
+      
+      const config = session.getRegionActionConfig("colonize");
+      const costStrings = Object.entries(config.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+
+      const button = document.createElement("button");
+      button.className = "primary";
+      button.innerHTML = `<span>${config.label}</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${costStrings.join(", ")} | -50 População da Capital</small>`;
+      
+      if (!isAdjacent) {
+        button.disabled = true;
+        button.innerHTML += `<small style="display:block; font-size:0.75em; color:#ff5555; margin-top:2px;">Requer fronteira vizinha</small>`;
+      }
+
+      button.addEventListener("click", () => {
+        const result = session.executeRegionAction(selectedRegionId ?? "", "colonize");
+        showToast(result.message);
+      });
+      ui.regionActions.appendChild(button);
     } else {
-      ui.regionActions.innerHTML = "<p class='hint-text'>Esta região não pertence ao seu império. Ações bloqueadas.</p>";
+      const targetId = region.ownerId;
+      
+      const warConfig = session.getDiplomaticConfig(state, player.id, targetId, "war");
+      const warCostStrings = Object.entries(warConfig.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+      const warBtn = document.createElement("button");
+      warBtn.className = "danger";
+      warBtn.innerHTML = `<span>Declarar Guerra</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${warCostStrings.join(", ")}</small><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Chance de Sucesso na Corte: ${formatNumber(warConfig.chance * 100)}%</small>`;
+      warBtn.addEventListener("click", () => {
+        const result = session.executeDiplomaticAction(targetId, "war");
+        showToast(result.message);
+      });
+      ui.regionActions.appendChild(warBtn);
+
+      const relConfig = session.getReligiousActionConfig(player.id, targetId, "send_missionaries");
+      const relCostStrings = Object.entries(relConfig.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+      const relBtn = document.createElement("button");
+      relBtn.innerHTML = `<span>Enviar Missionários</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${relCostStrings.join(", ")}</small><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Chance de Sucesso: ${formatNumber(relConfig.chance * 100)}%</small>`;
+      relBtn.addEventListener("click", () => {
+        const result = session.executeReligiousAction(targetId, "send_missionaries");
+        showToast(result.message);
+      });
+      ui.regionActions.appendChild(relBtn);
     }
   }
 

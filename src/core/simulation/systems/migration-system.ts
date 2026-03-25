@@ -1,3 +1,4 @@
+import { AutomationLevel } from "../../models/enums";
 import type { StaticWorldData } from "../../models/static-world-data";
 import type { SimulationSystem, TickContext } from "../tick-pipeline";
 import { WORLD_DEFINITIONS_V1 } from "../../../application/boot/generated/world-definitions-v1";
@@ -26,6 +27,11 @@ export function createMigrationSystem(staticData: StaticWorldData, eventBus: { p
 
         // Apenas tribos assentadas (Não-Selvagens) expandem
         if (!region || region.ownerId === "k_nature") continue;
+
+        const kingdom = state.kingdoms[region.ownerId];
+        if (kingdom && kingdom.administration.automation.expansion === AutomationLevel.Manual) {
+          continue; // Expansão orgânica retida por política governamental
+        }
 
         const currentPop = state.ecs?.populationTotal?.[i] || 0;
 
