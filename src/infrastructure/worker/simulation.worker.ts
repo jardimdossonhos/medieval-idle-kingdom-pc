@@ -234,6 +234,8 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
       if (!targetArray) {
         DiagnosticWorker.warn("WRK-ERR", `APPLY_ECS_EFFECTS ignorado: alvo '${target}' não encontrado na arquitetura.`);
         return;
+      } else {
+        DiagnosticWorker.trace("WRK-ECS", `APPLY_ECS_EFFECTS: { op: ${operation}, target: ${target}, val: ${value}, indices: ${indices.length} }`);
       }
 
       if (operation === "subtract_empire_total") {

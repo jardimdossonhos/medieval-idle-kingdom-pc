@@ -37,6 +37,10 @@ export class TickPipeline {
 
   run(previousState: GameState, deltaMs: number, now: number): TickResult {
     const nextState = cloneGameStateForSimulation(previousState);
+    
+    // Bypass de Corrupção: Restaura o ponteiro real do Float64Array destruído pelo clone
+    nextState.ecs = previousState.ecs;
+
     const events = this.runInPlace(nextState, deltaMs, now, 1);
 
     return {
@@ -58,6 +62,10 @@ export class TickPipeline {
     const maxCollectedEvents = Math.max(1, options.maxCollectedEvents ?? 120);
     const coarseStepTicks = Math.max(1, Math.trunc(options.coarseStepTicks ?? 1));
     const nextState = cloneGameStateForSimulation(previousState);
+    
+    // Bypass de Corrupção: Restaura o ponteiro real do Float64Array destruído pelo clone
+    nextState.ecs = previousState.ecs;
+    
     const collectedEvents: DomainEvent[] = [];
     let processedTicks = 0;
 

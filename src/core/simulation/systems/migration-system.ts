@@ -1,4 +1,5 @@
 import { AutomationLevel } from "../../models/enums";
+import { Diagnostic } from "../../../application/diagnostics";
 import type { StaticWorldData } from "../../models/static-world-data";
 import type { SimulationSystem, TickContext } from "../tick-pipeline";
 import { WORLD_DEFINITIONS_V1 } from "../../../application/boot/generated/world-definitions-v1";
@@ -30,20 +31,29 @@ export function createMigrationSystem(staticData: StaticWorldData, eventBus: { p
 
         const kingdom = state.kingdoms[region.ownerId];
         if (kingdom && kingdom.administration.automation.expansion === AutomationLevel.Manual) {
+          if (kingdom.isPlayer) Diagnostic.trace("MIG-SYS-PLAYER", `Expansão pulada para ${regionId}: Política Manual Ativa.`);
           continue; // Expansão orgânica retida por política governamental
         }
 
         const currentPop = state.ecs?.populationTotal?.[i] || 0;
 
         // Atingiu o Teto de Suporte (Carrying Capacity) local
-        if (currentPop >= MIGRATION_THRESHOLD) {
+        if (currentPop < MIGRATION_THRESHOLD) {
+          if (kingdom.isPlayer) Diagnostic.trace("MIG-SYS-PLAYER", `Expansão pulada para ${regionId}: População ${Math.floor(currentPop)} < ${MIGRATION_THRESHOLD}.`);
+          continue;
+        }
+
           const validNeighbors = def.neighbors.filter((nid) => {
             const nRegion = state.world.regions[nid];
             const nDef = staticData.definitions[nid];
             return nRegion && nRegion.ownerId === "k_nature" && nDef && !nDef.isWater;
           });
 
-          if (validNeighbors.length > 0) {
+          if (validNeighbors.length === 0) {
+            if (kingdom.isPlayer) Diagnostic.trace("MIG-SYS-PLAYER", `Expansão pulada para ${regionId}: Sem vizinhos selvagens disponíveis (Fronteira Fechada).`);
+            continue;
+          }
+
             // Escolhe aleatoriamente uma direção desabitada
             const targetId = validNeighbors[Math.floor(Math.random() * validNeighbors.length)];
             
@@ -57,8 +67,6 @@ export function createMigrationSystem(staticData: StaticWorldData, eventBus: { p
 
             // 2. Empacota a Intenção Física para a fila
             migrations.push({ sourceId: regionId, targetId, amount: MIGRATION_AMOUNT, kingdomId: region.ownerId });
-          }
-        }
       }
 
       // Dispara as emissões em lote para a Interface traduzir em Comandos ECS

@@ -909,3 +909,39 @@ O painel de Ações Regionais sofria de desconexão de domínio (exibia opções
 **2. Limpeza Medieval:** Todas as referências a "Feudalismo", "Cidadelas Fortificadas" e "Ordens Monásticas" foram extintas do jogo inicial.
 **3. A Matriz Primordial:** Criada a base da Idade da Pedra: `Domínio do Fogo`, `Ferramentas de Osso`, `Animismo`, `Grupos de Caça` e a revolucionária `Sedentarismo` (Quebra de Paradigma).
 **4. Sinergia Logística:** A tecnologia de Sedentarismo foi configurada para multiplicar a Capacidade de Suporte (`population.carrying_capacity_multiplier`), integrando-se perfeitamente à Fórmula de Verhulst aplicada no Worker, permitindo que a tribo saia da estagnação nômade para criar vilas permanentes com milhares de habitantes no futuro.
+
+---
+
+## Entrada: 60
+
+**Data:** 25/03/2024
+
+### Solução do Efeito Cascata de Compilação (GameSession)
+**O Incidente:** O `game-session.ts` gerou dezenas de erros vitais no linter (`requireState does not exist`, `persistCurrent does not exist`).
+**A Causa Raiz:** Um erro de formatação durante a atualização anterior deixou a assinatura do método `getReligiousActionConfig` duplicada com os modificadores `private` e `public` seguidos. Isso quebrou o *parser* do TypeScript, que parou de ler o arquivo na metade, gerando a ilusão de que o resto da classe havia sumido (Compiler Cascade).
+**Ação:** Remoção cirúrgica da linha de duplicação, restaurando o arquivo a 100% de estabilidade verde.
+
+---
+
+## Entrada: 61
+
+**Data:** 25/03/2024
+
+### Validação do Mundo Vivo (A Inteligência Artificial Caminha) e Pivô Estratégico
+**1. A Expansão Autônoma:** Os logs do Worker rodando a 10x de velocidade confirmaram múltiplos disparos de `APPLY_ECS_EFFECTS` vindos de impérios além do jogador. O sistema provou que os NPCs tribais estão controlando a própria demografia, alcançando o Teto Populacional de 150 e fundando colônias sozinhos pelo mapa.
+**2. Pivô do Simulador Histórico:** Formalizada no `ARCHITECTURE.md` a transição de design para um "Simulador Histórico Sistêmico". O jogo abandona totalmente a possibilidade de roteiros fixos (Scripts por ano). Em substituição, ele agora adotará as diretrizes de **Inércia Histórica**, **Vetores Probabilísticos** e o **Fog of Truth (Desinformação Visual)** para guiar as eras.
+
+---
+
+## Entrada: 62
+
+**Data:** 25/03/2024
+
+### Correções no Fog of Truth e Planejamento da UI de Inteligência
+**1. Consertos na Interface (Fog of Truth):** A ofuscação de dados para impérios distantes estava vazando as informações de Fé Dominante e Minoria Religiosa. Isso foi corrigido na camada de Apresentação, mantendo a imersão de mistério intacta.
+**2. Modo Deus (Toggle Fog):** Adicionado o comando `toggle_fog` no console de desenvolvedor para permitir ao criador desativar temporariamente a Névoa da Verdade e auditar a simulação inteira em tempo real sem obstáculos visuais.
+**3. Pivô da UX (Abas Analíticas):** O design da Interface foi expandido e documentado na Arquitetura. As abas deixarão de ser menus estáticos e se tornarão "Centros Analíticos" (Inteligência Global, Fluxos Mundiais, Linha do Tempo), traduzindo números frios em relatórios de causa e efeito para o jogador.
+**4. Roteiro Imediato Estabelecido:** Foi definido um caminho estratégico em 3 estágios antes da expansão da UI:
+   * Passo 1: Motor Militar ECS (Cálculo de *Manpower* nativo no Worker).
+   * Passo 2: Atrito de Fronteira e Inércia (Fome orgânica e Revolta por superpopulação).
+   * Passo 3: Construção dos Painéis Avançados de Inteligência da UI alimentados pelos novos dados.

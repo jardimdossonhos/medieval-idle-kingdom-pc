@@ -1,4 +1,5 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
+import { Diagnostic } from "./diagnostics";
 import type {
   CommandLogRepository,
   GameStateRepository,
@@ -236,6 +237,17 @@ export class GameSession {
     this.emitState();
   }
 
+  setExpansionAutomation(level: AutomationLevel): void {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    player.administration.automation.expansion = level;
+
+    this.appendActionLog("Automação de expansão atualizada", `Nível definido para ${level}.`, "info");
+    this.recordPlayerCommand("expansion.automation", { level });
+    this.persistCurrent();
+    this.emitState();
+  }
+
   updateTaxPolicy(patch: Partial<TaxPolicy>): void {
     const state = this.requireState();
     const player = this.getPlayerKingdom(state);
@@ -424,6 +436,7 @@ export class GameSession {
   }
 
   executeDiplomaticAction(targetKingdomId: string, actionType: DiplomaticActionType): PlayerActionResult {
+    Diagnostic.trace("CMD-DIPLO", `Intenção de Ação Diplomática: ${actionType} contra ${targetKingdomId}`);
     let state = this.requireState();
     const now = this.deps.clock.now();
     const player = this.getPlayerKingdom(state);
@@ -540,6 +553,7 @@ export class GameSession {
   }
 
   executeRegionAction(regionId: string, actionType: RegionActionType): PlayerActionResult {
+    Diagnostic.trace("CMD-REGION", `Intenção de Ação Regional: ${actionType} em ${regionId}`);
     const state = this.requireState();
     const now = this.deps.clock.now();
     const player = this.getPlayerKingdom(state);

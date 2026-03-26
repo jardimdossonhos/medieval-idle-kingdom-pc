@@ -28,6 +28,13 @@ Para manter a estabilidade da base de código e evitar "remendos" que escalonam 
 *   **Verificação Obrigatória:** Nenhuma linha de código deve ser escrita (ou refatorada) com base em suposições ou convenções genéricas de mercado se o arquivo de contrato original (interface, classe base ou hook) não tiver sido lido previamente.
 *   **Solicitação Ativa (Fail-Fast):** Se uma dependência cruzada, interface ou lógica de terceiros não estiver disponível no contexto de desenvolvimento imediato, a execução da tarefa deve ser **pausada e paralisada imediatamente**. O desenvolvedor ou assistente deve solicitar acesso explícito aos arquivos ausentes antes de sugerir qualquer alteração de código. Tentativas de "adivinhação" (guessing) de APIs violam este princípio e inserem débito técnico inaceitável.
 
+### 1.3 Filosofia de Game Design: Simulador Histórico Sistêmico
+
+O jogo rejeita o formato de "roteiro fixo" (eventos atrelados a datas exatas do mundo real) e adota um modelo de **História Probabilística guiada por forças estruturais**.
+*   **Sem Roteiros, Apenas Vetores:** O surgimento de eras, guerras mundiais ou revoluções (como a Industrial) não ocorre no "Ano X". Elas são engatilhadas quando as condições sistêmicas do motor matemático (Centralização, Tecnologia, Pressão Demográfica) são atingidas. O jogador atua como uma "força de desvio" dentro dessas tendências.
+*   **Inércia Histórica:** O mapa não é um tabuleiro passivo. Hexágonos funcionam como "Containers Históricos Vivos" possuindo atrito (Assimilação, Cultura, Religião). Mudar a natureza de uma região leva tempo e gera reação orgânica. O ECS tentará "voltar ao padrão histórico" se o jogador não mantiver o esforço.
+*   **Fog of Truth (Neblina da Verdade/Desinformação):** O jogador não deve possuir onisciência. A UI ocultará ou "borrará" dados precisos de impérios distantes ou eras antigas (ex: exibir "População Desconhecida" ou "Exército: 1k~10k" em vez de números absolutos), forçando a necessidade de tecnologias de Espionagem, Embaixadas e Exploração para revelar os cálculos exatos do Worker.
+
 ## 2. Estrutura de Diretórios
 
 A organização do projeto reflete os princípios da Arquitetura Limpa.

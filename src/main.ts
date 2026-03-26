@@ -1,5 +1,6 @@
 import "./styles/global.css";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { Diagnostic } from "./application/diagnostics";
 import { createInitialState } from "./application/boot/create-initial-state";
 import { createStaticWorldData } from "./application/boot/static-world-data";
 import { WORLD_DEFINITIONS_V1 } from "./application/boot/generated/world-definitions-v1";
@@ -25,24 +26,6 @@ import { BrowserClockService } from "./infrastructure/runtime/browser-clock-serv
 import { LocalEventBus } from "./infrastructure/runtime/local-event-bus";
 import { LocalWarResolver } from "./infrastructure/war/local-war-resolver";
 import { calculateTechnologyBonuses } from "./core/models/technology-effects-service";
-
-// ============================================================================
-// SISTEMA DE DIAGNÓSTICO ESTRITO (TELEMETRIA F12)
-// ============================================================================
-export const Diagnostic = {
-  trace: (code: string, message: string, data?: any) => {
-    console.log(`%c[${code}]%c ${message}`, "color: #bada55; background: #222; padding: 2px 4px; border-radius: 3px; font-weight: bold;", "color: inherit;", data !== undefined ? data : "");
-  },
-  system: (code: string, message: string, data?: any) => {
-    console.log(`%c[${code}]%c ${message}`, "color: #00e5ff; background: #002233; padding: 2px 4px; border-radius: 3px; font-weight: bold;", "color: inherit;", data !== undefined ? data : "");
-  },
-  warn: (code: string, message: string, data?: any) => {
-    console.warn(`[${code}] ${message}`, data !== undefined ? data : "");
-  },
-  error: (code: string, message: string, data?: any) => {
-    console.error(`[${code}] ${message}`, data !== undefined ? data : "");
-  }
-};
 
 interface UiRefs {
   playerValue: HTMLElement;
@@ -72,6 +55,7 @@ interface UiRefs {
   governmentApplyButton: HTMLButtonElement;
   budgetInputs: Record<string, HTMLInputElement>;
   taxInputs: Record<string, HTMLInputElement>;
+  expansionAutomationSelect: HTMLSelectElement;
   techFocusSelect: HTMLSelectElement;
   techAutomationSelect: HTMLSelectElement;
   techHideCompletedToggle: HTMLInputElement;
@@ -487,6 +471,15 @@ async function bootstrapApp(): Promise<void> {
             <label>Administração <input id="budget-administration" type="number" min="0" max="100" step="1"></label>
             <label>Tecnologia <input id="budget-technology" type="number" min="0" max="100" step="1"></label>
           </div>
+          <h3>Automação do Império</h3>
+          <div class="form-grid">
+            <label>Expansão e Migração
+              <select id="expansion-automation-select">
+                <option value="manual">Manual (Requer controle)</option>
+                <option value="assisted">Automática (Transbordo Livre)</option>
+              </select>
+            </label>
+          </div>
           <button id="government-apply-btn">Aplicar políticas</button>
         </article>
 
@@ -629,6 +622,7 @@ async function bootstrapApp(): Promise<void> {
       clergyExemption: queryElement(appRoot, "#tax-clergy"),
       tariffRate: queryElement(appRoot, "#tax-tariff")
     },
+    expansionAutomationSelect: queryElement(appRoot, "#expansion-automation-select"),
     techFocusSelect: queryElement(appRoot, "#tech-focus-select"),
     techAutomationSelect: queryElement(appRoot, "#tech-automation-select"),
     techHideCompletedToggle: queryElement(appRoot, "#tech-hide-completed-toggle"),
@@ -664,8 +658,13 @@ async function bootstrapApp(): Promise<void> {
   // Interceptador O(1) de Tráfego de Saída (Main -> Worker)
   const originalWorkerPost = simulationWorker.postMessage.bind(simulationWorker);
   simulationWorker.postMessage = (msg: any) => {
-    if (msg.type !== "SET_TIME_SCALE" && msg.type !== "START" && msg.type !== "STOP" && msg.type !== "UPDATE_MODIFIERS") {
-      Diagnostic.trace("WRK-TX", `Ordem enviada ao Motor Físico: ${msg.type}`, msg.type === "RESTORE_ECS_STATE" ? "[Matrizes ECS Omitidas por Performance]" : msg.payload);
+    // Filtra comandos de alta frequência para não poluir o console
+    if (msg.type !== "SET_TIME_SCALE" && msg.type !== "START" && msg.type !== "STOP") {
+      // Oculta payloads gigantescos para manter a legibilidade
+      const isHeavyPayload = msg.type === "RESTORE_ECS_STATE" || msg.type === "UPDATE_MODIFIERS";
+      const payloadForLog = isHeavyPayload ? "[Matrizes Omitidas por Performance]" : msg.payload;
+
+      Diagnostic.trace("WRK-TX", `Ordem enviada ao Motor Físico: ${msg.type}`, payloadForLog);
     }
     originalWorkerPost(msg);
   };
@@ -809,6 +808,7 @@ async function bootstrapApp(): Promise<void> {
   let isGovernmentFormDirty = false;
   let hideCompletedTechnologies = true;
   let ignoreWorkerTicksUntil = 0;
+  let isFogOfTruthDisabled = false; // Controle do Modo Deus
   let currentWorkerSpeed = 1;
   let currentWorkerPaused = false;
   
@@ -1122,6 +1122,8 @@ async function bootstrapApp(): Promise<void> {
   // Escuta as Ordens Sociais (Migração Orgânica) e converte em mutações de Worker
   eventBus.subscribe("population.migration", (event: any) => {
     const state = session.getState();
+    Diagnostic.system("MIG-SYS", "Evento de Migração Orgânica recebido.", event.payload);
+
     if (!state) return;
     const { sourceId, targetId, amount, kingdomId } = event.payload;
     const sourceIdx = REGION_INDEX_MAP.get(sourceId);
@@ -1437,12 +1439,8 @@ async function bootstrapApp(): Promise<void> {
     const player = getPlayerKingdom(state);
     const owner = state.kingdoms[region.ownerId];
     const isPlayer = owner?.isPlayer;
+    const isAdjacent = regionDef.neighbors.some(nid => state.world.regions[nid]?.ownerId === player.id);
     const ownerName = owner ? `${owner.name}${isPlayer ? " (Você)" : ""}` : "-";
-    const dominantFaith = staticWorldData.religions[region.dominantFaith];
-    const minorityFaith = region.minorityFaith ? staticWorldData.religions[region.minorityFaith] : null;
-    const minorityText = region.minorityFaith && typeof region.minorityShare === "number"
-      ? `${minorityFaith?.name ?? region.minorityFaith} (${formatNumber(region.minorityShare * 100)}%)`
-      : "Sem minoria relevante";
 
     // Tradução e mapeamento de dados do Bioma
     const biomeLabels: Record<string, string> = { ocean: "Oceano", desert: "Deserto", tundra: "Tundra", temperate: "Temperado", tropical: "Tropical" };
@@ -1456,19 +1454,64 @@ async function bootstrapApp(): Promise<void> {
       ? currentSimulationState.populationTotalData[regionIndex] 
       : 0;
 
+    // Aplicação da Desinformação Visual (Fog of Truth)
+    let popText = "";
+    let faithUnrestText = "";
+    let unrestText = "";
+    let autonomyText = "";
+    let assimilationText = "";
+    let devText = "";    
+    let dominantFaithText = "";
+    let minorityFaithText = "";
+
+    if (isPlayer || isFogOfTruthDisabled) {
+      popText = `${formatNumber(currentPop)} / ${formatNumber(baseCapacity)} (Máx. Natural)`;
+      faithUnrestText = `${formatNumber(region.faithUnrest * 100)}%`;
+      unrestText = `${formatNumber(region.unrest * 100)}%`;
+      autonomyText = `${formatNumber(region.autonomy * 100)}%`;
+      assimilationText = `${formatNumber(region.assimilation * 100)}%`;
+      devText = `${formatNumber(region.devastation * 100)}%`;
+      const dominantFaith = staticWorldData.religions[region.dominantFaith];
+      dominantFaithText = `${dominantFaith?.name ?? region.dominantFaith} (${formatNumber(region.dominantShare * 100)}%)`;
+      const minorityFaith = region.minorityFaith ? staticWorldData.religions[region.minorityFaith] : null;
+      minorityFaithText = region.minorityFaith && typeof region.minorityShare === "number"
+        ? `${minorityFaith?.name ?? region.minorityFaith} (${formatNumber(region.minorityShare * 100)}%)`
+        : "Nenhuma";
+    } else if (isAdjacent) {
+      const popEst = Math.max(0, Math.round(currentPop / 10) * 10);
+      popText = `~${formatNumber(popEst)} (Estimativa de Fronteira)`;
+      faithUnrestText = region.faithUnrest > 0.5 ? "Alta" : region.faithUnrest > 0.2 ? "Média" : "Baixa";
+      unrestText = region.unrest > 0.5 ? "Alta" : region.unrest > 0.2 ? "Média" : "Baixa";
+      autonomyText = region.autonomy > 0.5 ? "Alta" : region.autonomy > 0.2 ? "Média" : "Baixa";
+      assimilationText = region.assimilation > 0.5 ? "Alta" : region.assimilation > 0.2 ? "Média" : "Baixa";
+      devText = region.devastation > 0.5 ? "Severa" : region.devastation > 0.2 ? "Moderada" : "Mínima";
+      const dominantFaith = staticWorldData.religions[region.dominantFaith];
+      dominantFaithText = `${dominantFaith?.name ?? "Desconhecida"} (Maioria)`;
+      minorityFaithText = "Presente";
+    } else {
+      popText = "Desconhecida (Névoa)";
+      faithUnrestText = "Desconhecida";
+      unrestText = "Desconhecida";
+      autonomyText = "Desconhecida";
+      assimilationText = "Desconhecida";
+      devText = "Desconhecida";
+      dominantFaithText = "Desconhecida";
+      minorityFaithText = "Desconhecida";
+    }
+
     ui.regionInfo.innerHTML = `
       <div class="summary-grid">
         <span>Nome</span><strong>${regionDef.name}</strong>
         <span>Dono</span><strong>${ownerName}</strong>
         <span>Bioma</span><strong>${regionBiomeLabel}</strong>
-        <span>População</span><strong>${formatNumber(currentPop)} / ${formatNumber(baseCapacity)} (Máx. Natural)</strong>
-        <span>Fé dominante</span><strong>${dominantFaith?.name ?? region.dominantFaith} (${formatNumber(region.dominantShare * 100)}%)</strong>
-        <span>Minoria religiosa</span><strong>${minorityText}</strong>
-        <span>Tensão de fé</span><strong>${formatNumber(region.faithUnrest * 100)}%</strong>
-        <span>Instabilidade</span><strong>${formatNumber(region.unrest * 100)}%</strong>
-        <span>Autonomia</span><strong>${formatNumber(region.autonomy * 100)}%</strong>
-        <span>Assimilação</span><strong>${formatNumber(region.assimilation * 100)}%</strong>
-        <span>Devastação</span><strong>${formatNumber(region.devastation * 100)}%</strong>
+        <span>População</span><strong>${popText}</strong>
+        <span>Fé dominante</span><strong>${dominantFaithText}</strong>
+        <span>Minoria religiosa</span><strong>${minorityFaithText}</strong>
+        <span>Tensão de fé</span><strong>${faithUnrestText}</strong>
+        <span>Instabilidade</span><strong>${unrestText}</strong>
+        <span>Autonomia</span><strong>${autonomyText}</strong>
+        <span>Assimilação</span><strong>${assimilationText}</strong>
+        <span>Devastação</span><strong>${devText}</strong>
       </div>
     `;
 
@@ -1499,8 +1542,6 @@ async function bootstrapApp(): Promise<void> {
         ui.regionActions.appendChild(button);
       }
     } else if (region.ownerId === "k_nature") {
-      const isAdjacent = regionDef.neighbors.some(nid => state.world.regions[nid]?.ownerId === player.id);
-      
       const config = session.getRegionActionConfig("colonize");
       const costStrings = Object.entries(config.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
 
@@ -1561,6 +1602,7 @@ async function bootstrapApp(): Promise<void> {
     ui.budgetInputs.religion.value = String(round(player.economy.budgetPriority.religion));
     ui.budgetInputs.administration.value = String(round(player.economy.budgetPriority.administration));
     ui.budgetInputs.technology.value = String(round(player.economy.budgetPriority.technology));
+    ui.expansionAutomationSelect.value = player.administration.automation.expansion;
   }
 
   function renderTechnologyTree(choices: TechnologyChoice[]): void {
@@ -2208,6 +2250,12 @@ async function bootstrapApp(): Promise<void> {
     showToast("Políticas de governo aplicadas.");
   });
 
+  ui.expansionAutomationSelect.addEventListener("change", () => {
+    const level = ui.expansionAutomationSelect.value as AutomationLevel;
+    session.setExpansionAutomation(level);
+    showToast(`Automação de Expansão: ${automationLevelLabel(level)}.`);
+  });
+
   // Botões de Religião (Poderes Divinos Diretos)
   const btnBlessCrops = appRoot!.querySelector("#btn-bless-crops");
   if (btnBlessCrops) {
@@ -2321,6 +2369,11 @@ async function bootstrapApp(): Promise<void> {
           payload: { target: "food", operation: "set", value: 0, indices: playerRegionIndices }
         });
         showToast("Modo Deus: APOCALIPSE. Recursos zerados.");
+        break;
+      case "toggle_fog":
+        isFogOfTruthDisabled = !isFogOfTruthDisabled;
+        renderRegionInfo(state);
+        showToast(`Modo Deus: Fog of Truth ${isFogOfTruthDisabled ? "DESATIVADO" : "ATIVADO"}.`);
         break;
       case "unlock_tech":
         showToast("Modo Deus: Desbloqueio requer rotina na GameSession. Em breve.");
