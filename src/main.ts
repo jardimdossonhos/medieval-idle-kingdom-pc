@@ -686,6 +686,7 @@ async function bootstrapApp(): Promise<void> {
         legitimacyData?: Float64Array;
         populationTotalData?: Float64Array;
         populationGrowthRateData?: Float64Array;
+        manpowerData?: Float64Array;
       };
     };
     if (data?.type === "TICK" || data?.type === "INITIAL_STATE") {
@@ -714,6 +715,9 @@ async function bootstrapApp(): Promise<void> {
       if (payload?.populationGrowthRateData instanceof Float64Array) {
         currentSimulationState.populationGrowthRateData = payload.populationGrowthRateData;
       }
+      if (payload?.manpowerData instanceof Float64Array) {
+        currentSimulationState.manpowerData = payload.manpowerData;
+      }
 
       // Atualiza o GameState na sessão com os dados mais recentes do worker.
       // Isso é crucial para que as decisões lógicas (como canAfford) usem dados frescos.
@@ -726,7 +730,8 @@ async function bootstrapApp(): Promise<void> {
           faith: payload.faithData ?? new Float64Array(),
           legitimacy: payload.legitimacyData ?? new Float64Array(),
           populationTotal: payload.populationTotalData ?? new Float64Array(),
-          populationGrowthRate: payload.populationGrowthRateData ?? new Float64Array()
+          populationGrowthRate: payload.populationGrowthRateData ?? new Float64Array(),
+          manpower: payload.manpowerData ?? new Float64Array()
         });
       }
 
@@ -853,6 +858,7 @@ async function bootstrapApp(): Promise<void> {
     legitimacyData: Float64Array;
     populationTotalData: Float64Array;
     populationGrowthRateData: Float64Array;
+    manpowerData: Float64Array;
   } = {
     goldData: new Float64Array(0),
     foodData: new Float64Array(0),
@@ -861,7 +867,8 @@ async function bootstrapApp(): Promise<void> {
     faithData: new Float64Array(0),
     legitimacyData: new Float64Array(0),
     populationTotalData: new Float64Array(0),
-    populationGrowthRateData: new Float64Array(0)
+    populationGrowthRateData: new Float64Array(0),
+    manpowerData: new Float64Array(0)
   };
   let resourcesInitialized = false;
 
@@ -964,7 +971,8 @@ async function bootstrapApp(): Promise<void> {
         faith: Array.from(new Float64Array(len).fill(50)) as any,
         legitimacy: Array.from(new Float64Array(len).fill(50)) as any,
         populationTotal: Array.from(new Float64Array(len).fill(5000)) as any,
-        populationGrowthRate: Array.from(new Float64Array(len).fill(0.00015)) as any
+        populationGrowthRate: Array.from(new Float64Array(len).fill(0.00015)) as any,
+        manpower: Array.from(new Float64Array(len).fill(0)) as any
       };
     } else {
       // Vacina: Se o save veio com População morta (artefato de testes antigos), revive o mundo
@@ -1033,6 +1041,7 @@ async function bootstrapApp(): Promise<void> {
         legitimacy: toFloat(state.ecs.legitimacy),
         populationTotal: toFloat(state.ecs.populationTotal),
         populationGrowthRate: toFloat(state.ecs.populationGrowthRate),
+        manpower: toFloat(state.ecs.manpower),
         
         // Duplicado com sufixo Data para garantir compatibilidade com diferentes versões do Worker
         goldData: toFloat(state.ecs.gold),
@@ -1043,6 +1052,7 @@ async function bootstrapApp(): Promise<void> {
         legitimacyData: toFloat(state.ecs.legitimacy),
         populationTotalData: toFloat(state.ecs.populationTotal),
         populationGrowthRateData: toFloat(state.ecs.populationGrowthRate),
+        manpowerData: toFloat(state.ecs.manpower),
       };
 
       simulationWorker.postMessage({ type: "RESTORE_ECS_STATE", payload });
@@ -1059,6 +1069,7 @@ async function bootstrapApp(): Promise<void> {
       currentSimulationState.legitimacyData = payload.legitimacy;
       currentSimulationState.populationTotalData = payload.populationTotal;
       currentSimulationState.populationGrowthRateData = payload.populationGrowthRate;
+      currentSimulationState.manpowerData = payload.manpower;
       
       playerFaithCache = getPlayerTotalResource(state, ResourceType.Faith);
 

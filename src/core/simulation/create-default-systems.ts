@@ -1,4 +1,4 @@
-﻿import type { DiplomacyResolver, INpcDecisionService, WarResolver } from "../contracts/services";
+﻿﻿import type { DiplomacyResolver, INpcDecisionService, WarResolver } from "../contracts/services";
 import type { StaticWorldData } from "../models/static-world-data";
 import type { SimulationSystem } from "./tick-pipeline";
 import { createAdministrationSystem } from "./systems/administration-system";
@@ -7,6 +7,7 @@ import { createDiplomacySystem } from "./systems/diplomacy-system";
 import { createMigrationSystem } from "./systems/migration-system";
 import { createEconomySystem } from "./systems/economy-system";
 import { createEventLogSystem } from "./systems/event-log-system";
+import { createMilitarySystem } from "./systems/military-system"; // Bypass: Força o recálculo do cache TypeScript
 import { createNpcDecisionSystem } from "./systems/npc-decision-system";
 import { createPopulationSystem } from "./systems/population-system";
 import { createReligionSystem } from "./systems/religion-system";
@@ -29,6 +30,7 @@ export function createDefaultSimulationSystems(services: SimulationServices): Si
     createAutomationSystem(),
     createEconomySystem(),
     createPopulationSystem(),
+    createMilitarySystem(),
     createReligionSystem(),
     createAdministrationSystem(),
     createTechnologySystem(),

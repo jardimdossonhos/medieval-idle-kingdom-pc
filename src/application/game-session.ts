@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
 import { Diagnostic } from "./diagnostics";
 import type {
   CommandLogRepository,
@@ -192,6 +192,7 @@ export class GameSession {
         legitimacy: Array.from(this.currentState.ecs?.legitimacy || []),
         populationTotal: Array.from(this.currentState.ecs?.populationTotal || []),
         populationGrowthRate: Array.from(this.currentState.ecs?.populationGrowthRate || []),
+        manpower: Array.from(this.currentState.ecs?.manpower || []),
       } as any;
     }
 
@@ -1276,6 +1277,7 @@ export class GameSession {
         legitimacy: Array.from(state.ecs?.legitimacy || []),
         populationTotal: Array.from(state.ecs?.populationTotal || []),
         populationGrowthRate: Array.from(state.ecs?.populationGrowthRate || []),
+        manpower: Array.from(state.ecs?.manpower || []),
       } as any;
     }
 

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import type { AdministrationState } from "./administration";
+﻿﻿﻿﻿﻿﻿import type { AdministrationState } from "./administration";
 import type { DiplomacyState } from "./diplomacy";
 import type { EconomyState } from "./economy";
 import type { EventLogEntry } from "./events";
@@ -20,6 +20,7 @@ export interface EcsState {
   legitimacy: number[] | Float64Array;
   populationTotal: number[] | Float64Array;
   populationGrowthRate: number[] | Float64Array;
+  manpower: number[] | Float64Array;
 }
 
 export interface KingdomState {

@@ -1,9 +1,11 @@
 import { World } from "../../core/ecs/World";
 import { EconomyComponent } from "../../core/components/EconomyComponent";
 import { PopulationComponent } from "../../core/components/PopulationComponent";
+import { MilitaryComponent } from "../../core/components/MilitaryComponent";
 import type { EcsState } from "../../core/models/game-state";
 import { EconomySystem } from "../../core/systems/EconomySystem";
 import { PopulationSystem } from "../../core/systems/PopulationSystem";
+import { MilitarySystem } from "../../core/systems/MilitarySystem";
 
 const DiagnosticWorker = {
   trace: (code: string, message: string, data?: any) => {
@@ -19,9 +21,11 @@ let intervalId: number | null = null;
 let world: World | null = null;
 let economy: EconomyComponent | null = null;
 let population: PopulationComponent | null = null;
+let military: MilitaryComponent | null = null;
 let geography: { isWater: Uint8Array; biome: Uint8Array } | null = null;
 const economySystem = new EconomySystem();
 const populationSystem = new PopulationSystem();
+const militarySystem = new MilitarySystem();
 
 const activeEntities: number[] = [];
 let activeModifiers: Record<string, Float64Array> | null = null;
@@ -49,6 +53,7 @@ interface TickMessage {
     legitimacyData: Float64Array;
     populationTotalData: Float64Array;
     populationGrowthRateData: Float64Array;
+    manpowerData: Float64Array;
   };
 }
 
@@ -60,7 +65,7 @@ function startClock(): void {
     return;
   }
 
-  if (!world || !economy || !population || activeEntities.length === 0) {
+  if (!world || !economy || !population || !military || activeEntities.length === 0) {
     // Ainda não inicializado via INIT; não inicia o relógio.
     return;
   }
@@ -76,11 +81,12 @@ function startClock(): void {
     const deltaTimeSeconds = Math.max(0, (nowMs - lastTickMs) / 1_000);
     lastTickMs = nowMs;
 
-    if (economy && population && geography) {
+    if (economy && population && military && geography) {
       if (!isPaused && speedMultiplier > 0) {
         const gameDeltaTime = deltaTimeSeconds * speedMultiplier;
         economySystem.update(gameDeltaTime, economy, population, activeEntities, activeModifiers);
         populationSystem.update(gameDeltaTime, population, activeEntities, activeModifiers, geography.biome);
+        militarySystem.update(gameDeltaTime, military, population, activeEntities, activeModifiers);
       }
 
       debugTickCount++;
@@ -99,7 +105,8 @@ function startClock(): void {
           faithData: economy.faith,
           legitimacyData: economy.legitimacy,
           populationTotalData: population.total,
-          populationGrowthRateData: population.growthRate
+          populationGrowthRateData: population.growthRate,
+          manpowerData: military.manpower
         }
       };
       self.postMessage(message);
@@ -132,6 +139,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
       world = new World();
       economy = new EconomyComponent(count > 0 ? count : 1);
       population = new PopulationComponent(count > 0 ? count : 1);
+      military = new MilitaryComponent(count > 0 ? count : 1);
       geography = {
         isWater: command.payload.isWaterData,
         biome: command.payload.biomeData
@@ -146,7 +154,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
       break;
     }
     case "EXTRACT_SAVE_STATE": {
-      if (!economy || !population) {
+      if (!economy || !population || !military) {
         return;
       }
 
@@ -158,7 +166,8 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
         faith: Array.from(economy.faith || []),
         legitimacy: Array.from(economy.legitimacy || []),
         populationTotal: Array.from(population.total),
-        populationGrowthRate: Array.from(population.growthRate)
+        populationGrowthRate: Array.from(population.growthRate),
+        manpower: Array.from(military.manpower)
       };
 
       self.postMessage({ type: "SAVE_STATE_DATA", payload: saveData });
@@ -166,7 +175,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
     }
     case "PAUSE_AND_EXTRACT_STATE": {
       stopClock();
-      if (!economy || !population) return;
+      if (!economy || !population || !military) return;
       const saveData: EcsState = {
         gold: Array.from(economy.gold),
         food: Array.from(economy.food),
@@ -175,7 +184,8 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
         faith: Array.from(economy.faith || []),
         legitimacy: Array.from(economy.legitimacy || []),
         populationTotal: Array.from(population.total),
-        populationGrowthRate: Array.from(population.growthRate)
+        populationGrowthRate: Array.from(population.growthRate),
+        manpower: Array.from(military.manpower)
       };
       self.postMessage({ type: "SAVE_STATE_DATA", payload: saveData });
       break;
@@ -185,7 +195,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
       break;
     }
     case "RESTORE_ECS_STATE": {
-      if (!economy || !population) {
+      if (!economy || !population || !military) {
         DiagnosticWorker.warn("WRK-ERR", "Comando de Restauração falhou: Arrays nulos antes do preenchimento.");
         return;
       }
@@ -205,6 +215,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
           if (economy.legitimacy && state.legitimacy) economy.legitimacy[i] = state.legitimacy[i] || 0;
           if (population.total && state.populationTotal) population.total[i] = state.populationTotal[i] || 0;
           if (population.growthRate && state.populationGrowthRate) population.growthRate[i] = state.populationGrowthRate[i] || 0;
+          if (military.manpower && state.manpower) military.manpower[i] = state.manpower[i] || 0;
           if (economy.gold[i] > 0) modifiedCount++;
         }
         DiagnosticWorker.trace("WRK-ECS", `Restauração Finalizada: ${modifiedCount} entidades validadas e populadas com sucesso.`);
@@ -215,7 +226,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
       break;
     }
     case "APPLY_ECS_EFFECTS": {
-      if (!economy || !population) return;
+      if (!economy || !population || !military) return;
       
       const { target, operation, value, indices } = command.payload;
       let targetArray: Float64Array | null = null;
@@ -229,6 +240,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
         case "faith": targetArray = economy.faith; break;
         case "legitimacy": targetArray = economy.legitimacy; break;
         case "population": targetArray = population.total; break;
+        case "manpower": targetArray = military.manpower; break;
       }
 
       if (!targetArray) {

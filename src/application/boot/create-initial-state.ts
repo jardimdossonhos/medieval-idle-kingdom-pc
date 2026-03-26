@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
+﻿﻿﻿﻿﻿﻿﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
 import {
   ArmyPosture,
   AutomationLevel,
@@ -590,7 +590,8 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
     faith: new Array(totalEntities).fill(0),
     legitimacy: new Array(totalEntities).fill(0),
     populationTotal: new Array(totalEntities).fill(0),
-    populationGrowthRate: new Array(totalEntities).fill(0)
+    populationGrowthRate: new Array(totalEntities).fill(0),
+    manpower: new Array(totalEntities).fill(0)
   };
 
   for (let i = 0; i < totalEntities; i++) {

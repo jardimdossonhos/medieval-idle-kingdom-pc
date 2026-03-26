@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import type { PopulationComponent } from "../components/PopulationComponent";
+﻿﻿﻿﻿﻿﻿import type { PopulationComponent } from "../components/PopulationComponent";
 
 // Capacidade base de suporte natural por bioma (sem tecnologia)
 // 0: Oceano, 1: Deserto, 2: Tundra, 3: Temperado, 4: Tropical
@@ -44,9 +44,15 @@ export class PopulationSystem {
       // limitFactor se aproxima de 0 conforme a população chega no limite.
       // Se a população ultrapassar o teto (por imigração), o fator fica negativo (Fome/Morte Natural).
       const limitFactor = 1 - (currentPop / carryingCapacity);
-
-      const growth = currentPop * finalGrowthRate * limitFactor * deltaTimeSeconds;
-      population.total[entityId] = Math.max(0, currentPop + growth);
+      
+      let growth = 0;
+      if (limitFactor < 0) {
+        // Fome: A população morre a uma taxa acelerada quando acima do limite.
+        growth = currentPop * (finalGrowthRate * 2.5) * limitFactor * deltaTimeSeconds;
+      } else {
+        growth = currentPop * finalGrowthRate * limitFactor * deltaTimeSeconds;
+      }
+      population.total[entityId] = Math.max(1, currentPop + growth); // Garante que a tribo não seja extinta por fome, mantendo 1 sobrevivente.
     }
   }
 }
