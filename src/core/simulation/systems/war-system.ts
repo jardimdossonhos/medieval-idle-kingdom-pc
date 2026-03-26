@@ -1,4 +1,4 @@
-﻿import type { WarResolver } from "../../contracts/services";
+﻿﻿import type { WarResolver } from "../../contracts/services";
 import type { SimulationSystem } from "../tick-pipeline";
 import { createEventId, roundTo } from "./utils";
 
@@ -45,6 +45,30 @@ export function createWarSystem(warResolver: WarResolver): SimulationSystem {
             },
             occurredAt: context.now
           });
+        }
+
+        // Processamento de Baixas Físicas (Dreno Populacional)
+        if (war.casualties) {
+          for (const kingdomId of Object.keys(war.casualties)) {
+            const dead = war.casualties[kingdomId];
+            if (dead > 0) {
+              context.events.push({
+                id: createEventId({
+                  prefix: "evt_war_casualties",
+                  tick: context.nextState.meta.tick,
+                  systemId: "war",
+                  actorId: kingdomId,
+                  sequence: eventSeq++
+                }),
+                type: "war.casualties",
+                actorKingdomId: kingdomId,
+                payload: { warId: war.id, amount: dead },
+                occurredAt: context.now
+              });
+              // Limpa o buffer após o evento ser despachado para a Thread Principal
+              war.casualties[kingdomId] = 0;
+            }
+          }
         }
       }
 

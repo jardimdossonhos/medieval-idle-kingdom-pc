@@ -1169,6 +1169,24 @@ async function bootstrapApp(): Promise<void> {
     }
   });
 
+  // ALVO B2: Aplicação do Dano Militar Físico (As guerras matam a população real)
+  eventBus.subscribe("war.casualties", (event: any) => {
+    const state = session.getState();
+    if (!state) return;
+    
+    const kingdomId = event.actorKingdomId;
+    const amount = event.payload?.amount;
+    if (!amount || amount <= 0) return;
+
+    const indices = getKingdomRegionIndices(state, kingdomId);
+    if (indices.length === 0) return;
+
+    simulationWorker.postMessage({
+      type: "APPLY_ECS_EFFECTS",
+      payload: { target: "population", operation: "subtract_empire_total", value: amount, indices }
+    });
+  });
+
   // highlight-end
   const mapRenderer = new HybridMapRenderer(ui.mapCanvas, staticWorldData, (selection: MapSelection) => {
     selectedRegionId = selection.regionId;
@@ -1288,6 +1306,22 @@ async function bootstrapApp(): Promise<void> {
 
     let total = 0;
     const dataArray = currentSimulationState[`${resource}Data` as keyof typeof currentSimulationState];
+    if (dataArray) {
+      for (const index of playerRegionIndices) {
+        if (index < dataArray.length) {
+          total += dataArray[index];
+        }
+      }
+    }
+    return total;
+  }
+
+  function getPlayerTotalManpower(state: GameState): number {
+    const player = getPlayerKingdom(state);
+    const playerRegionIndices = getPlayerRegionIndicesCached(state, player);
+
+    let total = 0;
+    const dataArray = currentSimulationState.manpowerData;
     if (dataArray) {
       for (const index of playerRegionIndices) {
         if (index < dataArray.length) {
@@ -1464,6 +1498,9 @@ async function bootstrapApp(): Promise<void> {
     const currentPop = (regionIndex !== undefined && currentSimulationState.populationTotalData) 
       ? currentSimulationState.populationTotalData[regionIndex] 
       : 0;
+    const currentManpower = (regionIndex !== undefined && currentSimulationState.manpowerData)
+      ? currentSimulationState.manpowerData[regionIndex]
+      : 0;
 
     // Aplicação da Desinformação Visual (Fog of Truth)
     let popText = "";
@@ -1474,6 +1511,7 @@ async function bootstrapApp(): Promise<void> {
     let devText = "";    
     let dominantFaithText = "";
     let minorityFaithText = "";
+    let manpowerText = "";
 
     if (isPlayer || isFogOfTruthDisabled) {
       popText = `${formatNumber(currentPop)} / ${formatNumber(baseCapacity)} (Máx. Natural)`;
@@ -1488,6 +1526,7 @@ async function bootstrapApp(): Promise<void> {
       minorityFaithText = region.minorityFaith && typeof region.minorityShare === "number"
         ? `${minorityFaith?.name ?? region.minorityFaith} (${formatNumber(region.minorityShare * 100)}%)`
         : "Nenhuma";
+      manpowerText = formatNumber(currentManpower);
     } else if (isAdjacent) {
       const popEst = Math.max(0, Math.round(currentPop / 10) * 10);
       popText = `~${formatNumber(popEst)} (Estimativa de Fronteira)`;
@@ -1499,6 +1538,7 @@ async function bootstrapApp(): Promise<void> {
       const dominantFaith = staticWorldData.religions[region.dominantFaith];
       dominantFaithText = `${dominantFaith?.name ?? "Desconhecida"} (Maioria)`;
       minorityFaithText = "Presente";
+      manpowerText = "Desconhecido";
     } else {
       popText = "Desconhecida (Névoa)";
       faithUnrestText = "Desconhecida";
@@ -1508,6 +1548,7 @@ async function bootstrapApp(): Promise<void> {
       devText = "Desconhecida";
       dominantFaithText = "Desconhecida";
       minorityFaithText = "Desconhecida";
+      manpowerText = "Desconhecido";
     }
 
     ui.regionInfo.innerHTML = `
@@ -1516,6 +1557,7 @@ async function bootstrapApp(): Promise<void> {
         <span>Dono</span><strong>${ownerName}</strong>
         <span>Bioma</span><strong>${regionBiomeLabel}</strong>
         <span>População</span><strong>${popText}</strong>
+        <span>Recrutas (Manpower)</span><strong>${manpowerText}</strong>
         <span>Fé dominante</span><strong>${dominantFaithText}</strong>
         <span>Minoria religiosa</span><strong>${minorityFaithText}</strong>
         <span>Tensão de fé</span><strong>${faithUnrestText}</strong>
@@ -1835,13 +1877,13 @@ async function bootstrapApp(): Promise<void> {
       .map((warId) => state.wars[warId])
       .filter((war) => war.attackers.includes(player.id) || war.defenders.includes(player.id));
 
-    const totalManpower = player.military.armies.reduce((sum, army) => sum + army.manpower, 0);
+    const totalManpower = getPlayerTotalManpower(state);
 
     ui.militarySummary.innerHTML = `
       <div class="summary-grid">
         <span>Postura</span><strong>${player.military.posture}</strong>
-        <span>Manpower ativo</span><strong>${formatNumber(totalManpower)}</strong>
-        <span>Reserva</span><strong>${formatNumber(player.military.reserveManpower)}</strong>
+        <span>Manpower do Reino</span><strong>${formatNumber(totalManpower)}</strong>
+        <span>Militarização Base</span><strong>2.5% da População</strong>
         <span>Tecnologia militar</span><strong>${formatNumber(player.military.militaryTechLevel)}</strong>
         <span>Guerras ativas</span><strong>${activeWars.length}</strong>
       </div>

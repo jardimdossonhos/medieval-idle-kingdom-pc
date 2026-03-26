@@ -1,4 +1,4 @@
-﻿import type { WarResolver } from "../../core/contracts/services";
+﻿﻿import type { WarResolver } from "../../core/contracts/services";
 import type { Treaty } from "../../core/models/diplomacy";
 import { DiplomaticRelation, TreatyType } from "../../core/models/enums";
 import type { GameState, KingdomState, WarFront, WarState } from "../../core/models/game-state";
@@ -217,14 +217,24 @@ function findBorderFronts(
   ];
 }
 
-function reduceArmyForWar(kingdom: KingdomState, intensity: number): void {
+function reduceArmyForWar(kingdom: KingdomState, intensity: number, war: WarState): void {
+  let deadThisTick = 0;
   for (const army of kingdom.military.armies) {
     const supplyPenalty = 1 + (1 - army.supply) * 0.7;
     const attritionRate = (0.0015 + intensity * 0.0018) * supplyPenalty;
 
-    army.manpower = Math.max(800, Math.round(army.manpower * (1 - attritionRate)));
+    const previousManpower = army.manpower;
+    // Removido o piso irrealista de 800. Se a guerra for brutal, o exército pode ser dizimado até sobrar 100 homens.
+    army.manpower = Math.max(100, Math.round(army.manpower * (1 - attritionRate)));
+    deadThisTick += (previousManpower - army.manpower);
+
     army.morale = roundTo(clamp(army.morale - 0.003 - intensity * 0.005, 0.25, 1));
     army.supply = roundTo(clamp(army.supply - 0.002 - intensity * 0.004, 0.25, 1));
+  }
+
+  if (deadThisTick > 0) {
+    war.casualties = war.casualties || {};
+    war.casualties[kingdom.id] = (war.casualties[kingdom.id] || 0) + deadThisTick;
   }
 }
 
@@ -370,7 +380,8 @@ export class LocalWarResolver implements WarResolver {
       defenders: [defenderId],
       warScore: 0,
       startedAt: now,
-      fronts
+      fronts,
+      casualties: {}
     };
 
     setPairStatus(state, attackerId, defenderId, DiplomaticRelation.Hostile);
@@ -444,7 +455,7 @@ export class LocalWarResolver implements WarResolver {
 
       for (const attackerId of war.attackers) {
         const attacker = state.kingdoms[attackerId];
-        reduceArmyForWar(attacker, intensity);
+        reduceArmyForWar(attacker, intensity, war);
         attacker.diplomacy.warExhaustion = roundTo(
           clamp(attacker.diplomacy.warExhaustion + 0.003 + intensity * 0.004 + longWarPressure * 0.008, 0, 1)
         );
@@ -453,7 +464,7 @@ export class LocalWarResolver implements WarResolver {
 
       for (const defenderId of war.defenders) {
         const defender = state.kingdoms[defenderId];
-        reduceArmyForWar(defender, intensity);
+        reduceArmyForWar(defender, intensity, war);
         defender.diplomacy.warExhaustion = roundTo(
           clamp(defender.diplomacy.warExhaustion + 0.0035 + intensity * 0.004 + longWarPressure * 0.009, 0, 1)
         );

@@ -979,3 +979,13 @@ O painel de Ações Regionais sofria de desconexão de domínio (exibia opções
 **1. Pivô de Game Design (IA Histórica):** Firmado o compromisso de abandonar NPCs baseados em "Árvores de Decisão Perfeitas". O projeto adota oficialmente a **Racionalidade Limitada (Bounded Rationality)**. A IA operará sob Fog of Truth, cometera erros de avaliação estratégica, carregará matrizes de Memória Histórica (com decaimento temporal) e será impedida de agir por conta de limites estruturais e psicológicos (Ex: Vontade do Líder vs Pressão da Elite).
 **2. Evolução da Interface:** A UI do navegador foi reestruturada conceitualmente. Em vez de menus básicos, o desenvolvimento focará em **Centros Analíticos Profundos** (Abas de Inteligência Global, Ranking com Setas de Tendência, Fluxos Visuais). A regra máxima é: O jogador deve interagir com "Por quês", e não apenas com números.
 **3. Rota Crítica Ajustada:** A documentação e os planos de execução (`implementation-plan.md` e `ARCHITECTURE.md`) foram massivamente atualizados para gravar essas diretrizes no núcleo do projeto, impedindo desvios futuros.
+
+---
+
+## Entrada: 66
+
+**Data:** 25/03/2024
+
+### Base Biológica e Estrutural (Fome e Manpower no ECS)
+**1. Implementação Física (Worker):** A `PopulationSystem` foi atualizada para aplicar a mecânica de Fome (declínio demográfico acelerado) caso a tribo ultrapasse o limite de suporte do bioma sem expandir. O `MilitarySystem` foi criado para extrair nativamente 2.5% da população viva como `manpower` (soldados).
+**2. Resolução de Contratos:** Houve uma quebra de compilação por dessincronia na interface `EcsState`, resolvida com uma varredura estrita e atualização dos construtores na Main Thread. Erros residuais de `TS2307` foram identificados como cache travado do TS Server, mitigados via reinicialização do serviço na IDE.

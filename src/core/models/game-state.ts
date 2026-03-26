@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import type { AdministrationState } from "./administration";
+﻿﻿﻿﻿﻿﻿﻿﻿import type { AdministrationState } from "./administration";
 import type { DiplomacyState } from "./diplomacy";
 import type { EconomyState } from "./economy";
 import type { EventLogEntry } from "./events";
@@ -55,6 +55,7 @@ export interface WarState {
   warScore: number;
   startedAt: TimestampMs;
   fronts: WarFront[];
+  casualties: Record<KingdomId, number>;
 }
 
 export interface CampaignConfig {
