@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Epochs Idle
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Epochs Idle
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -34,6 +34,9 @@ O jogo rejeita o formato de "roteiro fixo" (eventos atrelados a datas exatas do 
 *   **Sem Roteiros, Apenas Vetores:** O surgimento de eras, guerras mundiais ou revoluções (como a Industrial) não ocorre no "Ano X". Elas são engatilhadas quando as condições sistêmicas do motor matemático (Centralização, Tecnologia, Pressão Demográfica) são atingidas. O jogador atua como uma "força de desvio" dentro dessas tendências.
 *   **Inércia Histórica:** O mapa não é um tabuleiro passivo. Hexágonos funcionam como "Containers Históricos Vivos" possuindo atrito (Assimilação, Cultura, Religião). Mudar a natureza de uma região leva tempo e gera reação orgânica. O ECS tentará "voltar ao padrão histórico" se o jogador não mantiver o esforço.
 *   **Fog of Truth (Neblina da Verdade/Desinformação):** O jogador não deve possuir onisciência. A UI ocultará ou "borrará" dados precisos de impérios distantes ou eras antigas (ex: exibir "População Desconhecida" ou "Exército: 1k~10k" em vez de números absolutos), forçando a necessidade de tecnologias de Espionagem, Embaixadas e Exploração para revelar os cálculos exatos do Worker.
+*   **IA de Agentes Historicamente Coerentes:** NPCs não buscam jogadas matemáticas "ótimas". Eles sofrem de **Racionalidade Limitada**: tomam decisões com base em informações parciais (percepção distorcida da força inimiga) e restrições estruturais (fome, tecnologia).
+*   **Memória e Psicologia:** NPCs possuem memória com fator de decaimento (lembrarão de traições ou guerras antigas). Suas decisões são um cabo de guerra entre a Vontade do Líder (Agressividade/Zelo) e a Psicologia Coletiva (Opinião pública, elites, revoltas travando ações do governante).
+*   **Adaptação por Era:** A heurística de decisão da IA muda de acordo com o Zeitgeist. Na Idade da Pedra, o vetor sobrevivência/comida pesa mais; na Idade Média, o zelo religioso; na era Industrial, a classe e comércio.
 
 ## 2. Estrutura de Diretórios
 

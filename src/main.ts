@@ -2378,6 +2378,24 @@ async function bootstrapApp(): Promise<void> {
       case "unlock_tech":
         showToast("Modo Deus: Desbloqueio requer rotina na GameSession. Em breve.");
         break;
+      case "pop_1k":
+        if (playerRegionIndices.length > 0) {
+          simulationWorker.postMessage({
+            type: "APPLY_ECS_EFFECTS",
+            payload: { target: "population", operation: "add", value: 1000, indices: playerRegionIndices }
+          });
+        }
+        showToast("Modo Deus: +1.000 Habitantes injetados.");
+        break;
+      case "kill_pop":
+        if (playerRegionIndices.length > 0) {
+          simulationWorker.postMessage({
+            type: "APPLY_ECS_EFFECTS",
+            payload: { target: "population", operation: "set", value: 0, indices: playerRegionIndices }
+          });
+        }
+        showToast("Modo Deus: População dizimada nas suas regiões.");
+        break;
     }
   });
   syncProfileUi();

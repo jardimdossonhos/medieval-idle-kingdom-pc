@@ -75,6 +75,8 @@ export class GodModeConsole {
       <div id="god-mode-tabs" style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 10px;">
         <button class="god-tab" data-target="god-tab-resources" style="background: #00ff00; color: #000; border: none; padding: 5px 10px; cursor: pointer; font-weight: bold;">Recursos</button>
         <button class="god-tab" data-target="god-tab-tech" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Tecnologia</button>
+        <button class="god-tab" data-target="god-tab-map" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Mapa</button>
+        <button class="god-tab" data-target="god-tab-demo" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Demografia</button>
       </div>
       
       <div id="god-tab-resources" class="god-tab-content">
@@ -87,6 +89,17 @@ export class GodModeConsole {
       <div id="god-tab-tech" class="god-tab-content" style="display: none;">
         <p style="margin-top: 0; font-size: 14px;"><strong>Árvore do Conhecimento:</strong></p>
         <button id="btn-unlock-all-tech" style="background: #222; color: #00ff00; border: 1px solid #00ff00; padding: 5px; cursor: pointer; width: 100%;">Desbloquear Tecnologias Atuais</button>
+      </div>
+
+      <div id="god-tab-map" class="god-tab-content" style="display: none;">
+        <p style="margin-top: 0; font-size: 14px;"><strong>Controle de Visão:</strong></p>
+        <button id="btn-toggle-fog" style="background: #222; color: #00ff00; border: 1px solid #00ff00; padding: 5px; cursor: pointer; width: 100%;">Ativar/Desativar Névoa da Verdade</button>
+      </div>
+
+      <div id="god-tab-demo" class="god-tab-content" style="display: none;">
+        <p style="margin-top: 0; font-size: 14px;"><strong>Manipulação Populacional:</strong></p>
+        <button id="btn-pop-1k" style="background: #222; color: #00ff00; border: 1px solid #00ff00; padding: 5px; cursor: pointer; margin-right: 5px; margin-bottom: 5px;">+1.000 Habitantes</button>
+        <button id="btn-kill-pop" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px;">Dizimar População (Zerar)</button>
       </div>
     `;
 
@@ -119,5 +132,8 @@ export class GodModeConsole {
     this.panelElement.querySelector("#btn-food-10k")?.addEventListener("click", () => this.onCommand("food_10k"));
     this.panelElement.querySelector("#btn-ruin-economy")?.addEventListener("click", () => this.onCommand("ruin_economy"));
     this.panelElement.querySelector("#btn-unlock-all-tech")?.addEventListener("click", () => this.onCommand("unlock_tech"));
+    this.panelElement.querySelector("#btn-toggle-fog")?.addEventListener("click", () => this.onCommand("toggle_fog"));
+    this.panelElement.querySelector("#btn-pop-1k")?.addEventListener("click", () => this.onCommand("pop_1k"));
+    this.panelElement.querySelector("#btn-kill-pop")?.addEventListener("click", () => this.onCommand("kill_pop"));
   }
 }

@@ -27,6 +27,7 @@ A casca visual que o usuário interage. **Nenhuma lógica de negócios reside aq
     *   `i18n/messages.ts`, `types.ts`: Dicionários de traduções e internacionalização (en-US, pt-BR).
 *   **`src/main.ts`**: O Maestro. 
     *   Monta a DOM.
+*   **`src/application/god-mode.ts`**: Ferramenta de auditoria do Desenvolvedor. Um console injetável que ignora as regras do jogo e permite manipular o Worker diretamente (cheat menu).
     *   Instancia a `GameSession` (Aplicação).
     *   Controla a **Splash Screen** e o **Auto-Boot**.
     *   **Ponto Crítico:** Orquestra a comunicação entre a UI e o Worker. É o responsável por enviar os comandos de restauração (`RESTORE_ECS_STATE`) e início (`START`). O protocolo de comunicação original não aguardava confirmação do Worker, sendo a causa principal da falha no carregamento de jogos. *(Ver Seção 4.1 do ARCHITECTURE.md).*
@@ -61,7 +62,7 @@ Arquivos acoplados a frameworks externos (IndexDB, MapLibre, WebWorkers) que imp
     *   `browser-clock-service.ts`: O "coração batendo" do jogo (requestAnimationFrame/setInterval).
     *   `local-event-bus.ts`: Mensageria síncrona (pub/sub) que avisa ao sistema que algo ocorreu (ex: "guerra_declarada", "vitoria_alcancada").
 *   **`src/infrastructure/diplomacy/`, `npc/`, `war/`**: 
-    *   Implementações com lógicas determinísticas específicas de como os NPCs de fato tomam decisões com base em seus modificadores (ex: `RuleBasedNpcDecisionService`).
+    *   `npc/`: Onde habita a **Utility AI** (Racionalidade Limitada). Avalia vetores de personalidade, memória histórica com decaimento, percepção vs realidade (Fog) e adaptação por Era.
 
 ---
 

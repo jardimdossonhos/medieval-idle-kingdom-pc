@@ -54,7 +54,13 @@ O jogo possui um sistema de **Fé** que se acumula passivamente com o tempo, esp
 
 ---
 
-## 5. Salvamento e Proteção de Dados (Persistência)
+## 5. A Inteligência do Mundo (Como os NPCs pensam)
+Neste jogo, as nações controladas pelo computador **não são oniscientes e não jogam de forma "perfeita"**. 
+* Eles sofrem de **Racionalidade Limitada**: Um vizinho pode superestimar a própria força, tentar invadir você e falhar miseravelmente.
+* Eles possuem **Memória Histórica**: Se você traiu um aliado 200 anos atrás, o ressentimento diminui com o tempo, mas não some instantaneamente.
+* Eles sofrem **Pressão Estrutural**: O líder NPC pode querer declarar guerra a você, mas se a população dele estiver faminta ou as elites oprimidas (Alta Instabilidade), a sociedade o impedirá de agir. Espione as nações vizinhas através dos painéis de *Inteligência Global* para prever essas falhas.
+
+## 6. Salvamento e Proteção de Dados (Persistência)
 
 O jogo foi projetado para rodar localmente no seu navegador.
 *   **Autosave:** O jogo salva a si mesmo automaticamente a cada 5 ciclos (5 segundos).
@@ -64,12 +70,15 @@ O jogo foi projetado para rodar localmente no seu navegador.
 
 ---
 
-## 6. Guia para o Criador / Testador (Uso do Painel Dev)
+## 7. Guia para o Criador / Testador (Uso do Painel Dev)
 
 Ao rodar o jogo localmente com `npm run dev`, você terá acesso ao **Painel de Depuração** no canto inferior da tela. Este painel existe apenas para testar sistemas sem precisar esperar horas.
 
-*   **Adicionar 1000 de Ouro:** Aperte para contornar gargalos financeiros durante os testes.
-*   **Log GameState:** Útil para debugar no "Console" (F12 no navegador).
+Para acessar, clique **5 vezes rapidamente** na versão do jogo (canto superior esquerdo). O painel flutuante contém as seguintes abas:
+*   **Recursos:** Injeção de `+10k Ouro` ou `+10k Comida` e botão de Apocalipse (zerar economia).
+*   **Tecnologia:** Atalho para desbloqueio da árvore.
+*   **Mapa:** Botão **Remover Névoa (Fog of Truth)**. Revela instantaneamente a população e a instabilidade exata de tribos distantes e NPCs escondidos.
+*   **Demografia:** Injeção de `+1.000 Habitantes` nas suas regiões para forçar o gatilho automático do Sistema de Migração (testar expansão territorial) ou botão de dizimar a população para testar colapso.
 
 ### Dicas de Teste Padrão
 1. **Testando a Economia:** Altere a Taxa Base para 0.6. Aguarde 10 segundos e veja se o seu ouro sobe violentamente, mas acompanhe na barra lateral se o Risco de Revolta subiu junto.

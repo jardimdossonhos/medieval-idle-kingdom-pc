@@ -945,3 +945,37 @@ O painel de Ações Regionais sofria de desconexão de domínio (exibia opções
    * Passo 1: Motor Militar ECS (Cálculo de *Manpower* nativo no Worker).
    * Passo 2: Atrito de Fronteira e Inércia (Fome orgânica e Revolta por superpopulação).
    * Passo 3: Construção dos Painéis Avançados de Inteligência da UI alimentados pelos novos dados.
+
+---
+
+## Entrada: 63
+
+**Data:** 25/03/2024
+
+### Validação Absoluta da Expansão Orgânica e Correção de Ponteiro ECS
+**1. O Mistério do "Mundo Cego":** A interface exibia o crescimento populacional (ex: 240 habitantes), mas a expansão automática não ocorria de fato. Os novos logs de diagnóstico provaram que o Motor de Migração enxergava a população como `0`.
+**2. A Causa (Clonagem Destrutiva):** A rotina `cloneGameStateForSimulation` na `TickPipeline` estava destruindo os TypedArrays (`Float64Array`) do WebWorker durante a cópia profunda, entregando objetos vazios `{}` para os sistemas avaliarem. O `MigrationSystem` lia o objeto vazio, assumia população zero e abortava a expansão legitimamente.
+**3. A Correção Arquitetural:** Inserido um bypass de memória logo após o clone (`nextState.ecs = previousState.ecs`), restaurando o ponteiro bruto da matriz de alta performance antes dos sistemas rodarem. 
+**4. Sucesso do Milestone:** A correção devolveu a "visão" matemática ao motor. Tanto o jogador (quando em modo Assistido) quanto os NPCs agora expandem maravilhosamente pelo mapa ao atingir o limiar demográfico de 150 habitantes, esbarrando organicamente nas limitações geográficas de Fronteiras Fechadas ou oceanos, atestando o sucesso vivo da Era da Aurora.
+
+---
+
+## Entrada: 64
+
+**Data:** 25/03/2024
+
+### Console de Desenvolvedor (Modo Deus) e Manipulação Direta ECS
+**1. A Expansão do Console:** O `god-mode.ts` foi refatorado para suportar abas analíticas (Recursos, Tecnologia, Mapa, Demografia), tornando-se a ferramenta definitiva de auditoria da simulação.
+**2. Controle de Névoa e População:** Adicionados os disparos `APPLY_ECS_EFFECTS` para injeção demográfica (`+1.000 Habitantes`) e extermínio (`Dizimar População`), além do controle de interface `toggle_fog`.
+**3. Validação Tática:** O uso das novas ferramentas permitiu forçar populações de teste, provando visualmente e instantaneamente que o `MigrationSystem` atua de forma impecável. Ao bater a marca exigida, o transbordo populacional espalha a civilização pelos hexágonos validando o ecossistema.
+
+---
+
+## Entrada: 65
+
+**Data:** 25/03/2024
+
+### Manifesto de UX Analítica e IA de Agentes Coerentes
+**1. Pivô de Game Design (IA Histórica):** Firmado o compromisso de abandonar NPCs baseados em "Árvores de Decisão Perfeitas". O projeto adota oficialmente a **Racionalidade Limitada (Bounded Rationality)**. A IA operará sob Fog of Truth, cometera erros de avaliação estratégica, carregará matrizes de Memória Histórica (com decaimento temporal) e será impedida de agir por conta de limites estruturais e psicológicos (Ex: Vontade do Líder vs Pressão da Elite).
+**2. Evolução da Interface:** A UI do navegador foi reestruturada conceitualmente. Em vez de menus básicos, o desenvolvimento focará em **Centros Analíticos Profundos** (Abas de Inteligência Global, Ranking com Setas de Tendência, Fluxos Visuais). A regra máxima é: O jogador deve interagir com "Por quês", e não apenas com números.
+**3. Rota Crítica Ajustada:** A documentação e os planos de execução (`implementation-plan.md` e `ARCHITECTURE.md`) foram massivamente atualizados para gravar essas diretrizes no núcleo do projeto, impedindo desvios futuros.
