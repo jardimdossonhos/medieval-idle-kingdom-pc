@@ -20,7 +20,7 @@ import type { GameState, KingdomState } from "./core/models/game-state";
 import type { MapLayerMode, MapRenderContext, MapSelection } from "./infrastructure/rendering/map-renderer";
 import { HybridMapRenderer } from "./infrastructure/rendering/hybrid-map-renderer";
 import { LocalDiplomacyResolver } from "./infrastructure/diplomacy/local-diplomacy-resolver";
-import { RuleBasedNpcDecisionService } from "./infrastructure/npc/rule-based-npc-decision-service";
+import { UtilityNpcDecisionService } from "./infrastructure/npc/utility-npc-decision-service";
 import { createRuntimePersistenceBundle } from "./infrastructure/persistence/runtime-persistence";
 import { BrowserClockService } from "./infrastructure/runtime/browser-clock-service";
 import { LocalEventBus } from "./infrastructure/runtime/local-event-bus";
@@ -779,7 +779,7 @@ async function bootstrapApp(): Promise<void> {
   const activeCampaignId = `campaign:${profile.id}`;
   const staticWorldData = createStaticWorldData();
   const eventBus = new LocalEventBus();
-  const npcDecisionService = new RuleBasedNpcDecisionService();
+  const npcDecisionService = new UtilityNpcDecisionService();
   const diplomacyResolver = new LocalDiplomacyResolver();
   const warResolver = new LocalWarResolver(staticWorldData);
   const persistence = createRuntimePersistenceBundle(activeCampaignId);

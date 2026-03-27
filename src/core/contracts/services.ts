@@ -1,4 +1,4 @@
-﻿import type { CommandLogEntry, SnapshotSummary, StateSnapshot } from "../models/commands";
+﻿﻿import type { CommandLogEntry, SnapshotSummary, StateSnapshot } from "../models/commands";
 import type { GameState, KingdomState, WarState } from "../models/game-state";
 import type { DomainEvent } from "../models/events";
 import type { KingdomId, TimestampMs } from "../models/types";
@@ -13,7 +13,7 @@ export interface NpcDecision {
 }
 
 export interface INpcDecisionService {
-  decide(state: GameState, actorKingdomId: KingdomId): NpcDecision[];
+  decide(state: GameState, actorKingdomId: KingdomId, now: TimestampMs): NpcDecision[];
 }
 
 export interface DiplomacyResolver {
