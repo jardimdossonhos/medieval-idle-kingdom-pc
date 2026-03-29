@@ -1,7 +1,7 @@
 import type { SimulationSystem, TickContext } from "../tick-pipeline";
-import { WORLD_DEFINITIONS_V1 } from "../../../application/boot/generated/world-definitions-v1";
+import type { RegionDefinition } from "../../models/world";
 
-export function createMilitarySystem(): SimulationSystem {
+export function createMilitarySystem(orderedDefinitions: RegionDefinition[]): SimulationSystem {
   return {
     id: "military_system",
     run: (context: TickContext) => {
@@ -14,8 +14,8 @@ export function createMilitarySystem(): SimulationSystem {
       // 1. Mapeia o limite de Manpower real da Malha Geográfica do Worker (ECS) para os impérios
       const ecsManpowerLimit: Record<string, number> = {};
       if (state.ecs && state.ecs.manpower) {
-        for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
-          const ownerId = state.world.regions[WORLD_DEFINITIONS_V1[i].id]?.ownerId;
+        for (let i = 0; i < orderedDefinitions.length; i++) {
+          const ownerId = state.world.regions[orderedDefinitions[i].id]?.ownerId;
           if (ownerId && ownerId !== "k_nature") {
             ecsManpowerLimit[ownerId] = (ecsManpowerLimit[ownerId] || 0) + (state.ecs.manpower[i] || 0);
           }

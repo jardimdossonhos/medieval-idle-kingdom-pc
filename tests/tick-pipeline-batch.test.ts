@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createInitialState } from "../src/application/boot/create-initial-state";
 import { createStaticWorldData } from "../src/application/boot/static-world-data";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 import type { SimulationSystem } from "../src/core/simulation/tick-pipeline";
 import { TickPipeline } from "../src/core/simulation/tick-pipeline";
 
 describe("tick pipeline batch mode", () => {
   it("keeps tick/time progression consistent with coarse offline steps", () => {
     const staticData = createStaticWorldData();
-    const initial = createInitialState(staticData);
+    const initial = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
     const startedTick = initial.meta.tick;
     const startedAt = initial.meta.lastUpdatedAt;
     const deltaMs = initial.meta.tickDurationMs;
@@ -36,7 +37,7 @@ describe("tick pipeline batch mode", () => {
 
   it("ignores coarse stepping when collecting events", () => {
     const staticData = createStaticWorldData();
-    const initial = createInitialState(staticData);
+    const initial = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
     const deltaMs = initial.meta.tickDurationMs;
     const ticksToSimulate = 20;
 

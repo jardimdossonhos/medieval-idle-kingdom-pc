@@ -1,6 +1,6 @@
 # 🗺️ Mapa Mental e Arquitetura da Base de Código (Deep Dive)
 
-Este documento mapeia a utilidade de **toda a extensão da árvore de diretórios e padrões de arquivos** do projeto `medieval-idle-kingdom-pc` (abrangendo seus mais de 1.000 arquivos). 
+Este documento mapeia a utilidade de **toda a extensão da árvore de diretórios e padrões de arquivos** do projeto `epochs-idle-pc` (abrangendo seus mais de 1.000 arquivos). 
 Devido ao rigor da **Clean Architecture** e **Threads Separadas (Web Worker)**, use este guia como bússola para entender onde inserir novos códigos e prever o impacto das suas alterações.
 
 ---

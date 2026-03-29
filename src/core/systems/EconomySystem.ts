@@ -2,7 +2,7 @@ import type { EconomyComponent } from "../components/EconomyComponent";
 import type { PopulationComponent } from "../components/PopulationComponent";
 
 export class EconomySystem {
-  update(deltaTime: number, economy: EconomyComponent, population: PopulationComponent, activeEntities: number[], modifiers?: Record<string, Float64Array> | null): void {
+  update(deltaTime: number, economy: EconomyComponent, population: PopulationComponent, activeEntities: number[], _modifiers?: Record<string, Float64Array> | null): void {
     const gold = economy.gold;
     const food = economy.food;
     const wood = economy.wood;

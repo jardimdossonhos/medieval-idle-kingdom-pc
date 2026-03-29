@@ -14,9 +14,7 @@ test.describe("Resource Persistence", () => {
 
     // 2. Get initial resource values
     const initialGoldText = await page.locator("#resource-list li[data-resource='gold']").innerText();
-    const initialFoodText = await page.locator("#resource-list li[data-resource='food']").innerText();
     const initialGold = parseInt(initialGoldText.split(":")[1].trim().replace(/\./g, ""));
-    const initialFood = parseInt(initialFoodText.split(":")[1].trim().replace(/\./g, ""));
 
     // 3. Reload the page
     await page.reload();

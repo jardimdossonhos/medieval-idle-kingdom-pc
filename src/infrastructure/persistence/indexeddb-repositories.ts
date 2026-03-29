@@ -1,4 +1,4 @@
-﻿﻿import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+﻿﻿﻿﻿import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type {
   CommandLogRepository,
   GameStateRepository,
@@ -25,7 +25,6 @@ import {
 
 const DB_NAME = "epochs-idle-pc";
 const DB_VERSION = 2;
-const CURRENT_STATE_KEY = "current";
 
 interface MedievalDbSchema extends DBSchema {
   current_state: {
@@ -33,11 +32,11 @@ interface MedievalDbSchema extends DBSchema {
     value: import("./save-schema").CurrentStateEnvelope;
   };
   save_slots: {
-    key: SaveSlotId;
+    key: string;
     value: import("./save-schema").SaveEnvelope;
   };
   command_log: {
-    key: number;
+    key: string;
     value: import("./command-snapshot-schema").CommandLogEnvelope;
   };
   state_snapshots: {

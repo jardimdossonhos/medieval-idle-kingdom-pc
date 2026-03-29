@@ -1,4 +1,5 @@
-﻿import type { RegionDefinition } from "../../core/models/world";
+﻿﻿import type { RegionDefinition } from "../../core/models/world";
+import { BiomeType } from "../../core/models/enums";
 
 export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
   {
@@ -9,6 +10,8 @@ export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
     economyValue: 7,
     militaryValue: 6,
     isCoastal: true,
+    isWater: false,
+    biome: BiomeType.Temperate,
     neighbors: ["r_iberia_south", "r_gallia_west"],
     center: { x: 180, y: 190 }
   },
@@ -20,6 +23,8 @@ export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
     economyValue: 8,
     militaryValue: 5,
     isCoastal: true,
+    isWater: false,
+    biome: BiomeType.Temperate,
     neighbors: ["r_iberia_north", "r_maghreb_west"],
     center: { x: 190, y: 250 }
   },
@@ -31,6 +36,8 @@ export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
     economyValue: 7,
     militaryValue: 7,
     isCoastal: true,
+    isWater: false,
+    biome: BiomeType.Temperate,
     neighbors: ["r_iberia_north", "r_italia_north"],
     center: { x: 250, y: 150 }
   },
@@ -42,6 +49,8 @@ export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
     economyValue: 8,
     militaryValue: 6,
     isCoastal: true,
+    isWater: false,
+    biome: BiomeType.Temperate,
     neighbors: ["r_gallia_west", "r_anatolia_west"],
     center: { x: 340, y: 170 }
   },
@@ -53,6 +62,8 @@ export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
     economyValue: 7,
     militaryValue: 8,
     isCoastal: true,
+    isWater: false,
+    biome: BiomeType.Temperate,
     neighbors: ["r_maghreb_east", "r_anatolia_west"],
     center: { x: 470, y: 250 }
   },
@@ -64,6 +75,8 @@ export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
     economyValue: 6,
     militaryValue: 6,
     isCoastal: true,
+    isWater: false,
+    biome: BiomeType.Temperate,
     neighbors: ["r_iberia_south", "r_maghreb_east"],
     center: { x: 250, y: 320 }
   },
@@ -75,6 +88,8 @@ export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
     economyValue: 7,
     militaryValue: 6,
     isCoastal: true,
+    isWater: false,
+    biome: BiomeType.Temperate,
     neighbors: ["r_maghreb_west", "r_levant_coast"],
     center: { x: 370, y: 325 }
   },
@@ -86,8 +101,9 @@ export const SEED_REGION_DEFINITIONS: RegionDefinition[] = [
     economyValue: 7,
     militaryValue: 8,
     isCoastal: true,
+    isWater: false,
+    biome: BiomeType.Temperate,
     neighbors: ["r_italia_north", "r_levant_coast"],
     center: { x: 450, y: 190 }
   }
 ];
-

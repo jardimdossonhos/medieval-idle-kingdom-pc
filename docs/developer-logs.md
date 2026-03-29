@@ -989,3 +989,59 @@ O painel de Ações Regionais sofria de desconexão de domínio (exibia opções
 ### Base Biológica e Estrutural (Fome e Manpower no ECS)
 **1. Implementação Física (Worker):** A `PopulationSystem` foi atualizada para aplicar a mecânica de Fome (declínio demográfico acelerado) caso a tribo ultrapasse o limite de suporte do bioma sem expandir. O `MilitarySystem` foi criado para extrair nativamente 2.5% da população viva como `manpower` (soldados).
 **2. Resolução de Contratos:** Houve uma quebra de compilação por dessincronia na interface `EcsState`, resolvida com uma varredura estrita e atualização dos construtores na Main Thread. Erros residuais de `TS2307` foram identificados como cache travado do TS Server, mitigados via reinicialização do serviço na IDE.
+
+---
+
+## Entrada: 67
+
+**Data:** 26/03/2024
+
+### Interrupção de Refactoring e Quebra de Sintaxe (VS Code Crash)
+**O Incidente:** Durante uma refatoração em lote para injetar a paridade geográfica nos testes unitários, o editor (VS Code) sofreu um crash. Isso deixou o arquivo `save-schema-migration.test.ts` com um artefato de quebra de sintaxe (declaração duplicada da constante `state`), paralisando o compilador TypeScript.
+**Análise de Impacto:** O projeto exige que o motor matemático do WebWorker (ECS) seja inicializado com a mesma geografia do mapa visual (`WORLD_DEFINITIONS_V1`) para evitar a criação de um "Mundo Cego" (matrizes vazias) durante os testes. Metade da suíte de testes já havia recebido essa injeção, mas a outra metade não.
+**Plano de Ação (Em Execução):**
+1. **Limpeza Imediata:** Remover a linha duplicada obsoleta no `save-schema-migration.test.ts` para restaurar a compilação do projeto.
+2. **Retomada do Lote:** Propagar a injeção do `WORLD_DEFINITIONS_V1` de forma segura nos demais arquivos de teste que ainda inicializam o estado de forma cega, garantindo a paridade 1:1 entre as matrizes `Float64Array` simuladas e a topografia real. Os arquivos mapeados para a fila de atualização são:
+   - `local-war-resolver.test.ts`
+   - `world-state-global.test.ts`
+   - `tick-pipeline-batch.test.ts`
+   - `religion-influence-system.test.ts`
+   - `build-save-summary.test.ts`
+   - `sync-coordinator.test.ts`
+   - `game-session-command-snapshot.test.ts`
+   - `game-session-player-actions.test.ts`
+
+---
+
+## Entrada: 68
+
+**Data:** 26/03/2024
+
+### Conclusão do Refactoring de Paridade Geográfica nos Testes
+**Ação Realizada:** O plano de ação da Entrada 67 foi integralmente executado. A constante `WORLD_DEFINITIONS_V1` foi injetada de forma cirúrgica nos construtores `createInitialState` de toda a metade restante da suíte de testes mapeada.
+
+**Objetivo Alcançado (Teórico):** 100% dos testes agora inicializam as matrizes do Worker espelhando a topografia real da simulação. O erro fatal de compilação gerado pelo crash do VS Code (duplicação de variável no `save-schema-migration.test.ts`) foi devidamente higienizado.
+
+**Status Atual:** **Aguardando Validação (Pendência de Testes).** A propagação do lote foi concluída no código estrutural, mas o usuário/criador ainda não executou a suíte de testes (Vitest) localmente. Seguindo o protocolo de engenharia, nenhuma funcionalidade será considerada estável até que o comando de testes (`npm run test`) confirme 100% de aprovação (verde) atestando que não há regressões sistêmicas na topografia.
+
+---
+
+## Entrada: 69
+
+**Data:** 26/03/2024
+
+### Problema Detectado: Falha de Game Design (Softlock de Bioma e Clima Irrealista)
+O usuário reportou duas falhas críticas de imersão e jogabilidade na Era da Aurora:
+1.  **Clima Irrealista:** Ao iniciar um jogo no Brasil, o bioma foi gerado como "Deserto", o que é geograficamente incorreto para a maior parte do território.
+2.  **Travamento Matemático (Softlock):** Ao nascer em um bioma de Deserto (limite de 50 habitantes), a tribo do jogador fica matematicamente impedida de crescer até os 150 habitantes necessários para a mecânica de migração orgânica, ficando presa em um ciclo de fome e estagnação.
+
+### Análise da Causa Raiz:
+1.  **Gerador Procedural Simplista:** O algoritmo de geração de biomas em `generate-world-geojson.mjs` considera apenas a latitude, ignorando fatores como umidade, o que leva a distorções climáticas.
+2.  **Lacuna na Mecânica de Jogo:** Não existe uma ação de "abandono" ou "realocação" para tribos nômades no início do jogo. A única forma de mover a capital (`change_capital`) tem um custo proibitivo para uma tribo inicial.
+
+### Solução Arquitetural Proposta:
+1.  **Gerador Climático Realista:** No futuro, o gerador de mapa será aprimorado para usar uma segunda camada de ruído para simular umidade, garantindo que desertos só surjam em zonas quentes e secas.
+2.  **Mecânica de "Êxodo Nômade":** Será criada uma nova Ação Regional de baixo custo (apenas Comida) que permite ao jogador abandonar seu território atual e mover toda a sua população e recursos para um hexágono adjacente. Isso resolve o softlock e adiciona uma camada de jogabilidade nômade historicamente precisa.
+
+### Status:
+Documentado em `ARCHITECTURE.md` (Seção 6.9). Implementação pendente.

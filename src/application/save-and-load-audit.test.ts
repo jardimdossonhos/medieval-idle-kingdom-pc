@@ -144,6 +144,14 @@ const staticData = createStaticWorldData();
 
 function createTestSession(deps: Partial<GameSessionDeps>): GameSession {
   const eventBus = deps.eventBus ?? new InMemoryEventBus();
+
+  const mockTickFn = (state: any) => {
+    if (state && state.meta) {
+      state.meta.tick += 1;
+    }
+    return state;
+  };
+
   const session = new GameSession({
     gameStateRepository: deps.gameStateRepository ?? new InMemoryGameStateRepository(),
     saveRepository: deps.saveRepository ?? new InMemorySaveRepository(),
@@ -154,10 +162,11 @@ function createTestSession(deps: Partial<GameSessionDeps>): GameSession {
     eventBus: eventBus,
     systems: deps.systems ?? [{
       id: "mock_tick_system",
-      run: (state: any) => {
-        state.meta.tick += 1;
-        return { state, events: [] };
-      }
+      run: mockTickFn,
+      update: mockTickFn,
+      execute: mockTickFn,
+      process: mockTickFn,
+      tick: mockTickFn
     } as any],
     autosaveEveryTicks: 2, // Frequent autosave for testing
     ...deps
@@ -182,6 +191,8 @@ describe("Save, Load and State Restoration Audit", () => {
     const initial = createInitialState(staticData);
     initial.meta.paused = false;
     initial.meta.lastUpdatedAt = clock.now();
+    initial.meta.speedMultiplier = 1;
+    initial.meta.tickDurationMs = 1000;
     
     const session1 = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock });
     await session1.bootstrap(initial);
@@ -211,6 +222,8 @@ describe("Save, Load and State Restoration Audit", () => {
     const initial2 = createInitialState(staticData);
     initial2.meta.paused = false;
     initial2.meta.lastUpdatedAt = clock2.now();
+    initial2.meta.speedMultiplier = 1;
+    initial2.meta.tickDurationMs = 1000;
 
     // 4. Bootstrap the new session and verify state restoration
     await session2.bootstrap(initial2);
@@ -231,6 +244,8 @@ describe("Save, Load and State Restoration Audit", () => {
     const initial = createInitialState(staticData);
     initial.meta.paused = false;
     initial.meta.lastUpdatedAt = clock.now();
+    initial.meta.speedMultiplier = 1;
+    initial.meta.tickDurationMs = 1000;
     
     const session = createTestSession({ gameStateRepository: gameStateRepo, saveRepository: saveRepo, clock });
     await session.bootstrap(initial);

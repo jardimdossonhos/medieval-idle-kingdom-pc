@@ -31,7 +31,7 @@ function createKingdomFingerprint(kingdom: KingdomState) {
     unlockedTechs: [...kingdom.technology.unlocked].sort(),
     activeResearchId: kingdom.technology.activeResearchId,
     researchFocus: kingdom.technology.researchFocus,
-    dominantFaith: kingdom.religion.dominantFaith,
+    stateFaith: kingdom.religion.stateFaith,
     posture: kingdom.military.posture,
     legitimacy: kingdom.legitimacy,
     stability: kingdom.stability,

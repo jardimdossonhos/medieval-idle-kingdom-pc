@@ -1,4 +1,5 @@
-﻿﻿﻿﻿﻿﻿import type { PopulationComponent } from "../components/PopulationComponent";
+﻿﻿﻿﻿﻿﻿﻿﻿import type { PopulationComponent } from "../components/PopulationComponent";
+import type { EcsModifiers } from "../models/technology";
 
 // Capacidade base de suporte natural por bioma (sem tecnologia)
 // 0: Oceano, 1: Deserto, 2: Tundra, 3: Temperado, 4: Tropical
@@ -14,7 +15,7 @@ export class PopulationSystem {
     deltaTimeSeconds: number, 
     population: PopulationComponent, 
     entities: readonly number[],
-    activeModifiers: Record<string, Float64Array> | null,
+    activeModifiers: EcsModifiers | null,
     biome: Uint8Array
   ): void {
     const capacityModifiers = activeModifiers?.["population.carrying_capacity_multiplier"];

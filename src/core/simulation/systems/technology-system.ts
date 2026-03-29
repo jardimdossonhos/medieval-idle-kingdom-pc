@@ -1,4 +1,4 @@
-﻿import { TechnologyDomain } from "../../models/enums";
+﻿﻿import { TechnologyDomain } from "../../models/enums";
 import type { KingdomState } from "../../models/game-state";
 import type { TechnologyNode } from "../../models/technology";
 import { getTechnologyNode, selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../../data/technology-tree";
@@ -6,11 +6,10 @@ import type { SimulationSystem } from "../tick-pipeline";
 import { clamp, createEventId, roundTo } from "./utils";
 
 function applyResearchEffects(kingdom: KingdomState, node: TechnologyNode): void {
-  for (const [effect, value] of Object.entries(node.effects)) {
+  for (const effectObj of node.effects) {
+    const effect = effectObj.target;
+    const value = effectObj.value;
     switch (effect) {
-      case "technology.researchRate":
-        kingdom.technology.researchRate = roundTo(clamp(kingdom.technology.researchRate + value, 0.5, 5));
-        break;
       case "military.techLevel":
         kingdom.military.militaryTechLevel = roundTo(clamp(kingdom.military.militaryTechLevel + value, 1, 10));
         break;
@@ -114,7 +113,8 @@ export function createTechnologySystem(): SimulationSystem {
         const kingdom = context.nextState.kingdoms[kingdomId];
         const budgetTechFactor = kingdom.economy.budgetPriority.technology / 20;
         const focusBoost = kingdom.technology.researchFocus === TechnologyDomain.Military ? 0.08 : 0.04;
-        const researchDelta = kingdom.technology.researchRate * (0.5 + budgetTechFactor + focusBoost);
+        const baseResearchRate = 1.0;
+        const researchDelta = baseResearchRate * (0.5 + budgetTechFactor + focusBoost);
 
         kingdom.technology.accumulatedResearch = roundTo(kingdom.technology.accumulatedResearch + researchDelta);
 

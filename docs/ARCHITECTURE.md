@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Epochs Idle
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿# Arquitetura - Epochs Idle
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -28,7 +28,28 @@ Para manter a estabilidade da base de código e evitar "remendos" que escalonam 
 *   **Verificação Obrigatória:** Nenhuma linha de código deve ser escrita (ou refatorada) com base em suposições ou convenções genéricas de mercado se o arquivo de contrato original (interface, classe base ou hook) não tiver sido lido previamente.
 *   **Solicitação Ativa (Fail-Fast):** Se uma dependência cruzada, interface ou lógica de terceiros não estiver disponível no contexto de desenvolvimento imediato, a execução da tarefa deve ser **pausada e paralisada imediatamente**. O desenvolvedor ou assistente deve solicitar acesso explícito aos arquivos ausentes antes de sugerir qualquer alteração de código. Tentativas de "adivinhação" (guessing) de APIs violam este princípio e inserem débito técnico inaceitável.
 
-### 1.3 Filosofia de Game Design: Simulador Histórico Sistêmico
+### 1.3 Protocolo Operacional do Assistente de IA (Prompt de Sistema)
+
+Para manter o rigor imposto pela seção anterior, qualquer uso de Inteligência Artificial para refatoração ou geração de código neste projeto deve operar estritamente sob o seguinte *System Prompt*:
+
+**Contexto e Papel:** Atuação como Engenheiro de Software Sênior especializado em TypeScript de alta complexidade. Foco absoluto em estabilidade, escalabilidade e segurança. Objetivo: propor melhorias com risco zero de regressão.
+
+**Restrições Operacionais Técnicas (Críticas):**
+* **Acesso a Arquivos:** A IA não possui visão onisciente. Se um arquivo, dependência ou contrato for mencionado e não estiver no contexto, a IA deve **PARAR E EXIGIR** o código antes de prosseguir.
+* **Proibição de Suposições:** Nunca inferir implementações. Basear-se exclusivamente no código explícito.
+* **Alteração de Código:** Nunca emitir blocos de código finais antes de ter o plano aprovado pelo desenvolvedor humano.
+* **Padrão TypeScript:** Presumir `strict: true`. Terminantemente proibido o uso de `any`. Priorizar *Discriminated Unions*, *Type Guards*, *Generics* estritos. Impor tipagem de retorno explícita.
+
+**Fluxo de Trabalho Obrigatório (4 Fases):**
+1. **Fase 1: Diagnóstico e Mapeamento:** Descrever tecnicamente o código, listar a Árvore de Impacto e apontar Lacunas de Informação (arquivos que faltam).
+2. **Fase 2: Proposta e Plano:** Estratégia técnica, Plano de Execução (Step-by-step), Matriz de Risco e Plano de Rollback.
+3. **Fase 3: Validação e Testes:** Garantia de integridade e edge cases.
+4. **Fase 4: Checkpoint de Autorização:** Encerrar solicitando autorização ("*A análise está correta? Posso prosseguir com a geração do código do Passo 1?*").
+
+**Diretrizes de Comunicação:**
+A IA deve ser clínica, direta e focada em engenharia. Sem saudações ou didática júnior. Falhas estruturais devem ser apontadas diretamente.
+
+### 1.4 Filosofia de Game Design: Simulador Histórico Sistêmico
 
 O jogo rejeita o formato de "roteiro fixo" (eventos atrelados a datas exatas do mundo real) e adota um modelo de **História Probabilística guiada por forças estruturais**.
 *   **Sem Roteiros, Apenas Vetores:** O surgimento de eras, guerras mundiais ou revoluções (como a Industrial) não ocorre no "Ano X". Elas são engatilhadas quando as condições sistêmicas do motor matemático (Centralização, Tecnologia, Pressão Demográfica) são atingidas. O jogador atua como uma "força de desvio" dentro dessas tendências.
@@ -176,13 +197,13 @@ Para garantir a integridade da base de código e evitar retrabalho, o desenvolvi
 *   **Fase 4: A Visão Épica (Metagame)**
     *   **Alvo Único: Multi-Eras (6.7) e UI Dinâmica (6.8).** Com a base matemática inquebrável, implementar a passagem de tempo, mutação das labels de recursos e a interface preditiva final.
 
-### 6.0.1. Ferramentas de Desenvolvedor (Modo Deus)
+### 6.0.1. Ferramentas de Desenvolvedor (Console de Dev / Modo Deus)
 
 Para auxiliar no balanceamento de longo prazo e limpar a UI para o jogador final, o painel de debug estático será substituído por um **Developer Console ("Modo Deus")** oculto.
 *   **Acesso:** Abordagem "Android-style". O menu é ativado exclusivamente ao clicar rápida e sequencialmente **5 vezes** sobre a label de Versão do jogo na interface.
 *   **Utilidade Estrutural:** O Modo Deus servirá como o grande ambiente de testes para o canal `APPLY_ECS_EFFECTS`.
 *   **Capacidades Planejadas:**
-    *   **Recursos & Demografia:** Injeção massiva ou dizimação (zerar recursos/matar população) para engatilhar cenários de crise.
+    *   **Recursos & Demografia:** Injeção massiva ou dizimação para engatilhar cenários de crise ou testar transbordos.
     *   **Meta & Tempo:** Desbloqueio imediato de toda a árvore de Tecnologias, saltos de Eras e manipulação de saltos no relógio da simulação (Time Travel).
     *   **Estado & Debug:** Monitoramento de saúde do Worker, FPS e Hard Reset profundo de Banco de Dados.
 
@@ -373,6 +394,24 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     *   **Previsão de Causa e Efeito:** A UI protegerá o jogador de erros cegos. Mover *sliders* de controle (ex: Impostos no painel de Governo) calculará um "Delta" local e exibirá um texto flutuante preditivo (ex: `+150 Ouro / -5% Legitimidade`) antes que o jogador solte o mouse e confirme a ação.
     *   **Sistema de Tooltips Inteligentes:** Interceptação dos dados do Worker para explicar o "Porquê" das coisas. Passar o mouse sobre um ganho revelará a fórmula destrinchada (ex: *Produção Base + Bônus Tecnológico - Penalidade Climática*).
     *   **Automação (Modo Idle de Fim de Jogo):** A introdução de caixas de seleção estratégicas (`[x] Priorizar Defesa`, `[x] Focar Expansão`). Desbloqueáveis como "Burocracia de Estado" em Eras avançadas, permitindo que a própria thread principal faça o microgerenciamento dos *sliders* a cada ciclo, abraçando a natureza *Idle* do projeto.
+
+### 6.9. Mecânicas de Sobrevivência Inicial (Êxodo Nômade e Clima Realista)
+
+Esta seção detalha as soluções para falhas de game design que criam cenários de "softlock" para o jogador na Era da Aurora.
+
+#### 6.9.1. Falha do Gerador Climático (Biomas Incorretos)
+
+*   **Problema Identificado:** O gerador de mapa procedural (`generate-world-geojson.mjs`) distribui biomas baseando-se unicamente em latitude e ruído Perlin. Isso leva a anomalias geográficas, como a geração de biomas de "Deserto" em regiões de alta umidade como o Brasil, quebrando a imersão.
+*   **Solução Planejada:** O script de geração será aprimorado para incluir uma segunda camada de ruído simulando **Umidade (Moisture)**. Biomas como "Deserto" só serão formados na intersecção de "Alta Temperatura" com "Baixa Umidade", garantindo uma distribuição climática mais realista.
+
+#### 6.9.2. Softlock de Nômades e a Mecânica de Êxodo
+
+*   **Problema Identificado:** Existe um travamento matemático (`softlock`) no início do jogo. Biomas hostis (ex: Deserto) têm um limite de suporte (`carryingCapacity`) de 50 habitantes. No entanto, o `MigrationSystem` exige 150 habitantes para acionar a colonização de um hexágono vizinho. Uma tribo que nasce em um deserto fica permanentemente presa, pois a fome a impede de atingir o limiar de migração.
+*   **Solução Planejada (Êxodo Nômade):** Será criada uma nova Ação Regional chamada **"Êxodo Nômade"**, específica para a Era da Aurora.
+    *   **Mecânica:** O jogador poderá selecionar um hexágono selvagem adjacente e mover toda a sua tribo para lá.
+    *   **Custo:** A ação custará apenas um valor em Comida (para a jornada), sem exigir Ouro ou Legitimidade.
+    *   **Efeito:** O hexágono de origem é abandonado e retorna ao estado de "Terra Selvagem" (`k_nature`). A totalidade da população e dos recursos do jogador é transferida para o novo hexágono, que se torna a nova capital.
+    *   **Impacto no Design:** Isso não apenas resolve o softlock, mas também adiciona uma camada de jogabilidade historicamente coerente, simulando o comportamento nômade de caçadores-coletores em busca de terras mais férteis.
 
 ## 7. Problemas Anteriores (Resolvidos)
 

@@ -1,9 +1,6 @@
 import "./styles/global.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Diagnostic } from "./application/diagnostics";
-import { createInitialState } from "./application/boot/create-initial-state";
-import { createStaticWorldData } from "./application/boot/static-world-data";
-import { WORLD_DEFINITIONS_V1 } from "./application/boot/generated/world-definitions-v1";
 import {
   GameSession,
   type DiplomaticActionType,
@@ -285,28 +282,47 @@ function saveLocalProfile(profile: LocalPlayerProfile): void {
 }
 
 // Cache de Índice O(1) para abolir o findIndex em arrays de 62k posições
-const REGION_INDEX_MAP = new Map<string, number>();
-const STATIC_IS_WATER = new Uint8Array(WORLD_DEFINITIONS_V1.length);
-const STATIC_BIOME = new Uint8Array(WORLD_DEFINITIONS_V1.length);
-
-for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
-  const def = WORLD_DEFINITIONS_V1[i];
-  REGION_INDEX_MAP.set(def.id, i);
-  
-  // Tradução Data-Oriented: Arrays compactos de 8-bits para transporte ultrarrápido ao Worker
-  STATIC_IS_WATER[i] = def.isWater ? 1 : 0;
-  switch (def.biome) {
-    case "ocean": STATIC_BIOME[i] = 0; break;
-    case "desert": STATIC_BIOME[i] = 1; break;
-    case "tundra": STATIC_BIOME[i] = 2; break;
-    case "temperate": STATIC_BIOME[i] = 3; break;
-    case "tropical": STATIC_BIOME[i] = 4; break;
-    default: STATIC_BIOME[i] = 0;
-  }
-}
+let REGION_INDEX_MAP: Map<string, number>;
+let STATIC_IS_WATER: Uint8Array;
+let STATIC_BIOME: Uint8Array;
+let WORLD_DEFINITIONS_V1: any[];
+let WORLD_DEFINITIONS_MAP_ID: string;
 
 async function bootstrapApp(): Promise<void> {
   Diagnostic.system("SYS-BOOT", "Iniciando sequência de ignição da Engine (Main Thread)...");
+
+  Diagnostic.system("SYS-BOOT", "Carregando matriz geográfica (Code Split via Dynamic Import)...");
+  const [
+    { createInitialState },
+    { createStaticWorldData },
+    mapData
+  ] = await Promise.all([
+    import("./application/boot/create-initial-state"),
+    import("./application/boot/static-world-data"),
+    import("./application/boot/generated/world-definitions-v1")
+  ]);
+
+  WORLD_DEFINITIONS_V1 = mapData.WORLD_DEFINITIONS_V1;
+  WORLD_DEFINITIONS_MAP_ID = mapData.WORLD_DEFINITIONS_MAP_ID;
+
+  REGION_INDEX_MAP = new Map<string, number>();
+  STATIC_IS_WATER = new Uint8Array(WORLD_DEFINITIONS_V1.length);
+  STATIC_BIOME = new Uint8Array(WORLD_DEFINITIONS_V1.length);
+
+  for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
+    const def = WORLD_DEFINITIONS_V1[i];
+    REGION_INDEX_MAP.set(def.id, i);
+    
+    STATIC_IS_WATER[i] = def.isWater ? 1 : 0;
+    switch (def.biome) {
+      case "ocean": STATIC_BIOME[i] = 0; break;
+      case "desert": STATIC_BIOME[i] = 1; break;
+      case "tundra": STATIC_BIOME[i] = 2; break;
+      case "temperate": STATIC_BIOME[i] = 3; break;
+      case "tropical": STATIC_BIOME[i] = 4; break;
+      default: STATIC_BIOME[i] = 0;
+    }
+  }
 
   const appRoot = document.getElementById("app");
 
@@ -777,7 +793,7 @@ async function bootstrapApp(): Promise<void> {
   let profile = loadLocalProfile();
   
   const activeCampaignId = `campaign:${profile.id}`;
-  const staticWorldData = createStaticWorldData();
+  const staticWorldData = createStaticWorldData(WORLD_DEFINITIONS_V1, WORLD_DEFINITIONS_MAP_ID);
   const eventBus = new LocalEventBus();
   const npcDecisionService = new UtilityNpcDecisionService();
   const diplomacyResolver = new LocalDiplomacyResolver();
@@ -799,8 +815,10 @@ async function bootstrapApp(): Promise<void> {
       diplomacyResolver,
       warResolver,
       eventBus,
-      staticData: staticWorldData
+      staticData: staticWorldData,
+      orderedDefinitions: WORLD_DEFINITIONS_V1
     }),
+    regionIndexMap: REGION_INDEX_MAP,
     autosaveEveryTicks: 5,
     maxOfflineTicks: 12_000,
     snapshotEveryTicks: 25,
@@ -2031,7 +2049,8 @@ async function bootstrapApp(): Promise<void> {
       playerAlliedRegionIds: Array.from(playerAlliedRegionIds).sort(),
       playerEnemyRegionIds: Array.from(playerEnemyRegionIds).sort(),
       regionWealthRatio,
-      animationClockMs: typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+      animationClockMs: typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now(),
+      orderedDefinitions: WORLD_DEFINITIONS_V1
     };
   }
 
@@ -2521,7 +2540,7 @@ async function bootstrapApp(): Promise<void> {
     await persistence.gameStateRepository.clearCurrent();
     
     const selectedRegionId = ui.splashCountrySelect.value;
-    const freshState = createInitialState(staticWorldData, selectedRegionId);
+    const freshState = createInitialState(staticWorldData, selectedRegionId, WORLD_DEFINITIONS_V1);
 
     const playerKingdom = freshState.kingdoms["k_player"];
     if (playerKingdom) {
@@ -2541,7 +2560,7 @@ async function bootstrapApp(): Promise<void> {
   async function startGameplay(stateToBoot: GameState | null) {
     ui.splashScreen.classList.add("is-hidden");
     
-    const bootState = stateToBoot ?? createInitialState(staticWorldData);
+    const bootState = stateToBoot ?? createInitialState(staticWorldData, undefined, WORLD_DEFINITIONS_V1);
     const finalState = await session.bootstrap(bootState);
     
     mapRenderer.setLayer("owner");

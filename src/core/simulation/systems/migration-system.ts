@@ -2,12 +2,12 @@ import { AutomationLevel } from "../../models/enums";
 import { Diagnostic } from "../../../application/diagnostics";
 import type { StaticWorldData } from "../../models/static-world-data";
 import type { SimulationSystem, TickContext } from "../tick-pipeline";
-import { WORLD_DEFINITIONS_V1 } from "../../../application/boot/generated/world-definitions-v1";
+import type { RegionDefinition } from "../../models/world";
 
 const MIGRATION_THRESHOLD = 150; // População necessária para engatilhar o transbordo
 const MIGRATION_AMOUNT = 50;     // Quantidade demográfica que forma a nova colônia
 
-export function createMigrationSystem(staticData: StaticWorldData, eventBus: { publish: (event: any) => void }): SimulationSystem {
+export function createMigrationSystem(staticData: StaticWorldData, eventBus: { publish: (event: any) => void }, orderedDefinitions: RegionDefinition[]): SimulationSystem {
   return {
     id: "migration_system",
     run: (context: TickContext) => {
@@ -19,8 +19,8 @@ export function createMigrationSystem(staticData: StaticWorldData, eventBus: { p
       const migrations: Array<{ sourceId: string; targetId: string; amount: number; kingdomId: string }> = [];
 
       // Avaliação linear de alta performance (Data-Oriented Scan)
-      for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
-        const def = WORLD_DEFINITIONS_V1[i];
+      for (let i = 0; i < orderedDefinitions.length; i++) {
+        const def = orderedDefinitions[i];
         if (def.isWater) continue;
 
         const regionId = def.id;

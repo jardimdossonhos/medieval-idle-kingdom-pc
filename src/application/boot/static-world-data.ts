@@ -137,9 +137,15 @@ const RELIGIONS_V1: ReligionDefinition[] = [
   }
 ];
 
-export function createStaticWorldData(): StaticWorldData {
+export function createStaticWorldData(
+  injectedDefinitions?: RegionDefinition[],
+  injectedMapId?: string
+): StaticWorldData {
+  const defs = injectedDefinitions ?? WORLD_DEFINITIONS_V1;
+  const mId = injectedMapId ?? WORLD_DEFINITIONS_MAP_ID;
+
   const definitions: Record<string, RegionDefinition> = Object.fromEntries(
-    [...WORLD_DEFINITIONS_V1]
+    [...defs]
       .sort((left, right) => left.id.localeCompare(right.id))
       .map((definition) => [definition.id, definition] as const)
   );
@@ -156,7 +162,7 @@ export function createStaticWorldData(): StaticWorldData {
   );
 
   return {
-    mapId: WORLD_DEFINITIONS_MAP_ID,
+    mapId: mId,
     definitions,
     neighborsByRegionId,
     routes: buildRoutes(definitions),

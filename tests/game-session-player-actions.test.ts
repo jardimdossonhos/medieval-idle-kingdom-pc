@@ -1,4 +1,4 @@
-﻿﻿import { describe, expect, it } from "vitest";
+﻿﻿﻿﻿import { describe, expect, it } from "vitest";
 import { createInitialState } from "../src/application/boot/create-initial-state";
 import { createStaticWorldData } from "../src/application/boot/static-world-data";
 import { GameSession } from "../src/application/game-session";
@@ -15,6 +15,7 @@ import type { ClockService, EventBus } from "../src/core/contracts/services";
 import type { CommandLogEntry, SnapshotSummary, StateSnapshot } from "../src/core/models/commands";
 import type { DomainEvent } from "../src/core/models/events";
 import type { GameState } from "../src/core/models/game-state";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 
 class InMemoryGameStateRepository implements GameStateRepository {
   private state: GameState | null = null;
@@ -154,7 +155,7 @@ class InMemoryEventBus implements EventBus {
 describe("GameSession player actions", () => {
   it("applies regional action and decreases unrest", async () => {
     const staticData = createStaticWorldData();
-    const initial = createInitialState(staticData);
+    const initial = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
 
     const session = new GameSession({
       gameStateRepository: new InMemoryGameStateRepository(),
@@ -179,7 +180,7 @@ describe("GameSession player actions", () => {
 
   it("applies diplomacy cooldown on repeated action", async () => {
     const staticData = createStaticWorldData();
-    const initial = createInitialState(staticData);
+    const initial = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
 
     const session = new GameSession({
       gameStateRepository: new InMemoryGameStateRepository(),
@@ -204,7 +205,7 @@ describe("GameSession player actions", () => {
 
   it("lists technology choices and allows targeting available research", async () => {
     const staticData = createStaticWorldData();
-    const initial = createInitialState(staticData);
+    const initial = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
 
     const session = new GameSession({
       gameStateRepository: new InMemoryGameStateRepository(),

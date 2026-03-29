@@ -1,13 +1,13 @@
-﻿import { describe, expect, it } from "vitest";
-import { createInitialState } from "../src/application/boot/create-initial-state";
+﻿﻿import { createInitialState } from "../src/application/boot/create-initial-state";
 import { createStaticWorldData } from "../src/application/boot/static-world-data";
 import { ArmyPosture } from "../src/core/models/enums";
 import type { TickContext } from "../src/core/simulation/tick-pipeline";
 import { createAutomationSystem } from "../src/core/simulation/systems/automation-system";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 
 function createContext(): TickContext {
   const staticData = createStaticWorldData();
-  const state = createInitialState(staticData);
+  const state = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
 
   return {
     previousState: state,
@@ -43,6 +43,7 @@ describe("automation system", () => {
       attackers: ["k_rival_north"],
       defenders: ["k_player"],
       warScore: 0,
+      casualties: {},
       startedAt: context.now,
       fronts: [
         {

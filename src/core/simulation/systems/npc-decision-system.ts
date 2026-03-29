@@ -1,4 +1,4 @@
-﻿import type { DiplomacyResolver, INpcDecisionService, NpcDecision, WarResolver } from "../../contracts/services";
+﻿﻿import type { DiplomacyResolver, INpcDecisionService, NpcDecision, WarResolver } from "../../contracts/services";
 import type { WarState } from "../../models/game-state";
 import type { NpcMemoryEntry } from "../../models/npc";
 import type { SimulationSystem } from "../tick-pipeline";
@@ -88,7 +88,7 @@ export function createNpcDecisionSystem(
           continue;
         }
 
-        const decisions = decisionService.decide(state, kingdom.id);
+        const decisions = decisionService.decide(state, kingdom.id, context.now);
 
         for (const decision of decisions) {
           context.nextState = diplomacyResolver.applyDecision(context.nextState, decision);

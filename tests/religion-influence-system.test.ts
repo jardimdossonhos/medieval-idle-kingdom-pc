@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialState } from "../src/application/boot/create-initial-state";
 import { createStaticWorldData } from "../src/application/boot/static-world-data";
 import { TickPipeline } from "../src/core/simulation/tick-pipeline";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 import { createReligionSystem } from "../src/core/simulation/systems/religion-system";
 
 function frontierRegionIds(state: ReturnType<typeof createInitialState>, ownerId: string, rivalId: string, neighborsByRegionId: Record<string, string[]>): string[] {
@@ -33,7 +34,7 @@ function faithShareForRegion(
 describe("religion influence system", () => {
   it("applies deterministic frontier conversion when missionaries pressure is active", () => {
     const staticData = createStaticWorldData();
-    const state = createInitialState(staticData);
+    const state = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
     const player = state.kingdoms.k_player;
     const candidateTargets = Object.keys(state.kingdoms)
       .sort()
@@ -88,7 +89,7 @@ describe("religion influence system", () => {
 
   it("emits deterministic coup risk event under high influence and low stability", () => {
     const staticData = createStaticWorldData();
-    const state = createInitialState(staticData);
+    const state = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
     const player = state.kingdoms.k_player;
     const candidateTargets = Object.keys(state.kingdoms)
       .sort()

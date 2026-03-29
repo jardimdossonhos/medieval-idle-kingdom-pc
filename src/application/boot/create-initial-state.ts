@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
 import {
   ArmyPosture,
   AutomationLevel,
@@ -17,7 +17,6 @@ import type { StaticWorldData } from "../../core/models/static-world-data";
 import type { ReligionId } from "../../core/models/types";
 import type { RegionDefinition, RegionState, RegionZone, WorldState } from "../../core/models/world";
 import { createStaticWorldData } from "./static-world-data";
-import { WORLD_DEFINITIONS_V1 } from "./generated/world-definitions-v1";
 
 interface KingdomBlueprint {
   id: string;
@@ -567,7 +566,7 @@ function createKingdoms(ownerByRegionId: Record<string, string>, capitalByOwner:
   return kingdoms;
 }
 
-export function createInitialState(staticData: StaticWorldData = createStaticWorldData(), playerStartRegionId?: string): GameState {
+export function createInitialState(staticData: StaticWorldData = createStaticWorldData(), playerStartRegionId?: string, orderedDefinitions: RegionDefinition[] = []): GameState {
   const now = Date.now();
   const definitions = listDefinitionsSorted(staticData);
   const { ownerByRegionId, capitalByOwner } = assignRegionOwners(definitions, playerStartRegionId);
@@ -579,7 +578,7 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
       .map((kingdomId) => [kingdomId, kingdoms[kingdomId].religion.stateFaith] as const)
   );
 
-  const totalEntities = WORLD_DEFINITIONS_V1.length;
+  const totalEntities = orderedDefinitions.length;
 
   // FAGULHA VITAL (AURORA DA HUMANIDADE): Preenche 99% das matrizes ECS com ZERO para o terreno vazio
   const ecsState: EcsState = {
@@ -595,7 +594,7 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
   };
 
   for (let i = 0; i < totalEntities; i++) {
-    const def = WORLD_DEFINITIONS_V1[i];
+    const def = orderedDefinitions[i];
     const ownerId = ownerByRegionId[def.id] ?? "k_nature";
 
     if (ownerId !== "k_nature" && !def.isWater) {

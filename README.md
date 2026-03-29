@@ -1,4 +1,4 @@
-﻿﻿﻿﻿# Medieval Idle Kingdom
+﻿﻿# Epochs Idle
 
 Browser-first grand strategy idle game architecture focused on local simulation depth.
 
@@ -51,13 +51,13 @@ npm run desktop:dist
 
 Saída do pacote:
 
-- `release/Medieval Idle Kingdom Setup *.exe`
-- `release/Medieval Idle Kingdom *.exe` (portable)
+- `release/Epochs Idle PC Setup *.exe`
+- `release/Epochs Idle PC *.exe` (portable)
 
 Persistência desktop:
 
 - os saves deixam de depender de `IndexedDB`
-- o app grava JSON local em `%APPDATA%/Medieval Idle Kingdom/game-data`
+- o app grava JSON local em `%APPDATA%/Epochs Idle PC/game-data`
 - isso prepara import/export, backup e futura sincronização LAN/internet
 
 Para testar no celular (mesma rede local):

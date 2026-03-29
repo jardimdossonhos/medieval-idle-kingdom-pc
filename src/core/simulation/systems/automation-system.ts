@@ -1,4 +1,4 @@
-﻿import { ArmyPosture, AutomationLevel, TechnologyDomain } from "../../models/enums";
+﻿﻿import { ArmyPosture, AutomationLevel, TechnologyDomain } from "../../models/enums";
 import { selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../../data/technology-tree";
 import type { BudgetPriority } from "../../models/economy";
 import type { GameState, KingdomState } from "../../models/game-state";
@@ -192,9 +192,6 @@ export function createAutomationSystem(): SimulationSystem {
               : selectDefaultResearchNode(kingdom.technology, kingdom.technology.researchFocus);
             kingdom.technology.activeResearchId = target?.id ?? null;
           }
-
-          const rateBoost = kingdom.administration.automation.technology === AutomationLevel.NearlyAutomatic ? 0.03 : 0.015;
-          kingdom.technology.researchRate = roundTo(clamp(kingdom.technology.researchRate + rateBoost, 0.6, 4));
         }
 
         if (isEnabled(kingdom.administration.automation.diplomacyReactive) && threat > 0.7) {

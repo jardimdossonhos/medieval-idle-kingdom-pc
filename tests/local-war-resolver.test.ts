@@ -1,13 +1,14 @@
-﻿import { describe, expect, it } from "vitest";
+﻿﻿import { describe, expect, it } from "vitest";
 import { createInitialState } from "../src/application/boot/create-initial-state";
 import { createStaticWorldData } from "../src/application/boot/static-world-data";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 import { DiplomaticRelation, TreatyType } from "../src/core/models/enums";
 import { LocalWarResolver } from "../src/infrastructure/war/local-war-resolver";
 
 describe("LocalWarResolver", () => {
   it("declares war and enforces peace treaty", () => {
     const staticData = createStaticWorldData();
-    const state = createInitialState(staticData);
+    const state = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
     const resolver = new LocalWarResolver(staticData);
 
     const attackerId = "k_rival_north";

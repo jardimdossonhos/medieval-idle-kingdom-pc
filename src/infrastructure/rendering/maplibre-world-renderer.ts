@@ -4,7 +4,6 @@ import type { KingdomState } from "../../core/models/game-state";
 import type { StaticWorldData } from "../../core/models/static-world-data";
 import type { WorldState } from "../../core/models/world";
 import type { GameMapRenderer, MapLayerMode, MapRenderContext, MapSelection } from "./map-renderer";
-import { WORLD_DEFINITIONS_V1 } from "../../application/boot/generated/world-definitions-v1";
 
 interface WarMarkerFeature {
   type: "Feature";
@@ -119,8 +118,9 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
     const animationClockMs = context?.animationClockMs ?? (typeof performance !== "undefined" ? performance.now() : Date.now());
 
     // Usa o array de definições puro como fonte da iteração de estados
-    for (let i = 0; i < WORLD_DEFINITIONS_V1.length; i++) {
-      const def = WORLD_DEFINITIONS_V1[i];
+    const orderedDefs = (context as any)?.orderedDefinitions ?? [];
+    for (let i = 0; i < orderedDefs.length; i++) {
+      const def = orderedDefs[i];
       if (def.isWater) continue; // Pula os oceanos instantaneamente (ganho massivo de FPS)
 
       const regionId = def.id;

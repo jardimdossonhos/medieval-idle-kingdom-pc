@@ -5,10 +5,11 @@ import { TreatyType } from "../src/core/models/enums";
 import { buildTreatyId } from "../src/core/models/identifiers";
 import { MANUAL_SLOT_ID } from "../src/infrastructure/persistence/save-slots";
 import { normalizeSaveEnvelope, SAVE_SCHEMA_VERSION } from "../src/infrastructure/persistence/save-schema";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 
 describe("save schema migration", () => {
   it("migrates v1 saves to canonical v2 ids", () => {
-    const state = createInitialState();
+    const state = createInitialState(undefined, undefined, WORLD_DEFINITIONS_V1);
     state.meta.schemaVersion = 1;
 
     const attackerId = "k_rival_south";
@@ -20,6 +21,7 @@ describe("save schema migration", () => {
         id: "war_legacy_reverse",
         attackers: [attackerId],
         defenders: [defenderId],
+        casualties: {},
         warScore: 0,
         startedAt: 30_000,
         fronts: []

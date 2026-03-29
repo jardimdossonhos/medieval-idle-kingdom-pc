@@ -2,7 +2,7 @@
   "name": "epochs-idle-pc",
   "version": "0.1.0",
   "private": true,
-  "description": "Grand strategy idle medieval local-first com mapa mundial e simulação sistêmica.",
+  "description": "Grand strategy idle local-first com mapa mundial e simulação sistêmica.",
   "author": "Josias Michel <josiasmichel@gmail.com>",
   "type": "module",
   "main": "desktop/main.mjs",

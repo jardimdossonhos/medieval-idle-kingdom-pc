@@ -1,7 +1,14 @@
-﻿import { TechnologyDomain } from "./enums";
+﻿﻿import { TechnologyDomain } from "./enums";
+
+export type ModifierTarget =
+  | "population.carrying_capacity_multiplier"
+  | "population.growth_rate_multiplier"
+  | "military.manpower_modifier";
+
+export type EcsModifiers = Partial<Record<ModifierTarget, Float64Array>>;
 
 export interface TechnologyEffect {
-  target: string;
+  target: ModifierTarget;
   value: number;
   type: "multiplier" | "additive";
 }

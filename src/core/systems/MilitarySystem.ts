@@ -1,5 +1,6 @@
 import type { MilitaryComponent } from "../components/MilitaryComponent";
 import type { PopulationComponent } from "../components/PopulationComponent";
+import type { EcsModifiers } from "../models/technology";
 
 const BASE_MANPOWER_RATIO = 0.025; // 2.5% da população se torna soldado por padrão
 
@@ -13,15 +14,15 @@ export class MilitarySystem {
     military: MilitaryComponent,
     population: PopulationComponent,
     entities: readonly number[],
-    _activeModifiers: Record<string, Float64Array> | null
+    activeModifiers: EcsModifiers | null
   ): void {
-    // const manpowerModifiers = activeModifiers?.["military.manpower_modifier"];
+    const manpowerModifiers = activeModifiers?.["military.manpower_modifier"];
 
     for (const entityId of entities) {
       const currentPop = population.total[entityId];
-      // const techManpowerMult = manpowerModifiers ? manpowerModifiers[entityId] : 0;
+      const techManpowerMult = manpowerModifiers ? manpowerModifiers[entityId] : 0;
       
-      military.manpower[entityId] = Math.floor(currentPop * BASE_MANPOWER_RATIO);
+      military.manpower[entityId] = Math.floor(currentPop * BASE_MANPOWER_RATIO * (1 + techManpowerMult));
     }
   }
 }

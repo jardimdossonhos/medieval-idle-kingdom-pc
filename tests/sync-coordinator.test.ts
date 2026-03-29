@@ -4,6 +4,7 @@ import { SyncCoordinator } from "../src/application/sync/sync-coordinator";
 import type { CommandLogRepository, SnapshotRepository } from "../src/core/contracts/game-ports";
 import type { CommandLogEntry, SnapshotSummary, StateSnapshot } from "../src/core/models/commands";
 import { LocalOnlySyncAdapter } from "../src/infrastructure/sync/local-sync-adapter";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 import { hashDeterministic } from "../src/core/utils/stable-hash";
 
 class InMemoryCommandLogRepository implements CommandLogRepository {
@@ -112,7 +113,7 @@ function createCommand(sequence: number, previousHash: string, commandType: stri
 
 describe("SyncCoordinator", () => {
   it("pushes local commands and pulls new remote commands", async () => {
-    const initialState = createInitialState();
+    const initialState = createInitialState(undefined, undefined, WORLD_DEFINITIONS_V1);
     const commandRepo = new InMemoryCommandLogRepository();
     const snapshotRepo = new InMemorySnapshotRepository();
     const syncAdapter = new LocalOnlySyncAdapter();

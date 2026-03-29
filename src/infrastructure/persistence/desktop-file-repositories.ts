@@ -73,6 +73,38 @@ export class DesktopFileGameStateRepository implements GameStateRepository {
   async clearCurrent(): Promise<void> {
     await this.bridge.storage.delete(CURRENT_SCOPE, CURRENT_KEY);
   }
+
+  saveCurrentSync(state: GameState): void {
+    try {
+      const envelope = createCurrentStateEnvelope(state);
+      localStorage.setItem("desktop:current", JSON.stringify(envelope));
+    } catch (error) {
+      console.error("Failed to save state to localStorage", error);
+    }
+  }
+
+  loadCurrentSync(): GameState | null {
+    try {
+      const raw = localStorage.getItem("desktop:current");
+      if (!raw) {
+        return null;
+      }
+      const envelope = JSON.parse(raw);
+      const normalized = normalizeCurrentStateEnvelope(envelope);
+      return normalized?.state ?? null;
+    } catch (error) {
+      console.error("Failed to load state from localStorage", error);
+      return null;
+    }
+  }
+
+  clearCurrentSync(): void {
+    try {
+      localStorage.removeItem("desktop:current");
+    } catch (error) {
+      console.error("Failed to clear state from localStorage", error);
+    }
+  }
 }
 
 export class DesktopFileSaveRepository implements SaveRepository {
@@ -120,6 +152,10 @@ export class DesktopFileSaveRepository implements SaveRepository {
 
   async deleteSlot(slotId: SaveSlotId): Promise<void> {
     await this.bridge.storage.delete(SAVES_SCOPE, slotId);
+  }
+
+  async clearAll(): Promise<void> {
+    await this.bridge.storage.clear(SAVES_SCOPE);
   }
 }
 

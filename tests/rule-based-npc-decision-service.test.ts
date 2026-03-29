@@ -1,10 +1,11 @@
-﻿import { describe, expect, it } from "vitest";
+﻿﻿﻿﻿import { describe, expect, it } from "vitest";
 import { createInitialState } from "../src/application/boot/create-initial-state";
 import { RuleBasedNpcDecisionService } from "../src/infrastructure/npc/rule-based-npc-decision-service";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 
 describe("RuleBasedNpcDecisionService", () => {
   it("proposes war when expansionist NPC has strong advantage", () => {
-    const state = createInitialState();
+    const state = createInitialState(undefined, undefined, WORLD_DEFINITIONS_V1);
     const service = new RuleBasedNpcDecisionService();
 
     const actor = state.kingdoms.k_rival_north;
@@ -26,7 +27,7 @@ describe("RuleBasedNpcDecisionService", () => {
   });
 
   it("proposes peace when exhaustion is high during war", () => {
-    const state = createInitialState();
+    const state = createInitialState(undefined, undefined, WORLD_DEFINITIONS_V1);
     const service = new RuleBasedNpcDecisionService();
 
     const actor = state.kingdoms.k_rival_north;
@@ -37,6 +38,7 @@ describe("RuleBasedNpcDecisionService", () => {
       id: "war_live",
       attackers: [actor.id],
       defenders: [player.id],
+      casualties: {},
       warScore: -8,
       startedAt: state.meta.lastUpdatedAt,
       fronts: [

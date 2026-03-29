@@ -1,4 +1,4 @@
-﻿﻿import { describe, expect, it } from "vitest";
+﻿﻿﻿﻿import { describe, expect, it } from "vitest";
 import { createInitialState } from "../src/application/boot/create-initial-state";
 import { createStaticWorldData } from "../src/application/boot/static-world-data";
 import { GameSession } from "../src/application/game-session";
@@ -15,6 +15,7 @@ import type { ClockService, EventBus } from "../src/core/contracts/services";
 import type { CommandLogEntry, SnapshotSummary, StateSnapshot } from "../src/core/models/commands";
 import type { DomainEvent } from "../src/core/models/events";
 import type { GameState } from "../src/core/models/game-state";
+import { WORLD_DEFINITIONS_V1 } from "../src/application/boot/generated/world-definitions-v1";
 
 class InMemoryGameStateRepository implements GameStateRepository {
   private state: GameState | null = null;
@@ -199,7 +200,7 @@ class InMemoryEventBus implements EventBus {
 describe("GameSession command log and snapshots", () => {
   it("records command chain and periodic snapshots", async () => {
     const staticData = createStaticWorldData();
-    const initialState = createInitialState(staticData);
+    const initialState = createInitialState(staticData, undefined, WORLD_DEFINITIONS_V1);
     const gameStateRepository = new InMemoryGameStateRepository();
     const saveRepository = new InMemorySaveRepository();
     const commandRepository = new InMemoryCommandLogRepository();
