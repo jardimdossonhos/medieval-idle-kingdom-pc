@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
+﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
 import { Diagnostic } from "./diagnostics";
 import type {
   CommandLogRepository,
@@ -846,6 +846,15 @@ export class GameSession {
   }
 
   private doCommitAutosave(): void {
+    // 1. Injeta o feedback visual na sessão ANTES de clonar, para que a mensagem já vá no arquivo do save.
+    this.appendActionLog("Progresso Registrado", "Os escribas reais salvaram o estado do império nos arquivos permanentes.", "info");
+    
+    // 2. Notifica a UI via EventBus (Permite que a interface mostre um ícone de "Salvando..." animado no canto da tela, se desejar)
+    this.deps.eventBus.publish({
+      type: "game.autosaved",
+      payload: { tick: this.currentState?.meta.tick ?? 0 }
+    } as any);
+
     const snapshot = this.buildSaveSlotSnapshot(AUTOSAVE_SLOT_ID);
     this.enqueueIo(async () => {
       await this.deps.saveRepository.saveToSlot(snapshot);
@@ -1229,7 +1238,8 @@ export class GameSession {
 
       this.recordTickCommands(previousTick, result.state.meta.tick, result.events, simNow);
 
-      if (this.ticksSinceAutosave >= (this.deps.autosaveEveryTicks ?? 5)) {
+      // Aumentado o fallback de 5 para 60 Ticks (~1 minuto). Salvar 19 mil hexágonos a cada 5 segundos destrói a Main Thread.
+      if (this.ticksSinceAutosave >= (this.deps.autosaveEveryTicks ?? 60)) {
         this.ticksSinceAutosave = 0;
         this.runAutosave();
       }

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import { existsSync } from "node:fs";
+﻿﻿import { existsSync } from "node:fs";
 import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -109,6 +109,40 @@ function classifyZone(lon, lat) {
   }
 
   return "sub_saharan_africa";
+}
+
+function computeMoisture(lon, lat) {
+  // Converte coordenadas para radianos para atuar como frequência harmônica
+  const radX = lon * Math.PI / 180;
+  const radY = lat * Math.PI / 180;
+
+  // Sobreposição de 3 Oitavas Trigonométricas para emular Perlin Noise deterministicamente
+  const n1 = (Math.sin(radX * 2.0 + radY) + Math.cos(radY * 3.0)) / 2;
+  const n2 = (Math.sin(radX * 6.0 - radY * 2.0) + Math.cos(radX * 5.0 + radY * 4.0)) / 2;
+  const n3 = (Math.sin(radX * 14.0 + radY * 11.0) + Math.cos(radX * 13.0 - radY * 9.0)) / 2;
+
+  // Normalização ponderada [-1, 1] -> [0, 1]
+  let noise = (n1 * 0.6) + (n2 * 0.3) + (n3 * 0.1);
+  noise = (noise + 1) / 2; 
+
+  const absLat = Math.abs(lat);
+  
+  // Bounding Boxes de Geofísica Real (Zonas de Sombra de Chuva e Ventos Alísios)
+  if (absLat >= 15 && absLat <= 35) {
+     // O Saara e Arábia (-15 a 55 lon leste)
+     if (lon >= -15 && lon <= 55 && lat > 0) noise *= 0.35; 
+     // Outback Australiano (115 a 155 lon leste)
+     else if (lon >= 115 && lon <= 155 && lat < 0) noise *= 0.40;
+     // Atacama / Costa Oeste da América do Sul
+     else if (lon >= -80 && lon <= -65 && lat < 0) noise *= 0.30;
+  }
+  
+  // Zonas de Convergência Intertropical (Bônus de Precipitação Amazônia/Congo/Indonésia)
+  if (absLat < 15) {
+      noise = Math.min(1.0, noise + 0.35);
+  }
+
+  return noise;
 }
 
 function createEconomicValues(regionId, zone) {
@@ -261,10 +295,23 @@ async function buildWorldArtifacts() {
       let biome = "ocean";
       if (!isWater) {
         const absLat = Math.abs(lat);
-        if (absLat >= 55) biome = "tundra";
-        else if (absLat >= 35) biome = "temperate";
-        else if (absLat >= 15) biome = "desert";
-        else biome = "tropical";
+        const moisture = computeMoisture(safeLon, lat);
+        
+        // Modelo Climático Bidimensional Simplificado (Whittaker adaptado)
+        if (absLat >= 55) {
+          biome = "tundra";
+        } else if (absLat >= 35) {
+          if (moisture < 0.25) biome = "desert"; // Estepes Frias / Gobi
+          else biome = "temperate";
+        } else if (absLat >= 15) {
+          if (moisture < 0.45) biome = "desert";
+          else if (moisture < 0.70) biome = "temperate"; // Savanas / Oásis
+          else biome = "tropical";
+        } else {
+          if (moisture < 0.20) biome = "desert"; // Muito raro no equador
+          else if (moisture < 0.40) biome = "temperate"; // Planaltos
+          else biome = "tropical";
+        }
       }
 
       const zone = classifyZone(safeLon, lat);
