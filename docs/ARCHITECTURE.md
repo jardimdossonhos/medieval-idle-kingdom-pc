@@ -394,6 +394,7 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     *   **Previsão de Causa e Efeito:** A UI protegerá o jogador de erros cegos. Mover *sliders* de controle (ex: Impostos no painel de Governo) calculará um "Delta" local e exibirá um texto flutuante preditivo (ex: `+150 Ouro / -5% Legitimidade`) antes que o jogador solte o mouse e confirme a ação.
     *   **Sistema de Tooltips Inteligentes:** Interceptação dos dados do Worker para explicar o "Porquê" das coisas. Passar o mouse sobre um ganho revelará a fórmula destrinchada (ex: *Produção Base + Bônus Tecnológico - Penalidade Climática*).
     *   **Automação (Modo Idle de Fim de Jogo):** A introdução de caixas de seleção estratégicas (`[x] Priorizar Defesa`, `[x] Focar Expansão`). Desbloqueáveis como "Burocracia de Estado" em Eras avançadas, permitindo que a própria thread principal faça o microgerenciamento dos *sliders* a cada ciclo, abraçando a natureza *Idle* do projeto.
+    *   **Feedback Visual Imediato (Regra Global de UX):** Todas as ações do jogador que interagem com o Worker (e, portanto, possuem latência) devem seguir o padrão de *Optimistic UI*. A interface deve reagir instantaneamente (ex: desabilitando ou mudando a cor de um botão) para confirmar ao jogador que seu comando foi recebido, evitando cliques múltiplos e frustração.
 
 ### 6.9. Mecânicas de Sobrevivência Inicial (Êxodo Nômade e Clima Realista)
 
@@ -412,6 +413,34 @@ Esta seção detalha as soluções para falhas de game design que criam cenário
     *   **Custo:** A ação custará apenas um valor em Comida (para a jornada), sem exigir Ouro ou Legitimidade.
     *   **Efeito:** O hexágono de origem é abandonado e retorna ao estado de "Terra Selvagem" (`k_nature`). A totalidade da população e dos recursos do jogador é transferida para o novo hexágono, que se torna a nova capital.
     *   **Impacto no Design:** Isso não apenas resolve o softlock, mas também adiciona uma camada de jogabilidade historicamente coerente, simulando o comportamento nômade de caçadores-coletores em busca de terras mais férteis.
+
+### 6.10. Configuração de Campanha Avançada (A Sala de Guerra)
+
+**Status:** `Em desenvolvimento`
+
+Para aumentar a rejogabilidade e dar ao jogador controle estratégico sobre a narrativa, será implementada uma tela de "Configuração Avançada". A interface principal terá duas opções: um botão de "Início Rápido" (que usa a configuração padrão) e um botão para este "Modo Avançado", que permitirá a personalização profunda do mundo antes do início de cada campanha.
+
+*   **Contrato de Campanha (`CampaignConfig`):** O `create-initial-state.ts` será refatorado para ser uma "Fábrica de Mundos" que opera com base em um novo objeto `CampaignConfig`. Este objeto conterá todas as escolhas do jogador.
+
+*   **Opções de Personalização Planejadas:**
+    *   **Identidade dos Reinos:** O jogador poderá personalizar o nome e a cor do seu império e de cada um dos NPCs.
+    *   **Personalidade da IA (Níveis de Dificuldade):** Em vez de bônus numéricos, a dificuldade será definida por perfis comportamentais no `NpcDecisionSystem`:
+        *   **Fácil ("O Eremita"):** Perfil passivo, focado em economia e avesso a riscos. Pode realizar ações altruístas.
+        *   **Moderado ("O Equilibrado"):** Comportamento padrão, balanceando todos os aspectos do jogo.
+        *   **Difícil ("O Tirano"):** Perfil agressivo, expansionista e oportunista. Maior propensão a trair pactos e a explorar fraquezas militares.
+    *   **Dinâmica Populacional dos NPCs:**
+        *   **Fixo:** O número de NPCs no mundo é constante. Um império só desaparece se for conquistado.
+        *   **Dinâmico:** O motor de "mitose" social é ativado. NPCs podem se fraturar, criando novos impérios, ou se fundir, alterando o cenário político de forma orgânica.
+    *   **Ponto de Partida Histórico:**
+        *   **Era Inicial:** O jogador poderá escolher a era de início (ex: "Aurora da Humanidade", "Era Medieval"). O sistema irá automaticamente desbloquear todas as tecnologias das eras anteriores e ajustar os recursos e população iniciais para um ponto de partida coerente.
+    *   **Recursos Iniciais:** Sliders ou campos de entrada para definir a quantidade inicial de população e recursos, com uma opção de "Aplicar a todos" para garantir paridade.
+    *   **Autopilot Inicial (Modo Idle Padrão):** Por padrão, a campanha do jogador começará com os sistemas de automação (pesquisa, expansão) ativados. O jogador poderá desativá-los a qualquer momento para assumir o controle manual, reforçando a natureza *idle* do jogo.
+
+### 6.11. Imersão Sensorial (Arte e Som)
+
+Para aumentar o fator de imersão, o planejamento futuro inclui a adição de elementos audiovisuais.
+*   **Arte de Abertura:** Uma imagem de abertura para dar um tom mais profissional e polido ao jogo.
+*   **Trilha Sonora:** Músicas de fundo para complementar a atmosfera de cada era do jogo.
 
 ## 7. Problemas Anteriores (Resolvidos)
 
