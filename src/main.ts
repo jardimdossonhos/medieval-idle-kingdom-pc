@@ -33,7 +33,7 @@ interface UiRefs {
   postVictoryValue: HTMLElement;
   pauseButton: HTMLButtonElement;
   speedSelect: HTMLSelectElement;
-  openSavesButton: HTMLButtonElement;
+  openSettingsButton: HTMLButtonElement;
   manualSaveButton: HTMLButtonElement;
   refreshSavesButton: HTMLButtonElement;
   exitToMenuBtn: HTMLButtonElement;
@@ -404,7 +404,7 @@ async function bootstrapApp(): Promise<void> {
             <option value="10">10x</option>
           </select>
         </label>
-        <button id="open-saves-btn">Menu de saves</button>
+        <button id="open-settings-btn">Configurações</button>
         <span id="toast-area" class="toast"></span>
       </section>
 
@@ -608,7 +608,7 @@ async function bootstrapApp(): Promise<void> {
     postVictoryValue: queryElement(appRoot, "#post-victory-value"),
     pauseButton: queryElement(appRoot, "#toggle-pause-btn"),
     speedSelect: queryElement(appRoot, "#speed-select"),
-    openSavesButton: queryElement(appRoot, "#open-saves-btn"),
+    openSettingsButton: queryElement(appRoot, "#open-settings-btn"),
     manualSaveButton: queryElement(appRoot, "#manual-save-btn"),
     refreshSavesButton: queryElement(appRoot, "#refresh-saves-btn"),
     exitToMenuBtn: queryElement(appRoot, "#exit-to-menu-btn"),
@@ -818,7 +818,6 @@ async function bootstrapApp(): Promise<void> {
       staticData: staticWorldData,
       orderedDefinitions: WORLD_DEFINITIONS_V1
     }),
-    regionIndexMap: REGION_INDEX_MAP,
     autosaveEveryTicks: 5,
     maxOfflineTicks: 12_000,
     snapshotEveryTicks: 25,
@@ -995,16 +994,17 @@ async function bootstrapApp(): Promise<void> {
     } else {
       // Vacina: Se o save veio com População morta (artefato de testes antigos), revive o mundo
       const pop = state.ecs.populationTotal as any;
-      let isWorldDead = true;
+      let totalLandPopulation = 0;
       
       if (pop && pop.length > 0) {
         for (let i = 0; i < Math.min(pop.length, len); i++) {
-          if (pop[i] > 0) {
-            isWorldDead = false;
-            break;
+          if (STATIC_IS_WATER[i] === 0) {
+            totalLandPopulation += pop[i] || 0;
           }
         }
       }
+
+      const isWorldDead = totalLandPopulation <= 0;
 
       if (isWorldDead) {
         Diagnostic.warn("PERS-003", "Fagulha Vital: Save antigo corrompido detectado (Mundo Morto). Injetando sobreviventes apenas em terra firme.");
@@ -1183,6 +1183,49 @@ async function bootstrapApp(): Promise<void> {
           occurredAt: Date.now()
         });
         if (state.events.length > 50) state.events.pop(); // Limpeza de Memória
+      }
+    }
+  });
+
+  // Escuta o Êxodo Nômade e transporta os recursos e população instantaneamente no Worker
+  eventBus.subscribe("population.exodus", (event: any) => {
+    const state = session.getState();
+    Diagnostic.system("MIG-SYS", "Evento de Êxodo Nômade recebido.", event.payload);
+
+    if (!state) return;
+    const { sourceId, targetId, kingdomId } = event.payload;
+    const sourceIdx = REGION_INDEX_MAP.get(sourceId);
+    const targetIdx = REGION_INDEX_MAP.get(targetId);
+
+    if (sourceIdx !== undefined && targetIdx !== undefined) {
+      const resources = ["gold", "food", "wood", "iron", "faith", "legitimacy", "population", "manpower"] as const;
+      
+      for (const res of resources) {
+        let amount = 0;
+        switch(res) {
+          case "gold": amount = currentSimulationState.goldData[sourceIdx] || 0; break;
+          case "food": amount = currentSimulationState.foodData[sourceIdx] || 0; break;
+          case "wood": amount = currentSimulationState.woodData[sourceIdx] || 0; break;
+          case "iron": amount = currentSimulationState.ironData[sourceIdx] || 0; break;
+          case "faith": amount = currentSimulationState.faithData[sourceIdx] || 0; break;
+          case "legitimacy": amount = currentSimulationState.legitimacyData[sourceIdx] || 0; break;
+          case "population": amount = currentSimulationState.populationTotalData[sourceIdx] || 0; break;
+          case "manpower": amount = currentSimulationState.manpowerData[sourceIdx] || 0; break;
+        }
+
+        if (amount > 0) {
+          // Transfere o valor exato lido no último tick para o novo hexágono e aniquila os vestígios na origem
+          simulationWorker.postMessage({ type: "APPLY_ECS_EFFECTS", payload: { target: res, operation: "add", value: amount, indices: [targetIdx] } });
+          simulationWorker.postMessage({ type: "APPLY_ECS_EFFECTS", payload: { target: res, operation: "set", value: 0, indices: [sourceIdx] } });
+        }
+      }
+
+      syncModifiersToWorker(state); // Reajusta limites de bioma
+
+      if (state.kingdoms[kingdomId]?.isPlayer) {
+        const def = staticWorldData.definitions[targetId];
+        state.events.unshift({ id: `exo_${state.meta.tick}_${targetId}`, title: "Êxodo Nômade", details: `A tribo abandonou suas terras ancestrais e migrou em massa para ${def?.name ?? targetId}.`, severity: "info", occurredAt: Date.now() });
+        if (state.events.length > 50) state.events.pop();
       }
     }
   });
@@ -1613,23 +1656,35 @@ async function bootstrapApp(): Promise<void> {
         ui.regionActions.appendChild(button);
       }
     } else if (region.ownerId === "k_nature") {
-      const config = session.getRegionActionConfig("colonize");
-      const costStrings = Object.entries(config.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+      const isNomad = Object.keys(state.world.regions).filter(r => state.world.regions[r].ownerId === player.id).length === 1;
 
-      const button = document.createElement("button");
-      button.className = "primary";
-      button.innerHTML = `<span>${config.label}</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${costStrings.join(", ")} | -50 População da Capital</small>`;
-      
-      if (!isAdjacent) {
-        button.disabled = true;
-        button.innerHTML += `<small style="display:block; font-size:0.75em; color:#ff5555; margin-top:2px;">Requer fronteira vizinha</small>`;
+      const actionsToRender: RegionActionType[] = ["colonize"];
+      if (isNomad) actionsToRender.push("exodus");
+
+      for (const actionId of actionsToRender) {
+        const config = session.getRegionActionConfig(actionId);
+        const costStrings = Object.entries(config.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+
+        const button = document.createElement("button");
+        button.className = "primary";
+        
+        let extraCost = "";
+        if (actionId === "colonize") extraCost = " | -50 Pop. da Capital";
+        if (actionId === "exodus") extraCost = " | Abandona território";
+
+        button.innerHTML = `<span>${config.label}</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${costStrings.join(", ")}${extraCost}</small>`;
+        
+        if (!isAdjacent) {
+          button.disabled = true;
+          button.innerHTML += `<small style="display:block; font-size:0.75em; color:#ff5555; margin-top:2px;">Requer fronteira vizinha</small>`;
+        }
+
+        button.addEventListener("click", () => {
+          const result = session.executeRegionAction(selectedRegionId ?? "", actionId);
+          showToast(result.message);
+        });
+        ui.regionActions.appendChild(button);
       }
-
-      button.addEventListener("click", () => {
-        const result = session.executeRegionAction(selectedRegionId ?? "", "colonize");
-        showToast(result.message);
-      });
-      ui.regionActions.appendChild(button);
     } else {
       const targetId = region.ownerId;
       
@@ -2261,8 +2316,12 @@ async function bootstrapApp(): Promise<void> {
     session.setSpeed(Number.isFinite(speed) ? speed : 1);
   });
 
-  ui.openSavesButton.addEventListener("click", () => {
-    setActiveTab("saves");
+  ui.openSettingsButton.addEventListener("click", () => {
+    setActiveTab("configuracoes");
+    const tabsSection = document.querySelector(".tabs.card");
+    if (tabsSection) {
+      tabsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   });
 
   ui.manualSaveButton.addEventListener("click", async () => {
@@ -2468,6 +2527,20 @@ async function bootstrapApp(): Promise<void> {
         }
         showToast("Modo Deus: População dizimada nas suas regiões.");
         break;
+      case "force_disaster": {
+        const isPlague = Math.random() > 0.5;
+        const eventType = isPlague ? "disaster.plague" : "disaster.drought";
+        const payload = {
+          actorKingdomId: player.id,
+          impact: isPlague ? "population_loss" : "food_loss"
+        };
+        eventBus.publish({ type: eventType, payload } as any);
+        showToast(`Modo Deus: Forçando desastre (${isPlague ? 'Praga' : 'Seca'}) no seu império.`);
+        const eventEl = ui.eventList.querySelector<HTMLLIElement>(`li`);
+        flashUIElement(eventEl, "#ff3333");
+        setActiveTab("eventos");
+        break;
+      }
     }
   });
   syncProfileUi();

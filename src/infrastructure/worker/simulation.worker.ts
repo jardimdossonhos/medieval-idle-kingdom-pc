@@ -39,7 +39,8 @@ type WorkerCommand =
   | { type: "PAUSE_AND_EXTRACT_STATE" }
   | { type: "RESUME" }
   | { type: "SET_TIME_SCALE"; payload: { speedMultiplier: number; isPaused: boolean } }
-  | { type: "APPLY_ECS_EFFECTS"; payload: { target: string; operation: string; value: number; indices: number[] } };
+  | { type: "APPLY_ECS_EFFECTS"; payload: { target: string; operation: string; value: number; indices: number[] } }
+  | { type: "UPDATE_MODIFIERS"; payload: Record<string, Float64Array> };
 
 interface TickMessage {
   type: "TICK";
@@ -129,6 +130,11 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
   }
 
   switch (command.type) {
+    case "UPDATE_MODIFIERS": {
+      activeModifiers = command.payload;
+      DiagnosticWorker.trace("WRK-MOD", `Modificadores de tecnologia recebidos e aplicados.`, { keys: Object.keys(command.payload) });
+      break;
+    }
     case "SET_TIME_SCALE": {
       speedMultiplier = command.payload.speedMultiplier;
       isPaused = command.payload.isPaused;

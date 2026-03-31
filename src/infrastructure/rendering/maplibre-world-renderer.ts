@@ -603,16 +603,16 @@ function buildPulse(clockMs: number, regionId: string): number {
 }
 
 function colorForKingdom(kingdomId: string): string {
-  if (!kingdomId) return "rgba(0,0,0,0)";
+  if (!kingdomId || typeof kingdomId !== "string") return "rgba(0,0,0,0)";
   if (kingdomId === "k_nature") return "#3b453b"; // Verde Musgo Escuro para a Natureza Selvagem
 
   const palette = ["#8f5b3c", "#4f6d52", "#5d5277", "#9b6c2e", "#435b78", "#7d4f5f"];
   const hash = kingdomId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return palette[hash % palette.length];
+  return palette[hash % palette.length] || "rgba(0,0,0,0)";
 }
 
 function colorForFaith(faithId: string, staticData?: StaticWorldData): string {
-  if (!faithId) return "rgba(0,0,0,0)";
+  if (!faithId || typeof faithId !== "string") return "rgba(0,0,0,0)";
   if (faithId === "ancestral_cults") return "#4a463c"; // Marrom Seco para Tribos Iniciais
 
   const staticColor = staticData?.religions[faithId]?.color;
@@ -622,7 +622,7 @@ function colorForFaith(faithId: string, staticData?: StaticWorldData): string {
 
   const palette = ["#7b4a33", "#ad7b2f", "#4f6c3e", "#b66a6a", "#49657a", "#8a6a9b", "#2f6f74"];
   const hash = faithId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return palette[hash % palette.length];
+  return palette[hash % palette.length] || "rgba(0,0,0,0)";
 }
 
 function buildTileUrl(): string {

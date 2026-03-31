@@ -1,9 +1,15 @@
 ﻿﻿import { TechnologyDomain } from "./enums";
 
 export type ModifierTarget =
+  | "economy.food_production_multiplier"
+  | "economy.tax_income_multiplier"
   | "population.carrying_capacity_multiplier"
   | "population.growth_rate_multiplier"
-  | "military.manpower_modifier";
+  | "military.manpower_modifier"
+  | "military.reserveManpower"
+  | "administration.capacity"
+  | "religion.cohesion"
+  | "legitimacy";
 
 export type EcsModifiers = Partial<Record<ModifierTarget, Float64Array>>;
 

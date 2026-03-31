@@ -1044,4 +1044,39 @@ O usuário reportou duas falhas críticas de imersão e jogabilidade na Era da A
 2.  **Mecânica de "Êxodo Nômade":** Será criada uma nova Ação Regional de baixo custo (apenas Comida) que permite ao jogador abandonar seu território atual e mover toda a sua população e recursos para um hexágono adjacente. Isso resolve o softlock e adiciona uma camada de jogabilidade nômade historicamente precisa.
 
 ### Status:
-Documentado em `ARCHITECTURE.md` (Seção 6.9). Implementação pendente.
+Documentado em `ARCHITECTURE.md` (Seção 6.9). Implementado com sucesso via sistema de eventos atômicos (Event-Driven) para transferência segura no ECS.
+
+---
+
+## Entrada: 70
+
+**Data:** 26/03/2024
+
+### Conclusão da Fase 1: Infraestrutura de Efeitos e Desastres (Alvo B)
+**Ação Realizada:** O motor de crises foi finalizado. Foi criado o `DisasterSystem` no Core POO, operando com gatilhos probabilísticos (Pragas e Secas). O sistema foi acoplado ao `EventBus`, traduzindo os eventos em danos matemáticos reais enviados para o Worker via `APPLY_ECS_EFFECTS`.
+**Controle de Jogador:** Injetada a flag `disastersEnabled` no `GameState.meta` com um *toggle* na interface (Aba Configurações), permitindo aos jogadores desligarem a mecânica.
+**Status:** Testado e validado via God Mode. A Rota Crítica "Fase 1: Infraestrutura de Efeitos" está 100% concluída.
+
+---
+
+## Entrada: 71
+
+**Data:** 26/03/2024
+
+### Melhorias de Qualidade de Vida (QoL) e UX do Desenvolvedor
+**Problema Detectado:** O console de desenvolvedor (Modo Deus) bloqueava parte da visão do jogo e cortava abas. O menu superior confundia novos jogadores ocultando configurações importantes no rodapé.
+**Ação Realizada:** 
+1. O painel do Modo Deus foi refatorado para ser *Draggable* (arrastável) via cabeçalho e teve sua largura expandida para acomodar novas ferramentas de testes sistêmicos.
+2. O botão "Menu de Saves" no painel principal foi renomeado para "Configurações" e recebeu uma âncora com `scrollIntoView(smooth)`, direcionando a atenção do jogador de forma orgânica para a gestão de opções, saves e perfis locais.
+
+---
+
+## Entrada: 72
+
+**Data:** 26/03/2024
+
+### Auditoria Forense Final: Sucesso da Persistência e o Novo Gargalo (Renderização O(N))
+**Validação:** A análise cruzada dos logs de sistema atestou o **sucesso incondicional da arquitetura de Save/Load**. O Handshake do Worker, o carregamento via `RESTORE_ECS_STATE` e a reinjeção de modificadores tecnológicos ocorrem perfeitamente. O bug histórico de amnésia do Worker está oficialmente extinto.
+**Novo Alerta Crítico (Gargalo de UI):** Os logs do navegador começaram a disparar `[Violation] 'message' handler took 1300ms+` travando a interface de usuário.
+**Causa Raiz:** O orquestrador `main.ts` escuta o `TICK` do Worker a cada 250ms e repassa a carga para o `renderState()`. A sub-função `buildMapRenderContext` está recalculando as razões de riqueza de **todas as 19.472 regiões de terra firme** a cada pulso (4 vezes por segundo), colapsando a thread principal e gerando input lag severo.
+**Próximo Passo (Imediato):** Otimizar o loop de renderização da UI no `main.ts`. Implementar *Throttle/Memoization* no `buildMapRenderContext` ou mover o cálculo pesado para rodar apenas 1x por segundo (acompanhando o relógio de UI) em vez de ser refém dos micro-pulsos físicos do Worker.

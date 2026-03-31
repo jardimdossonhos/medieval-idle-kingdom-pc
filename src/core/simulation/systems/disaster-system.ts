@@ -7,9 +7,10 @@ export function createDisasterSystem(): SimulationSystem {
     run(context): void {
       const state = context.nextState;
       let eventSeq = 0;
+      const disastersEnabled = state.meta.disastersEnabled ?? true; // Default to ON for old saves
 
-      // Roda o sorteio de desastres apenas a cada 10 ciclos (para poupar processamento)
-      if (state.meta.tick > 0 && state.meta.tick % 10 === 0) {
+      // Roda o sorteio de desastres apenas a cada 10 ciclos (para poupar processamento) e se estiver habilitado
+      if (disastersEnabled && state.meta.tick > 0 && state.meta.tick % 10 === 0) {
         const allKingdomIds = Object.keys(state.kingdoms);
         
         for (const kingdomId of allKingdomIds) {

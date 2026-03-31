@@ -1,5 +1,6 @@
-﻿﻿import type { KingdomState } from "../../core/models/game-state";
-import type { WorldState } from "../../core/models/world";
+﻿﻿
+import type { KingdomState } from "../../core/models/game-state";
+import type { RegionDefinition, WorldState } from "../../core/models/world";
 
 export type MapLayerMode = "owner" | "unrest" | "war" | "religion" | "diplomacy" | "economy";
 
@@ -16,6 +17,7 @@ export interface MapRenderContext {
   playerEnemyRegionIds?: readonly string[];
   regionWealthRatio?: Record<string, number>;
   animationClockMs?: number;
+  orderedDefinitions?: readonly RegionDefinition[];
 }
 
 export interface GameMapRenderer {

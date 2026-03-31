@@ -73,6 +73,7 @@ export interface GameMeta {
   tickDurationMs: number;
   speedMultiplier: number;
   paused: boolean;
+  disastersEnabled: boolean;
   createdAt: TimestampMs;
   lastUpdatedAt: TimestampMs;
   lastClosedAt: TimestampMs | null;

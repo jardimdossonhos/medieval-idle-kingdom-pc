@@ -54,7 +54,7 @@ export class GodModeConsole {
       position: absolute;
       top: 60px;
       right: 20px;
-      width: 400px;
+      width: 480px;
       background: rgba(10, 15, 20, 0.95);
       color: #00ff00;
       border: 1px solid #00ff00;
@@ -67,16 +67,17 @@ export class GodModeConsole {
     `;
 
     this.panelElement.innerHTML = `
-      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #00ff00; padding-bottom: 10px; margin-bottom: 15px;">
-        <h3 style="margin: 0; font-size: 16px; text-shadow: 0 0 5px #00ff00;">👁️ CONSOLE DEV</h3>
+      <div class="god-mode-header" style="display: flex; justify-content: space-between; border-bottom: 1px solid #00ff00; padding-bottom: 10px; margin-bottom: 15px; cursor: move;">
+        <h3 style="margin: 0; font-size: 16px; text-shadow: 0 0 5px #00ff00; pointer-events: none;">👁️ CONSOLE DEV</h3>
         <button id="god-mode-close" style="background: none; border: none; color: #00ff00; cursor: pointer; font-weight: bold; font-size: 16px;">X</button>
       </div>
       
-      <div id="god-mode-tabs" style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 10px;">
+      <div id="god-mode-tabs" style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 10px; flex-wrap: wrap;">
         <button class="god-tab" data-target="god-tab-resources" style="background: #00ff00; color: #000; border: none; padding: 5px 10px; cursor: pointer; font-weight: bold;">Recursos</button>
         <button class="god-tab" data-target="god-tab-tech" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Tecnologia</button>
         <button class="god-tab" data-target="god-tab-map" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Mapa</button>
         <button class="god-tab" data-target="god-tab-demo" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Demografia</button>
+        <button class="god-tab" data-target="god-tab-crisis" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Crises</button>
       </div>
       
       <div id="god-tab-resources" class="god-tab-content">
@@ -101,10 +102,51 @@ export class GodModeConsole {
         <button id="btn-pop-1k" style="background: #222; color: #00ff00; border: 1px solid #00ff00; padding: 5px; cursor: pointer; margin-right: 5px; margin-bottom: 5px;">+1.000 Habitantes</button>
         <button id="btn-kill-pop" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px;">Dizimar População (Zerar)</button>
       </div>
+
+      <div id="god-tab-crisis" class="god-tab-content" style="display: none;">
+        <p style="margin-top: 0; font-size: 14px;"><strong>Eventos Mundiais:</strong></p>
+        <button id="btn-force-disaster" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%;">Forçar Desastre Aleatório</button>
+      </div>
     `;
 
     document.body.appendChild(this.panelElement);
     this.setupInteractions();
+    this.setupDraggable();
+  }
+
+  private setupDraggable(): void {
+    const header = this.panelElement?.querySelector('.god-mode-header') as HTMLElement;
+    if (!header || !this.panelElement) return;
+
+    let isDragging = false;
+    let startX = 0, startY = 0, initialX = 0, initialY = 0;
+
+    header.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = this.panelElement!.getBoundingClientRect();
+      initialX = rect.left;
+      initialY = rect.top;
+      
+      // Remove âncoras relativas para usar posições absolutas
+      this.panelElement!.style.right = 'auto';
+      this.panelElement!.style.bottom = 'auto';
+      this.panelElement!.style.left = initialX + 'px';
+      this.panelElement!.style.top = initialY + 'px';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      this.panelElement!.style.left = (initialX + dx) + 'px';
+      this.panelElement!.style.top = (initialY + dy) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
   }
 
   private setupInteractions(): void {
@@ -135,5 +177,6 @@ export class GodModeConsole {
     this.panelElement.querySelector("#btn-toggle-fog")?.addEventListener("click", () => this.onCommand("toggle_fog"));
     this.panelElement.querySelector("#btn-pop-1k")?.addEventListener("click", () => this.onCommand("pop_1k"));
     this.panelElement.querySelector("#btn-kill-pop")?.addEventListener("click", () => this.onCommand("kill_pop"));
+    this.panelElement.querySelector("#btn-force-disaster")?.addEventListener("click", () => this.onCommand("force_disaster"));
   }
 }

@@ -1,4 +1,4 @@
-﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
+﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
 import { Diagnostic } from "./diagnostics";
 import type {
   CommandLogRepository,
@@ -47,7 +47,7 @@ type StateListener = (state: GameState) => void;
 export type DiplomaticActionType = "alliance" | "non_aggression" | "peace" | "tribute" | "embargo" | "war";
 export type ReligiousActionType = "send_missionaries";
 
-export type RegionActionType = "invest_agriculture" | "invest_infrastructure" | "garrison" | "pacify" | "change_capital" | "colonize";
+export type RegionActionType = "invest_agriculture" | "invest_infrastructure" | "garrison" | "pacify" | "change_capital" | "colonize" | "exodus";
 
 export interface PlayerActionResult {
   ok: boolean;
@@ -221,6 +221,14 @@ export class GameSession {
     const state = this.requireState();
     state.meta.paused = paused;
     this.recordPlayerCommand("session.pause", { paused });
+    this.persistCurrent();
+    this.emitState();
+  }
+
+  setDisastersEnabled(enabled: boolean): void {
+    const state = this.requireState();
+    state.meta.disastersEnabled = enabled;
+    this.recordPlayerCommand("session.disasters", { enabled });
     this.persistCurrent();
     this.emitState();
   }
@@ -569,13 +577,23 @@ export class GameSession {
       return { ok: false, message: "Você só pode administrar regiões próprias." };
     }
 
-    if (actionType === "colonize") {
+    if (actionType === "colonize" || actionType === "exodus") {
       if (region.ownerId !== "k_nature") {
-        return { ok: false, message: "Você só pode colonizar terras selvagens." };
+        return { ok: false, message: `Você só pode ${actionType === "exodus" ? "migrar para" : "colonizar"} terras selvagens.` };
       }
       const isAdjacent = regionDef.neighbors.some(nid => state.world.regions[nid]?.ownerId === player.id);
       if (!isAdjacent) {
         return { ok: false, message: "A região precisa fazer fronteira com o seu império." };
+      }
+      
+      if (actionType === "exodus") {
+        let ownedCount = 0;
+        for (const rId in state.world.regions) {
+          if (state.world.regions[rId].ownerId === player.id) ownedCount++;
+        }
+        if (ownedCount > 1) {
+          return { ok: false, message: "O Êxodo Nômade só é permitido para tribos de um único território." };
+        }
       }
     }
 
@@ -626,6 +644,28 @@ export class GameSession {
         player.capitalRegionId = regionId;
         region.unrest = 0; // Uma nova sede do governo sempre inicia pacificada
         break;
+      case "exodus": {
+        const oldCapitalId = player.capitalRegionId;
+        const oldRegion = state.world.regions[oldCapitalId];
+
+        oldRegion.ownerId = "k_nature";
+        oldRegion.controllerId = "k_nature";
+        oldRegion.actionCooldowns = {};
+        
+        region.ownerId = player.id;
+        region.controllerId = player.id;
+        region.dominantFaith = player.religion.stateFaith;
+        region.unrest = 0;
+        region.devastation = 0;
+        
+        player.capitalRegionId = regionId;
+
+        this.deps.eventBus.publish({
+          type: "population.exodus",
+          payload: { sourceId: oldCapitalId, targetId: regionId, kingdomId: player.id }
+        } as any);
+        break;
+      }
       case "colonize":
         region.ownerId = player.id;
         region.controllerId = player.id;
@@ -1175,6 +1215,14 @@ export class GameSession {
           cost: {
             [ResourceType.Gold]: 150,
             [ResourceType.Legitimacy]: 10
+          }
+        };
+      case "exodus":
+        return {
+          label: "Êxodo Nômade",
+          cooldownMs: 15_000,
+          cost: {
+            [ResourceType.Food]: 200
           }
         };
       case "colonize":
