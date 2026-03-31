@@ -418,23 +418,56 @@ Esta seção detalha as soluções para falhas de game design que criam cenário
 
 **Status:** `Em desenvolvimento`
 
-Para aumentar a rejogabilidade e dar ao jogador controle estratégico sobre a narrativa, será implementada uma tela de "Configuração Avançada". A interface principal terá duas opções: um botão de "Início Rápido" (que usa a configuração padrão) e um botão para este "Modo Avançado", que permitirá a personalização profunda do mundo antes do início de cada campanha.
+Para aumentar a rejogabilidade e dar ao jogador controle estratégico sobre a narrativa, será implementada uma tela de "Configuração Avançada". A interface principal terá duas opções: um botão de "Início Rápido" (que usa a configuração padrão) e um botão para este "Modo Avançado". Este modo permitirá a personalização profunda do mundo antes do início de cada campanha, usando um contrato de dados central.
 
-*   **Contrato de Campanha (`CampaignConfig`):** O `create-initial-state.ts` será refatorado para ser uma "Fábrica de Mundos" que opera com base em um novo objeto `CampaignConfig`. Este objeto conterá todas as escolhas do jogador.
+*   **Contrato de Campanha (`CampaignConfig`):** O `create-initial-state.ts` será refatorado para ser uma "Fábrica de Mundos" que opera com base em um novo objeto `CampaignConfig`. Este objeto conterá todas as escolhas do jogador, estruturado da seguinte forma:
 
-*   **Opções de Personalização Planejadas:**
-    *   **Identidade dos Reinos:** O jogador poderá personalizar o nome e a cor do seu império e de cada um dos NPCs.
-    *   **Personalidade da IA (Níveis de Dificuldade):** Em vez de bônus numéricos, a dificuldade será definida por perfis comportamentais no `NpcDecisionSystem`:
-        *   **Fácil ("O Eremita"):** Perfil passivo, focado em economia e avesso a riscos. Pode realizar ações altruístas.
-        *   **Moderado ("O Equilibrado"):** Comportamento padrão, balanceando todos os aspectos do jogo.
-        *   **Difícil ("O Tirano"):** Perfil agressivo, expansionista e oportunista. Maior propensão a trair pactos e a explorar fraquezas militares.
-    *   **Dinâmica Populacional dos NPCs:**
-        *   **Fixo:** O número de NPCs no mundo é constante. Um império só desaparece se for conquistado.
-        *   **Dinâmico:** O motor de "mitose" social é ativado. NPCs podem se fraturar, criando novos impérios, ou se fundir, alterando o cenário político de forma orgânica.
-    *   **Ponto de Partida Histórico:**
-        *   **Era Inicial:** O jogador poderá escolher a era de início (ex: "Aurora da Humanidade", "Era Medieval"). O sistema irá automaticamente desbloquear todas as tecnologias das eras anteriores e ajustar os recursos e população iniciais para um ponto de partida coerente.
-    *   **Recursos Iniciais:** Sliders ou campos de entrada para definir a quantidade inicial de população e recursos, com uma opção de "Aplicar a todos" para garantir paridade.
-    *   **Autopilot Inicial (Modo Idle Padrão):** Por padrão, a campanha do jogador começará com os sistemas de automação (pesquisa, expansão) ativados. O jogador poderá desativá-los a qualquer momento para assumir o controle manual, reforçando a natureza *idle* do jogo.
+    ```typescript
+    // Definição conceitual do contrato
+    interface CampaignConfig {
+      player: {
+        name: string;
+        color: string;
+      };
+      npcs: Array<{
+        name: string;
+        color: string;
+        personality: 'easy' | 'moderate' | 'hard';
+      }>;
+      world: {
+        npcPopulation: 'fixed' | 'dynamic';
+        startingEra: 'stone_age' | 'medieval' // ... e outras eras
+      };
+      initialConditions: {
+        resources: {
+          gold: number;
+          food: number;
+          // ... outros recursos
+        };
+        population: number;
+        applyToAll: boolean;
+      };
+      playerAutomation: {
+        autoExplore: boolean;
+        autoResearch: boolean;
+        // ... outras automações
+      };
+    }
+    ```
+
+*   **Opções de Personalização Detalhadas:**
+    *   **Identidade dos Reinos:** O jogador poderá personalizar o nome e a cor do seu império e de cada um dos NPCs (`player.name`, `npcs[].name`, etc.).
+    *   **Personalidade da IA (Níveis de Dificuldade):** Controlado pelo campo `npcs[].personality`. Em vez de bônus numéricos, a dificuldade será definida por perfis comportamentais no `NpcDecisionSystem`:
+        *   **`easy` ("O Eremita"):** Perfil passivo, focado em economia e avesso a riscos. Pode realizar ações altruístas.
+        *   **`moderate` ("O Equilibrado"):** Comportamento padrão, balanceando todos os aspectos do jogo.
+        *   **`hard` ("O Tirano"):** Perfil agressivo, expansionista e oportunista. Maior propensão a trair pactos e a explorar fraquezas militares.
+    *   **Dinâmica Populacional dos NPCs (`world.npcPopulation`):**
+        *   **`fixed`:** O número de NPCs no mundo é constante. Um império só desaparece se for conquistado.
+        *   **`dynamic`:** O motor de "mitose" social é ativado. NPCs podem se fraturar, criando novos impérios, ou se fundir, alterando o cenário político de forma orgânica.
+    *   **Ponto de Partida Histórico (`world.startingEra`):**
+        *   O jogador poderá escolher a era de início. O sistema irá automaticamente desbloquear todas as tecnologias das eras anteriores e ajustar os recursos e população iniciais para um ponto de partida coerente.
+    *   **Recursos Iniciais (`initialConditions`):** Sliders ou campos de entrada para definir a quantidade inicial de população e recursos, com uma opção de `applyToAll` para garantir paridade entre jogador e NPCs.
+    *   **Autopilot Inicial (`playerAutomation`):** Por padrão, a campanha do jogador começará com os sistemas de automação ativados. O jogador poderá desativá-los a qualquer momento para assumir o controle manual, reforçando a natureza *idle* do jogo.
 
 ### 6.11. Imersão Sensorial (Arte e Som)
 
