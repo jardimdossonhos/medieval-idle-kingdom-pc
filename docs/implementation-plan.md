@@ -1,4 +1,4 @@
-﻿
+
 ## Stage 2 - Runtime baseline
 
 - Wire Vite + TypeScript + Pixi shell map
@@ -28,7 +28,7 @@
 ## Stage 5 - Refinement
 
 - Initial balancing pass for progression and victory pacing
-- Offline progression simulation on reopen
+- [x] Offline progression simulation on reopen
 - Save recovery hardening and corruption handling
 - Performance profiling and tick budget control
 - Explicit sync serialization contracts for future multiplayer mode

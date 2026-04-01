@@ -1,4 +1,4 @@
-﻿# Arquitetura - Epochs Idle
+﻿﻿# Arquitetura - Epochs Idle
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -205,7 +205,8 @@ Para auxiliar no balanceamento de longo prazo e limpar a UI para o jogador final
 *   **Capacidades Planejadas:**
     *   **Recursos & Demografia:** Injeção massiva ou dizimação para engatilhar cenários de crise ou testar transbordos.
     *   **Meta & Tempo:** Desbloqueio imediato de toda a árvore de Tecnologias, saltos de Eras e manipulação de saltos no relógio da simulação (Time Travel).
-    *   **Estado & Debug:** Monitoramento de saúde do Worker, FPS e Hard Reset profundo de Banco de Dados.
+    *   **Estado, Debug e Telemetria (Holter):** Monitoramento de saúde do Worker, FPS e extração de Raio-X da malha. O sistema possui um gravador contínuo (Holter) que audita a economia e as intenções dos NPCs ciclo a ciclo para exportação no console (F12), essencial para balancear a IA.
+    *   **Alvo Dinâmico (Targeting):** As injeções do Modo Deus não são exclusivas do jogador. Um seletor de alvo permite manipular livremente as matrizes de RAM de qualquer NPC do mapa para testes de estresse geográfico e resgate de reinos prestes a ruir.
 
 ### 6.1. Camadas do Mapa Estratégico
 
@@ -482,6 +483,19 @@ Para aumentar a rejogabilidade e dar ao jogador controle estratégico sobre a na
 Para aumentar o fator de imersão, o planejamento futuro inclui a adição de elementos audiovisuais.
 *   **Arte de Abertura:** Uma imagem de abertura para dar um tom mais profissional e polido ao jogo.
 *   **Trilha Sonora:** Músicas de fundo para complementar a atmosfera de cada era do jogo.
+
+### 6.12. Sistema de Conselho Real (Advisors & Automação Narrativa)
+
+**Objetivo:** Humanizar a complexidade matemática do motor ECS, substituindo as configurações de automação frias por um sistema de "Conselheiros/Ministros" com personalidades distintas. Esta mecânica servirá como o principal vetor de **Explicabilidade (UX)** e tutoria orgânica do jogo.
+
+*   **Domínios de Atuação:** O jogador poderá contratar (e demitir) um conselheiro para cada pilar do Estado: Finanças, Exército, Religião, Tecnologia, Infraestrutura e Diplomacia.
+*   **Perfis e Personalidades:** Os candidatos a conselheiros terão traços de personalidade (ex: *Militarista*, *Cauteloso*, *Corrupto*, *Zeloso*). A personalidade altera a forma como eles automatizam o império (um Chanceler agressivo pode sugerir embargos frequentes).
+*   **Níveis de Delegação (Autonomia):**
+    1.  **Delegação Total (Silencioso/Auto):** O conselheiro assume 100% do controle da sua pasta baseando-se em seu perfil. Ele não emite alertas invasivos, apenas atua nos bastidores e mantém um "Relatório de Status" atualizado em sua aba (abraçando a natureza *Idle* do jogo).
+    2.  **Consultoria (Semi-Autônomo):** O conselheiro monitora o império, detecta problemas e formula "Projetos de Ação". Ele emite alertas propondo soluções prontas (ex: *"Senhor, preparei um decreto para reduzir os impostos e evitar uma rebelião no sul"*). O jogador tem a palavra final: Aprovar ou Recusar o pacote.
+    3.  **Microgerenciamento (Sem Autonomia):** O poder está totalmente centralizado no jogador. O conselheiro atua apenas como um Analista de Dados. Ele diagnostica a situação, explica as consequências das ordens diretas do jogador e reage narrativamente (elogiando decisões que batem com seu perfil ou reclamando amargamente de estratégias que ele considera falhas).
+*   **Vetor de Tutoria (Explicabilidade Histórica):** Os relatórios dos conselheiros quebrarão a "caixa preta" do jogo. Eles traduzirão os cálculos do Worker em texto humano, informando ao jogador exatamente por que uma revolta aconteceu ou por que a economia travou com base nas decisões tomadas em ciclos passados.
+*   **Desbloqueio Histórico:** Este sistema não estará disponível na Era da Aurora (Tribal). Ele será desbloqueado quando a civilização atingir o tamanho de um "Reino" formal (Idade do Bronze/Ferro), exigindo tecnologias de Burocracia Estatal para ser suportado.
 
 ## 7. Problemas Anteriores (Resolvidos)
 

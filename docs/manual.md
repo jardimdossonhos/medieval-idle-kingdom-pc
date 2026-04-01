@@ -75,10 +75,12 @@ O jogo foi projetado para rodar localmente no seu navegador.
 Ao rodar o jogo localmente com `npm run dev`, você terá acesso ao **Painel de Depuração** no canto inferior da tela. Este painel existe apenas para testar sistemas sem precisar esperar horas.
 
 Para acessar, clique **5 vezes rapidamente** na versão do jogo (canto superior esquerdo). O painel flutuante contém as seguintes abas:
-*   **Recursos:** Injeção de `+10k Ouro` ou `+10k Comida` e botão de Apocalipse (zerar economia).
+*   **Alvo das Ações:** Um menu suspenso no topo permite escolher se as trapaças abaixo afetarão o seu império (👑) ou qualquer outro NPC do mundo.
+*   **Recursos:** Injeção de `+10k Ouro`, `+10k Comida`, `Fé`, `Legitimidade` e botão de Apocalipse (zerar economia).
 *   **Tecnologia:** Atalho para desbloqueio da árvore.
 *   **Mapa:** Botão **Remover Névoa (Fog of Truth)**. Revela instantaneamente a população e a instabilidade exata de tribos distantes e NPCs escondidos.
 *   **Demografia:** Injeção de `+1.000 Habitantes` nas suas regiões para forçar o gatilho automático do Sistema de Migração (testar expansão territorial) ou botão de dizimar a população para testar colapso.
+*   **Debug:** Gera um Relatório de Estado instantâneo (Raio-X) ou inicia uma Gravação Contínua (Holter) que acompanha a evolução econômica e diplomática do mundo ao longo do tempo. Os dados são exportados para o Console do Navegador (F12).
 
 ### Dicas de Teste Padrão
 1. **Testando a Economia:** Altere a Taxa Base para 0.6. Aguarde 10 segundos e veja se o seu ouro sobe violentamente, mas acompanhe na barra lateral se o Risco de Revolta subiu junto.

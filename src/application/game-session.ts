@@ -1,4 +1,4 @@
-﻿import { buildSaveSummary } from "./save/build-save-summary";
+import { buildSaveSummary } from "./save/build-save-summary";
 import { Diagnostic } from "./diagnostics";
 import type {
   CommandLogRepository,
@@ -114,6 +114,9 @@ export class GameSession {
     const recovered = persisted ?? (await this.restoreFromSnapshotOrSave());
     const baseState = recovered ?? initialState;
     const now = this.deps.clock.now();
+    
+    // Respiro arquitetural: Evita que a Thread principal tranque o navegador ("Page Unresponsive")
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const offlineResult = this.runOfflineProgression(baseState, now);
     this.currentState = offlineResult.state;
@@ -124,6 +127,8 @@ export class GameSession {
 
     // Segurança: Retorna a velocidade para 0.5x ao carregar para evitar sobressaltos
     this.currentState.meta.speedMultiplier = 0.5;
+    // Segurança 2: Inicia o jogo estritamente pausado para dar tempo ao jogador e à CPU respirarem
+    this.currentState.meta.paused = true;
 
     // Padrão de Novo Jogo (Ciclo 0): Ativa a automação de expansão para o jogador
     if (this.currentState.meta.tick === 0) {
@@ -758,7 +763,8 @@ export class GameSession {
 
     this.currentState = structuredClone(snapshot.state);
     this.currentState.meta.lastUpdatedAt = this.deps.clock.now();
-    this.currentState.meta.paused = false;
+    // Inicia pausado ao carregar um save manual
+    this.currentState.meta.paused = true;
 
     await this.deps.gameStateRepository.saveCurrent(this.currentState);
     this.recordPlayerCommand("save.load_slot", { slotId });
@@ -785,6 +791,37 @@ export class GameSession {
 
   getState(): GameState {
     return this.requireState();
+  }
+
+  changeStateReligion(newFaithId: string): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const faithDef = this.deps.staticWorldData.religions[newFaithId];
+
+    if (!faithDef) {
+      return { ok: false, message: "Fé desconhecida." };
+    }
+
+    if (player.religion.stateFaith === newFaithId) {
+      return { ok: false, message: "O império já segue esta fé como religião oficial." };
+    }
+
+    const cost = { [ResourceType.Legitimacy]: 40 };
+    if (!this.canAfford(cost)) {
+      return { ok: false, message: "Legitimidade insuficiente para forçar uma conversão estatal (-40 necessários)." };
+    }
+
+    this.applyCost(cost);
+    
+    player.religion.stateFaith = newFaithId;
+    player.stability = this.clamp(player.stability - 30, 0, 100); // Choque cultural massivo
+
+    this.appendActionLog("Reforma Religiosa Estatal", `O império adotou oficialmente a fé: ${faithDef.name}. Houve grande choque cultural (-30 Estabilidade).`, "warning");
+    this.recordPlayerCommand("religion.change_state_faith", { newFaithId });
+    this.persistCurrent();
+    this.emitState();
+
+    return { ok: true, message: `Religião estatal alterada para ${faithDef.name}.` };
   }
 
   executeReligiousAction(targetKingdomId: string, actionType: ReligiousActionType): PlayerActionResult {
@@ -1004,7 +1041,7 @@ export class GameSession {
     return totals;
   }
 
-  private canAfford(cost: Partial<Record<ResourceType, number>>): boolean {
+  public canAfford(cost: Partial<Record<ResourceType, number>>): boolean {
     const state = this.requireState();
     const player = this.getPlayerKingdom(state);
     const playerEcsStock = this.getKingdomTotalEcsStock(state, player.id);

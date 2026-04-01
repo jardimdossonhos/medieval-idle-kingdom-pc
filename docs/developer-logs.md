@@ -1095,3 +1095,29 @@ Documentado em `ARCHITECTURE.md` (Seção 6.9). Implementado com sucesso via sis
 3.  **Pilar C (DOM Anti-Thrashing):** Preparar o terreno nas renderizações para parar de destruir o DOM (`innerHTML = ""`) e adotar transições granulares, trocando apenas o `textContent` quando houver de fato um delta matemático.
 **Impacto e Riscos:** Risco Zero para o motor matemático ECS (Worker), que continuará rodando intocado. Garantia de alívio instantâneo do Input Lag no clique do mouse do usuário.
 **Status:** Plano aprovado. Implementação iminente no `main.ts`.
+
+---
+
+## Entrada: 74
+
+**Data:** 26/03/2024
+
+### Início da Fase 2 (Alvo A): Profundidade Religiosa e Transparência
+**Objetivo:** Transformar a Religião em um vetor de instabilidade e poder, priorizando a transparência absoluta para o jogador (Game Design Requirement).
+**Plano de Execução (Etapa 1 - Fundação):**
+1.  **Backend (`game-session.ts`):** Criação da Ação de Estado `changeStateReligion`. Adoção de uma nova fé custará severamente (Legitimidade e Estabilidade) simulando o choque cultural.
+2.  **Frontend (`main.ts`):** Refatoração massiva da aba "Religião". Introdução do painel de **Demografia Espiritual**, que faz uma varredura nas províncias do jogador e exibe o percentual de seguidores de cada fé. Injeção do controle de Mudança de Fé Estatal com textos de advertência preditivos.
+**Risco:** Baixo. Operações restritas à camada de POO e Interface. O motor de alta performance (ECS) não sofrerá mutações nesta etapa.
+**Status:** Código da Etapa 1 gerado e aguardando validação do usuário.
+
+---
+
+## Entrada: 75
+
+**Data:** 26/03/2024
+
+### Telemetria Contínua, Modo Deus Dinâmico e UX de Loading
+**1. Holter de Simulação (Telemetria):** Implementada a funcionalidade de gravação contínua no console de desenvolvedor. O jogo agora pode gravar o fluxo econômico, geopolítico e as intenções da IA segundo a segundo, permitindo auditoria profunda da Racionalidade Limitada dos NPCs (ex: NPCs morrendo de fome por expansão sem tecnologia agrícola).
+**2. Alvos do Modo Deus:** O God Mode foi expandido com um seletor dinâmico de Reinos. O desenvolvedor agora pode injetar recursos, ditar apocalipses ou forçar crescimentos em qualquer NPC específico do mapa, facilitando testes isolados.
+**3. UX de Boot e Tempo Ausente:** Corrigido o travamento no carregamento de saves com longo tempo de inatividade. O navegador agora respira com um `setTimeout(50ms)` antes de processar o catch-up offline, e o botão de carregamento reflete o status verdadeiro (se fará cálculo de tempo ausente ou não). O jogo agora inicia estritamente pausado após carregamentos.
+**Status:** Funcionalidades de auditoria validadas. O problema do carregamento estático foi extinto. Arquitetura pronta para prosseguir com a Etapa 2 da Religião (Atrito).

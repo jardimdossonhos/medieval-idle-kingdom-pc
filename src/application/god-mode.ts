@@ -8,7 +8,8 @@ export class GodModeConsole {
 
   constructor(
     private triggerElement: HTMLElement,
-    private onCommand: (command: string) => void
+    private onCommand: (command: string, targetId: string) => void,
+    private getKingdoms: () => { id: string; name: string; isPlayer: boolean }[] = () => []
   ) {
     this.setupTrigger();
   }
@@ -38,10 +39,14 @@ export class GodModeConsole {
   private togglePanel(): void {
     this.isVisible = !this.isVisible;
     if (this.isVisible) {
-      this.render();
+      if (!this.panelElement) {
+        this.render();
+      }
+      if (this.panelElement) {
+        this.panelElement.style.display = "block";
+      }
     } else if (this.panelElement) {
-      this.panelElement.remove();
-      this.panelElement = null;
+      this.panelElement.style.display = "none";
     }
   }
 
@@ -78,12 +83,22 @@ export class GodModeConsole {
         <button class="god-tab" data-target="god-tab-map" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Mapa</button>
         <button class="god-tab" data-target="god-tab-demo" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Demografia</button>
         <button class="god-tab" data-target="god-tab-crisis" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Crises</button>
+        <button class="god-tab" data-target="god-tab-debug" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Debug</button>
       </div>
       
+      <div style="margin-bottom: 15px; padding: 10px; background: rgba(0, 255, 0, 0.1); border: 1px solid #00ff00; border-radius: 4px;">
+        <label style="font-size: 14px; font-weight: bold; display: block; margin-bottom: 5px;">🎯 Alvo das Ações (NPC ou Player):</label>
+        <select id="god-target-select" style="width: 100%; background: #111; color: #00ff00; border: 1px solid #00ff00; padding: 5px;">
+          ${this.getKingdoms().map(k => `<option value="${k.id}" ${k.isPlayer ? 'selected' : ''}>${k.isPlayer ? '👑 ' : ''}${k.name}</option>`).join('')}
+        </select>
+      </div>
+
       <div id="god-tab-resources" class="god-tab-content">
         <p style="margin-top: 0; font-size: 14px;"><strong>Tesouraria & Economia:</strong></p>
         <button id="btn-gold-10k" style="background: #222; color: #00ff00; border: 1px solid #00ff00; padding: 5px; cursor: pointer; margin-right: 5px; margin-bottom: 5px;">+10k Ouro</button>
         <button id="btn-food-10k" style="background: #222; color: #00ff00; border: 1px solid #00ff00; padding: 5px; cursor: pointer; margin-right: 5px; margin-bottom: 5px;">+10k Comida</button>
+        <button id="btn-faith-10k" style="background: #222; color: #00ff00; border: 1px solid #00ff00; padding: 5px; cursor: pointer; margin-right: 5px; margin-bottom: 5px;">+10k Fé</button>
+        <button id="btn-leg-10k" style="background: #222; color: #00ff00; border: 1px solid #00ff00; padding: 5px; cursor: pointer; margin-right: 5px; margin-bottom: 5px;">+10k Legitimidade</button>
         <button id="btn-ruin-economy" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; margin-top: 10px; width: 100%;">Apocalipse (Zerar Recursos)</button>
       </div>
 
@@ -106,6 +121,14 @@ export class GodModeConsole {
       <div id="god-tab-crisis" class="god-tab-content" style="display: none;">
         <p style="margin-top: 0; font-size: 14px;"><strong>Eventos Mundiais:</strong></p>
         <button id="btn-force-disaster" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%;">Forçar Desastre Aleatório</button>
+        <button id="btn-add-unrest" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%; margin-top: 5px;">Forçar 100% de Instabilidade</button>
+        <button id="btn-add-dev" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%; margin-top: 5px;">Forçar 100% de Devastação</button>
+      </div>
+
+      <div id="god-tab-debug" class="god-tab-content" style="display: none;">
+        <p style="margin-top: 0; font-size: 14px;"><strong>Telemetria e Logs:</strong></p>
+        <button id="btn-dump-state" style="background: #222; color: #00e5ff; border: 1px solid #00e5ff; padding: 5px; cursor: pointer; width: 100%;">Gerar Relatório de Estado (Console)</button>
+        <button id="btn-toggle-telemetry" style="background: #222; color: #ff3366; border: 1px solid #ff3366; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px;">🔴 Iniciar Gravação Contínua (Holter)</button>
       </div>
     `;
 
@@ -170,13 +193,21 @@ export class GodModeConsole {
       });
     });
 
-    this.panelElement.querySelector("#btn-gold-10k")?.addEventListener("click", () => this.onCommand("gold_10k"));
-    this.panelElement.querySelector("#btn-food-10k")?.addEventListener("click", () => this.onCommand("food_10k"));
-    this.panelElement.querySelector("#btn-ruin-economy")?.addEventListener("click", () => this.onCommand("ruin_economy"));
-    this.panelElement.querySelector("#btn-unlock-all-tech")?.addEventListener("click", () => this.onCommand("unlock_tech"));
-    this.panelElement.querySelector("#btn-toggle-fog")?.addEventListener("click", () => this.onCommand("toggle_fog"));
-    this.panelElement.querySelector("#btn-pop-1k")?.addEventListener("click", () => this.onCommand("pop_1k"));
-    this.panelElement.querySelector("#btn-kill-pop")?.addEventListener("click", () => this.onCommand("kill_pop"));
-    this.panelElement.querySelector("#btn-force-disaster")?.addEventListener("click", () => this.onCommand("force_disaster"));
+    const getTarget = () => (this.panelElement?.querySelector("#god-target-select") as HTMLSelectElement)?.value ?? "";
+
+    this.panelElement.querySelector("#btn-gold-10k")?.addEventListener("click", () => this.onCommand("gold_10k", getTarget()));
+    this.panelElement.querySelector("#btn-food-10k")?.addEventListener("click", () => this.onCommand("food_10k", getTarget()));
+    this.panelElement.querySelector("#btn-faith-10k")?.addEventListener("click", () => this.onCommand("faith_10k", getTarget()));
+    this.panelElement.querySelector("#btn-leg-10k")?.addEventListener("click", () => this.onCommand("leg_10k", getTarget()));
+    this.panelElement.querySelector("#btn-ruin-economy")?.addEventListener("click", () => this.onCommand("ruin_economy", getTarget()));
+    this.panelElement.querySelector("#btn-unlock-all-tech")?.addEventListener("click", () => this.onCommand("unlock_tech", getTarget()));
+    this.panelElement.querySelector("#btn-toggle-fog")?.addEventListener("click", () => this.onCommand("toggle_fog", getTarget()));
+    this.panelElement.querySelector("#btn-pop-1k")?.addEventListener("click", () => this.onCommand("pop_1k", getTarget()));
+    this.panelElement.querySelector("#btn-kill-pop")?.addEventListener("click", () => this.onCommand("kill_pop", getTarget()));
+    this.panelElement.querySelector("#btn-force-disaster")?.addEventListener("click", () => this.onCommand("force_disaster", getTarget()));
+    this.panelElement.querySelector("#btn-add-unrest")?.addEventListener("click", () => this.onCommand("add_unrest", getTarget()));
+    this.panelElement.querySelector("#btn-add-dev")?.addEventListener("click", () => this.onCommand("add_dev", getTarget()));
+    this.panelElement.querySelector("#btn-dump-state")?.addEventListener("click", () => this.onCommand("dump_state", getTarget()));
+    this.panelElement.querySelector("#btn-toggle-telemetry")?.addEventListener("click", () => this.onCommand("toggle_telemetry", getTarget()));
   }
 }

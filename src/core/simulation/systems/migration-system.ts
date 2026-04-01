@@ -1,5 +1,4 @@
 import { AutomationLevel } from "../../models/enums";
-import { Diagnostic } from "../../../application/diagnostics";
 import type { StaticWorldData } from "../../models/static-world-data";
 import type { SimulationSystem, TickContext } from "../tick-pipeline";
 import type { RegionDefinition } from "../../models/world";
@@ -32,7 +31,6 @@ export function createMigrationSystem(staticData: StaticWorldData, orderedDefini
 
         const kingdom = state.kingdoms[region.ownerId];
         if (kingdom && kingdom.administration.automation.expansion === AutomationLevel.Manual) {
-          if (kingdom.isPlayer) Diagnostic.trace("MIG-SYS-PLAYER", `Expansão pulada para ${regionId}: Política Manual Ativa.`);
           continue; // Expansão orgânica retida por política governamental
         }
 
@@ -40,7 +38,6 @@ export function createMigrationSystem(staticData: StaticWorldData, orderedDefini
 
         // Atingiu o Teto de Suporte (Carrying Capacity) local
         if (currentPop < MIGRATION_THRESHOLD) {
-          if (kingdom.isPlayer) Diagnostic.trace("MIG-SYS-PLAYER", `Expansão pulada para ${regionId}: População ${Math.floor(currentPop)} < ${MIGRATION_THRESHOLD}.`);
           continue;
         }
 
@@ -51,7 +48,6 @@ export function createMigrationSystem(staticData: StaticWorldData, orderedDefini
           });
 
           if (validNeighbors.length === 0) {
-            if (kingdom.isPlayer) Diagnostic.trace("MIG-SYS-PLAYER", `Expansão pulada para ${regionId}: Sem vizinhos selvagens disponíveis (Fronteira Fechada).`);
             continue;
           }
 

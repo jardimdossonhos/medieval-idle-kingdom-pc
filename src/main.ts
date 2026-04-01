@@ -60,6 +60,10 @@ interface UiRefs {
   techApplyButton: HTMLButtonElement;
   techSummary: HTMLElement;
   techTreeList: HTMLElement;
+  religionSummary: HTMLElement;
+  religionDemographics: HTMLElement;
+  religionChangeSelect: HTMLSelectElement;
+  religionChangeBtn: HTMLButtonElement;
   diplomacyList: HTMLElement;
   militarySummary: HTMLElement;
   saveList: HTMLElement;
@@ -349,6 +353,11 @@ async function bootstrapApp(): Promise<void> {
       .splash-form input, .splash-form select { width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, #444); color: white; border-radius: 4px; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
       
+      /* Melhorias de UX Globais */
+      button:active:not(:disabled) { transform: scale(0.95); transition: transform 0.05s ease; }
+      button:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(100%); }
+      .toast { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10000; background: rgba(30, 0, 0, 0.95); color: #ffeb3b; padding: 12px 24px; border-radius: 8px; font-weight: bold; pointer-events: none; border: 1px solid #d4af37; box-shadow: 0 10px 25px rgba(0,0,0,0.8); font-size: 1.1rem; text-align: center; }
+      
       /* Map Legend Styles */
       .map-legend { position: absolute; bottom: 20px; left: 20px; background: rgba(20, 20, 25, 0.9); border: 1px solid var(--border-color, #444); border-radius: 8px; padding: 12px; font-size: 0.85rem; color: #ddd; z-index: 10; pointer-events: none; backdrop-filter: blur(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
       .map-legend-title { font-weight: bold; margin-bottom: 8px; color: #fff; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 4px; }
@@ -501,14 +510,28 @@ async function bootstrapApp(): Promise<void> {
         </article>
 
         <article class="card tab-panel is-hidden" data-tab-panel="religiao">
-          <h2>Fé e Poderes Divinos</h2>
-          <p>O acúmulo de Fé permite canalizar milagres que transcendem a lógica mortal, afetando diretamente a malha do mundo (Motor Físico).</p>
+          <h2>Religião de Estado e Demografia</h2>
+          <div id="religion-summary" class="summary-grid"></div>
+          
+          <h3>Fé Dominante por Território (Geopolítica)</h3>
+          <ul id="religion-demographics" class="list compact" style="margin-bottom: 20px;"></ul>
+
+          <div class="inline-form" style="margin-top: 15px; border-top: 1px solid #333; padding-top: 15px;">
+            <label>Mudar Religião Oficial
+              <select id="religion-change-select"></select>
+            </label>
+            <button id="religion-change-btn" class="danger">Decretar Nova Fé</button>
+          </div>
+          <p class="hint-text">Mudar a religião oficial causa um severo choque cultural (-40 Legitimidade, -30 Estabilidade), mas permite alinhar o estado com a fé da maioria para evitar revoltas.</p>
+
+          <h3 style="margin-top: 20px;">Poderes Divinos</h3>
+          <p>O acúmulo de Fé permite canalizar milagres que afetam diretamente o mundo material.</p>
           <div class="summary-grid">
             <span>Fé Disponível</span><strong id="faith-pool-value">0</strong>
           </div>
           <div class="action-grid" style="margin-top: 15px;">
             <button id="btn-bless-crops" style="background: #002200; border-color: #00ff00; color: #00ff00;">Bênção da Colheita (-500 Fé)</button>
-            <button id="btn-smite-rebels" style="background: #220000; border-color: #ff3333; color: #ff3333;">Expurgo (Em breve)</button>
+            <button id="btn-smite-rebels" style="background: #220000; border-color: #ff3333; color: #ff3333;" disabled>Expurgo Divino (Em breve)</button>
           </div>
         </article>
 
@@ -653,6 +676,10 @@ async function bootstrapApp(): Promise<void> {
     techApplyButton: queryElement(appRoot, "#tech-apply-btn"),
     techSummary: queryElement(appRoot, "#tech-summary"),
     techTreeList: queryElement(appRoot, "#tech-tree-list"),
+    religionSummary: queryElement(appRoot, "#religion-summary"),
+    religionDemographics: queryElement(appRoot, "#religion-demographics"),
+    religionChangeSelect: queryElement(appRoot, "#religion-change-select"),
+    religionChangeBtn: queryElement(appRoot, "#religion-change-btn"),
     diplomacyList: queryElement(appRoot, "#diplomacy-list"),
     militarySummary: queryElement(appRoot, "#military-summary"),
     saveList: queryElement(appRoot, "#save-list"),
@@ -802,6 +829,16 @@ async function bootstrapApp(): Promise<void> {
   
   const activeCampaignId = `campaign:${profile.id}`;
   const staticWorldData = createStaticWorldData(WORLD_DEFINITIONS_V1, WORLD_DEFINITIONS_MAP_ID);
+
+  // Popula o select de religiões disponíveis (Agora sim, o staticWorldData existe!)
+  const religions = staticWorldData.religions;
+  for (const faithId in religions) {
+    const opt = document.createElement("option");
+    opt.value = faithId;
+    opt.textContent = religions[faithId].name;
+    ui.religionChangeSelect.appendChild(opt);
+  }
+
   const eventBus = new LocalEventBus();
   const npcDecisionService = new UtilityNpcDecisionService();
   const diplomacyResolver = new LocalDiplomacyResolver();
@@ -843,6 +880,21 @@ async function bootstrapApp(): Promise<void> {
   let currentWorkerPaused = false;
   
   let playerFaithCache = 0;
+
+  // TELEMETRIA CONTÍNUA (Exame Holter)
+  let isRecordingTelemetry = false;
+  let telemetryData: any = null;
+
+  const originalPublish = eventBus.publish.bind(eventBus);
+  eventBus.publish = (event: any) => {
+    if (isRecordingTelemetry && telemetryData && telemetryData.eventosOcorridos) {
+      // Filtra os eventos passivos de sistema para focar estritamente na História/Mecânica
+      if (event.type !== "game.autosaved" && event.type !== "game.loaded") {
+        telemetryData.eventosOcorridos.push(structuredClone(event));
+      }
+    }
+    originalPublish(event);
+  };
 
   // CACHE DE TERRITÓRIO: Evita varrer 62.400 regiões múltiplas vezes por segundo
   let cachedPlayerRegionIndices: number[] | null = null;
@@ -947,15 +999,17 @@ async function bootstrapApp(): Promise<void> {
 
   function showToast(message: string): void {
     ui.toastArea.textContent = message;
+    ui.toastArea.style.display = "block";
+    ui.toastArea.style.animation = "fadeIn 0.2s ease";
 
     if (toastTimeout !== null) {
       window.clearTimeout(toastTimeout);
     }
 
     toastTimeout = window.setTimeout(() => {
-      ui.toastArea.textContent = "";
+      ui.toastArea.style.display = "none";
       toastTimeout = null;
-    }, 2600);
+    }, 3500);
   }
 
   function setActiveTab(tabId: TabId): void {
@@ -1659,8 +1713,10 @@ async function bootstrapApp(): Promise<void> {
       for (const action of actions) {
         const config = session.getRegionActionConfig(action.id);
         const costStrings = Object.entries(config.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+        const isAffordable = session.canAfford(config.cost);
 
         const button = document.createElement("button");
+        button.disabled = !isAffordable;
         button.innerHTML = `<span>${action.label}</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${costStrings.join(", ")}</small>`;
         button.addEventListener("click", () => {
           const result = session.executeRegionAction(selectedRegionId ?? "", action.id);
@@ -1677,9 +1733,11 @@ async function bootstrapApp(): Promise<void> {
       for (const actionId of actionsToRender) {
         const config = session.getRegionActionConfig(actionId);
         const costStrings = Object.entries(config.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+        const isAffordable = session.canAfford(config.cost);
 
         const button = document.createElement("button");
         button.className = "primary";
+        button.disabled = !isAffordable;
         
         let extraCost = "";
         if (actionId === "colonize") extraCost = " | -50 Pop. da Capital";
@@ -1703,8 +1761,10 @@ async function bootstrapApp(): Promise<void> {
       
       const warConfig = session.getDiplomaticConfig(state, player.id, targetId, "war");
       const warCostStrings = Object.entries(warConfig.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+      const canWar = session.canAfford(warConfig.cost);
       const warBtn = document.createElement("button");
       warBtn.className = "danger";
+      warBtn.disabled = !canWar;
       warBtn.innerHTML = `<span>Declarar Guerra</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${warCostStrings.join(", ")}</small><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Chance de Sucesso na Corte: ${formatNumber(warConfig.chance * 100)}%</small>`;
       warBtn.addEventListener("click", () => {
         const result = session.executeDiplomaticAction(targetId, "war");
@@ -1714,7 +1774,9 @@ async function bootstrapApp(): Promise<void> {
 
       const relConfig = session.getReligiousActionConfig(player.id, targetId, "send_missionaries");
       const relCostStrings = Object.entries(relConfig.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+      const canMissionary = session.canAfford(relConfig.cost);
       const relBtn = document.createElement("button");
+      relBtn.disabled = !canMissionary;
       relBtn.innerHTML = `<span>Enviar Missionários</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${relCostStrings.join(", ")}</small><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Chance de Sucesso: ${formatNumber(relConfig.chance * 100)}%</small>`;
       relBtn.addEventListener("click", () => {
         const result = session.executeReligiousAction(targetId, "send_missionaries");
@@ -1866,9 +1928,51 @@ async function bootstrapApp(): Promise<void> {
     renderTechnologyTree(choices);
   }
 
-  function createDiplomacyActionButton(targetId: string, actionType: DiplomaticActionType, label: string): HTMLButtonElement {
+  function renderReligion(state: GameState): void {
+    const player = getPlayerKingdom(state);
+    const playerIndices = getPlayerRegionIndicesCached(state, player);
+    const currentFaithDef = staticWorldData.religions[player.religion.stateFaith];
+
+    ui.religionSummary.innerHTML = `
+      <span>Religião de Estado</span><strong style="color: ${currentFaithDef?.color ?? '#fff'}">${currentFaithDef?.name ?? "Nenhuma"}</strong>
+      <span>Tolerância</span><strong>${formatNumber(player.religion.tolerance * 100)}%</strong>
+    `;
+
+    // Calcula demografia iterando as regiões do player
+    const faithCounts: Record<string, number> = {};
+    for (const idx of playerIndices) {
+      const regionId = WORLD_DEFINITIONS_V1[idx].id;
+      const region = state.world.regions[regionId];
+      if (region && region.dominantFaith) {
+        faithCounts[region.dominantFaith] = (faithCounts[region.dominantFaith] || 0) + 1;
+      }
+    }
+
+    ui.religionDemographics.innerHTML = "";
+    const totalRegions = playerIndices.length;
+    
+    for (const [faithId, count] of Object.entries(faithCounts).sort((a, b) => b[1] - a[1])) {
+      const faithDef = staticWorldData.religions[faithId];
+      const percent = totalRegions > 0 ? (count / totalRegions) * 100 : 0;
+      const item = document.createElement("li");
+      item.innerHTML = `<span style="color: ${faithDef?.color ?? '#fff'}; font-weight: bold;">${faithDef?.name ?? faithId}</span> <strong>Maioria em ${count} região(ões) (${formatNumber(percent, 1)}% do Império)</strong>`;
+      ui.religionDemographics.appendChild(item);
+    }
+
+    // Desabilita o botão de mudar religião se não houver legitimidade
+    const canAffordReligionChange = session.canAfford({ legitimacy: 40 });
+    ui.religionChangeBtn.disabled = !canAffordReligionChange;
+    if (!canAffordReligionChange) {
+      ui.religionChangeBtn.innerHTML = `Decretar Nova Fé <small style="display:block; font-size: 0.7em;">Falta Legitimidade (40)</small>`;
+    } else {
+      ui.religionChangeBtn.innerHTML = `Decretar Nova Fé`;
+    }
+  }
+
+  function createDiplomacyActionButton(targetId: string, actionType: DiplomaticActionType, label: string, isAffordable: boolean): HTMLButtonElement {
     const button = document.createElement("button");
     button.textContent = label;
+    button.disabled = !isAffordable;
 
     button.addEventListener("click", () => {
       const result = session.executeDiplomaticAction(targetId, actionType);
@@ -1882,9 +1986,10 @@ async function bootstrapApp(): Promise<void> {
     return button;
   }
 
-  function createReligiousActionButton(targetId: string, actionType: ReligiousActionType, label: string): HTMLButtonElement {
+  function createReligiousActionButton(targetId: string, actionType: ReligiousActionType, label: string, isAffordable: boolean): HTMLButtonElement {
     const button = document.createElement("button");
     button.textContent = label;
+    button.disabled = !isAffordable;
 
     button.addEventListener("click", () => {
       const result = session.executeReligiousAction(targetId, actionType);
@@ -1939,14 +2044,22 @@ async function bootstrapApp(): Promise<void> {
 
       const actions = document.createElement("div");
       actions.className = "action-grid diplomacy-actions";
+      
+      const canAlliance = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "alliance").cost);
+      const canPact = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "non_aggression").cost);
+      const canPeace = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "peace").cost);
+      const canTribute = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "tribute").cost);
+      const canEmbargo = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "embargo").cost);
+      const canWar = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "war").cost);
+      const canMissionary = session.canAfford(session.getReligiousActionConfig(player.id, targetId, "send_missionaries").cost);
 
-      actions.appendChild(createDiplomacyActionButton(targetId, "alliance", "Aliança"));
-      actions.appendChild(createDiplomacyActionButton(targetId, "non_aggression", "Pacto"));
-      actions.appendChild(createDiplomacyActionButton(targetId, "peace", "Paz"));
-      actions.appendChild(createDiplomacyActionButton(targetId, "tribute", "Tributo"));
-      actions.appendChild(createDiplomacyActionButton(targetId, "embargo", "Embargo"));
-      actions.appendChild(createDiplomacyActionButton(targetId, "war", "Declarar guerra"));
-      actions.appendChild(createReligiousActionButton(targetId, "send_missionaries", "Enviar missionários"));
+      actions.appendChild(createDiplomacyActionButton(targetId, "alliance", "Aliança", canAlliance));
+      actions.appendChild(createDiplomacyActionButton(targetId, "non_aggression", "Pacto", canPact));
+      actions.appendChild(createDiplomacyActionButton(targetId, "peace", "Paz", canPeace));
+      actions.appendChild(createDiplomacyActionButton(targetId, "tribute", "Tributo", canTribute));
+      actions.appendChild(createDiplomacyActionButton(targetId, "embargo", "Embargo", canEmbargo));
+      actions.appendChild(createDiplomacyActionButton(targetId, "war", "Declarar guerra", canWar));
+      actions.appendChild(createReligiousActionButton(targetId, "send_missionaries", "Enviar missionários", canMissionary));
 
       row.appendChild(actions);
       ui.diplomacyList.appendChild(row);
@@ -2307,6 +2420,39 @@ async function bootstrapApp(): Promise<void> {
        syncModifiersToWorker(state);
     }
 
+    // Gravação da Timeline Economica e Geopolítica dos NPCs em tempo real
+    if (isRecordingTelemetry && telemetryData) {
+      const npcs = Object.values(state.kingdoms)
+        .filter(k => k.id !== "k_nature") // Grava Player e NPCs
+        .map(k => {
+          const indices = getKingdomRegionIndices(state, k.id);
+          let pop = 0, gold = 0, food = 0, unrestAcc = 0;
+          for (const idx of indices) {
+            pop += currentSimulationState.populationTotalData?.[idx] || 0;
+            gold += currentSimulationState.goldData?.[idx] || 0;
+            food += currentSimulationState.foodData?.[idx] || 0;
+            unrestAcc += state.world.regions[WORLD_DEFINITIONS_V1[idx].id]?.unrest || 0;
+          }
+          return {
+            id: k.id,
+            nome: k.name,
+            isPlayer: k.isPlayer,
+            territorios: indices.length,
+            populacao: Math.floor(pop),
+            ouro: Math.floor(gold),
+            comida: Math.floor(food),
+            instabilidadeMedia: indices.length > 0 ? Number((unrestAcc / indices.length).toFixed(2)) : 0,
+            objetivoIA: k.npc?.strategicGoal ?? "Player",
+            guerras: Object.keys(state.wars).filter(w => state.wars[w].attackers.includes(k.id) || state.wars[w].defenders.includes(k.id)).length
+          };
+        });
+
+      telemetryData.timelineEconomica.push({
+        tick: state.meta.tick,
+        reinos: npcs
+      });
+    }
+
     renderHeader(state);
     renderRuntimeMetrics(session.getRuntimeMetrics());
     renderResources();
@@ -2315,6 +2461,7 @@ async function bootstrapApp(): Promise<void> {
     renderRegionInfo(state);
     renderGovernmentInputs(state);
     renderTechnology(state);
+    renderReligion(state);
     renderDiplomacy(state);
     renderMilitary(state);
     renderEventLog(state);
@@ -2412,16 +2559,19 @@ async function bootstrapApp(): Promise<void> {
   });
 
   // Botões de Religião (Poderes Divinos Diretos)
-  const btnBlessCrops = appRoot!.querySelector("#btn-bless-crops");
+  const btnBlessCrops = appRoot!.querySelector<HTMLButtonElement>("#btn-bless-crops");
   if (btnBlessCrops) {
     btnBlessCrops.addEventListener("click", () => {
       const state = session.getState();
       if (!state) return;
       const player = getPlayerKingdom(state);
       const indices = getPlayerRegionIndicesCached(state, player);
+      const canBless = playerFaithCache >= 500;
+      btnBlessCrops.disabled = !canBless;
+      
       if (indices.length === 0) return;
       
-      if (playerFaithCache >= 500) {
+      if (canBless) {
         // 1. Atualização Otimista (Optimistic UI): Dá o feedback visual instantâneo e impede spam de cliques
         playerFaithCache -= 500;
         const faithEl = appRoot!.querySelector("#faith-pool-value");
@@ -2455,6 +2605,11 @@ async function bootstrapApp(): Promise<void> {
     const level = ui.techAutomationSelect.value as AutomationLevel;
     session.setTechnologyAutomation(level);
     showToast(`Automação tecnológica: ${automationLevelLabel(level)}.`);
+  });
+
+  ui.religionChangeBtn.addEventListener("click", () => {
+    const result = session.changeStateReligion(ui.religionChangeSelect.value);
+    showToast(result.message);
   });
 
   ui.techHideCompletedToggle.addEventListener("change", () => {
@@ -2491,44 +2646,64 @@ async function bootstrapApp(): Promise<void> {
     showToast(`Progresso offline ${ui.offlineProgressionToggle.checked ? "ativado" : "desativado"}.`);
   });
 
-  new GodModeConsole(ui.appVersion, (command) => {
+  new GodModeConsole(ui.appVersion, (command, targetId) => {
     const state = session.getState();
     if (!state) return;
     
-    const player = getPlayerKingdom(state);
-    const playerRegionIndices = getPlayerRegionIndicesCached(state, player);
+    const targetKingdom = state.kingdoms[targetId];
+    const targetRegionIndices = targetKingdom ? getKingdomRegionIndices(state, targetId) : [];
 
     switch (command) {
       case "gold_10k":
-        if (playerRegionIndices.length > 0) {
+        if (targetRegionIndices.length > 0) {
           simulationWorker.postMessage({
             type: "APPLY_ECS_EFFECTS",
-            payload: { target: "gold", operation: "add", value: 10000, indices: playerRegionIndices }
+            payload: { target: "gold", operation: "add", value: 10000, indices: targetRegionIndices }
           });
-          flashUIElement(ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="gold"]`), "#00ff00");
+          if (targetKingdom?.isPlayer) flashUIElement(ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="gold"]`), "#00ff00");
         }
-        showToast("Modo Deus: +10.000 Ouro injetado.");
+        showToast(`Modo Deus: +10.000 Ouro injetado em ${targetKingdom?.name ?? "Alvo"}.`);
         break;
       case "food_10k":
-        if (playerRegionIndices.length > 0) {
+        if (targetRegionIndices.length > 0) {
           simulationWorker.postMessage({
             type: "APPLY_ECS_EFFECTS",
-            payload: { target: "food", operation: "add", value: 10000, indices: playerRegionIndices }
+            payload: { target: "food", operation: "add", value: 10000, indices: targetRegionIndices }
           });
-          flashUIElement(ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="food"]`), "#00ff00");
+          if (targetKingdom?.isPlayer) flashUIElement(ui.resourceList.querySelector<HTMLLIElement>(`li[data-resource="food"]`), "#00ff00");
         }
-        showToast("Modo Deus: +10.000 Comida injetada.");
+        showToast(`Modo Deus: +10.000 Comida injetada em ${targetKingdom?.name ?? "Alvo"}.`);
+        break;
+      case "faith_10k":
+        if (targetRegionIndices.length > 0) {
+          simulationWorker.postMessage({
+            type: "APPLY_ECS_EFFECTS",
+            payload: { target: "faith", operation: "add", value: 10000, indices: targetRegionIndices }
+          });
+        }
+        showToast(`Modo Deus: +10.000 Fé injetada em ${targetKingdom?.name ?? "Alvo"}.`);
+        break;
+      case "leg_10k":
+        if (targetRegionIndices.length > 0) {
+          simulationWorker.postMessage({
+            type: "APPLY_ECS_EFFECTS",
+            payload: { target: "legitimacy", operation: "add", value: 10000, indices: targetRegionIndices }
+          });
+        }
+        showToast(`Modo Deus: +10.000 Legitimidade injetada em ${targetKingdom?.name ?? "Alvo"}.`);
         break;
       case "ruin_economy":
-        simulationWorker.postMessage({
-          type: "APPLY_ECS_EFFECTS",
-          payload: { target: "gold", operation: "set", value: 0, indices: playerRegionIndices }
-        });
-        simulationWorker.postMessage({
-          type: "APPLY_ECS_EFFECTS",
-          payload: { target: "food", operation: "set", value: 0, indices: playerRegionIndices }
-        });
-        showToast("Modo Deus: APOCALIPSE. Recursos zerados.");
+        if (targetRegionIndices.length > 0) {
+          simulationWorker.postMessage({
+            type: "APPLY_ECS_EFFECTS",
+            payload: { target: "gold", operation: "set", value: 0, indices: targetRegionIndices }
+          });
+          simulationWorker.postMessage({
+            type: "APPLY_ECS_EFFECTS",
+            payload: { target: "food", operation: "set", value: 0, indices: targetRegionIndices }
+          });
+        }
+        showToast(`Modo Deus: APOCALIPSE. Recursos de ${targetKingdom?.name ?? "Alvo"} zerados.`);
         break;
       case "toggle_fog":
         isFogOfTruthDisabled = !isFogOfTruthDisabled;
@@ -2539,38 +2714,196 @@ async function bootstrapApp(): Promise<void> {
         showToast("Modo Deus: Desbloqueio requer rotina na GameSession. Em breve.");
         break;
       case "pop_1k":
-        if (playerRegionIndices.length > 0) {
+        if (targetRegionIndices.length > 0) {
           simulationWorker.postMessage({
             type: "APPLY_ECS_EFFECTS",
-            payload: { target: "population", operation: "add", value: 1000, indices: playerRegionIndices }
+            payload: { target: "population", operation: "add", value: 1000, indices: targetRegionIndices }
           });
         }
-        showToast("Modo Deus: +1.000 Habitantes injetados.");
+        showToast(`Modo Deus: +1.000 Habitantes injetados em ${targetKingdom?.name ?? "Alvo"}.`);
         break;
       case "kill_pop":
-        if (playerRegionIndices.length > 0) {
+        if (targetRegionIndices.length > 0) {
           simulationWorker.postMessage({
             type: "APPLY_ECS_EFFECTS",
-            payload: { target: "population", operation: "set", value: 0, indices: playerRegionIndices }
+            payload: { target: "population", operation: "set", value: 0, indices: targetRegionIndices }
           });
         }
-        showToast("Modo Deus: População dizimada nas suas regiões.");
+        showToast(`Modo Deus: População dizimada nas regiões de ${targetKingdom?.name ?? "Alvo"}.`);
         break;
       case "force_disaster": {
+        if (!targetKingdom) return;
         const isPlague = Math.random() > 0.5;
         const eventType = isPlague ? "disaster.plague" : "disaster.drought";
         const payload = {
-          actorKingdomId: player.id,
+          actorKingdomId: targetId,
           impact: isPlague ? "population_loss" : "food_loss"
         };
         eventBus.publish({ type: eventType, payload } as any);
-        showToast(`Modo Deus: Forçando desastre (${isPlague ? 'Praga' : 'Seca'}) no seu império.`);
-        const eventEl = ui.eventList.querySelector<HTMLLIElement>(`li`);
-        flashUIElement(eventEl, "#ff3333");
-        setActiveTab("eventos");
+        showToast(`Modo Deus: Forçando desastre (${isPlague ? 'Praga' : 'Seca'}) em ${targetKingdom.name}.`);
+        if (targetKingdom.isPlayer) {
+          const eventEl = ui.eventList.querySelector<HTMLLIElement>(`li`);
+          flashUIElement(eventEl, "#ff3333");
+          setActiveTab("eventos");
+        }
+        break;
+      }
+      case "add_unrest": {
+        for (const idx of targetRegionIndices) {
+          const def = WORLD_DEFINITIONS_V1[idx];
+          if (state.world.regions[def.id]) state.world.regions[def.id].unrest = 1.0;
+        }
+        showToast(`Modo Deus: Regiões de ${targetKingdom?.name ?? "Alvo"} em Rebelião Total.`);
+        break;
+      }
+      case "add_dev": {
+        for (const idx of targetRegionIndices) {
+          const def = WORLD_DEFINITIONS_V1[idx];
+          if (state.world.regions[def.id]) state.world.regions[def.id].devastation = 1.0;
+        }
+        showToast(`Modo Deus: Regiões de ${targetKingdom?.name ?? "Alvo"} sofreram Devastação Máxima.`);
+        break;
+      }
+      case "dump_state": {
+        // HOLTER / RAIO-X PROFUNDO: Coleta de dados avançada para diagnóstico médico da simulação
+        const player = getPlayerKingdom(state); // Necessário para o holter focar no jogador
+        const playerIndices = getPlayerRegionIndicesCached(state, player);
+        const topUnrestRegions = playerIndices
+          .map(idx => {
+            const rId = WORLD_DEFINITIONS_V1[idx].id;
+            return { id: rId, unrest: state.world.regions[rId]?.unrest || 0 };
+          })
+          .filter(r => r.unrest > 0)
+          .sort((a, b) => b.unrest - a.unrest)
+          .slice(0, 3);
+
+        // LEITURA GLOBAL DE NPCS: Avalia a saúde e evolução da Inteligência Artificial
+        const npcs = Object.values(state.kingdoms)
+          .filter(k => !k.isPlayer && k.id !== "k_nature")
+          .map(k => {
+            const indices = getKingdomRegionIndices(state, k.id);
+            let pop = 0, gold = 0;
+            for (const idx of indices) {
+              pop += currentSimulationState.populationTotalData?.[idx] || 0;
+              gold += currentSimulationState.goldData?.[idx] || 0;
+            }
+            return {
+              nome: k.name,
+              territorios: indices.length,
+              populacao: Math.floor(pop),
+              ouro: Math.floor(gold),
+              estabilidade: Math.floor(k.stability),
+              objetivoIA: k.npc?.strategicGoal ?? "Nenhum"
+            };
+          });
+
+        const dump = {
+          sinaisVitais: {
+            ciclo: state.meta.tick,
+            velocidadeWorker: currentWorkerSpeed,
+            isPausado: currentWorkerPaused,
+            progressoOfflineAtivo: state.meta.offlineProgression
+          },
+          economiaInterna: {
+             // O que o reino gera vs o que ele gasta (POO Core)
+             rendaPorTick: player.economy.incomePerTick,
+             despesaPorTick: player.economy.upkeepPerTick,
+             estoqueAtualECS: {
+               ouro: getPlayerTotalResource(state, ResourceType.Gold),
+               comida: getPlayerTotalResource(state, ResourceType.Food),
+               fe: getPlayerTotalResource(state, ResourceType.Faith),
+               legitimidade: getPlayerTotalResource(state, ResourceType.Legitimacy),
+               populacaoVIVA: getPlayerTotalPopulation(state),
+               manpower: getPlayerTotalManpower(state)
+             },
+             politicaFiscal: player.economy.taxPolicy,
+             orcamento: player.economy.budgetPriority
+          },
+          geopolitica: {
+            religiaoDeEstado: player.religion.stateFaith,
+            relacoesDiplomaticas: Object.keys(player.diplomacy.relations).length,
+            guerrasAtivas: Object.keys(state.wars).filter(w => state.wars[w].attackers.includes(player.id) || state.wars[w].defenders.includes(player.id)).length,
+            regioesSobRiscoCritico: topUnrestRegions
+          },
+          concorrenciaGlobal: npcs,
+          diagnosticoWorker: {
+            // Verifica se a memória de alta performance está corrompida
+            tamanhoArrayOuro: currentSimulationState.goldData?.length || 0,
+            tamanhoArrayPop: currentSimulationState.populationTotalData?.length || 0,
+            matrizEsperada: WORLD_DEFINITIONS_V1.length
+          },
+          analiseSintomatica: Array.from(ui.explainList.querySelectorAll('li')).map(li => li.textContent),
+          focoPaciente: selectedRegionId ? {
+             id: selectedRegionId,
+             dono: state.world.regions[selectedRegionId]?.ownerId,
+             populacao: currentSimulationState.populationTotalData?.[REGION_INDEX_MAP.get(selectedRegionId)!] || 0,
+             feDominante: state.world.regions[selectedRegionId]?.dominantFaith,
+             instabilidade: state.world.regions[selectedRegionId]?.unrest,
+             tensaoReligiosa: state.world.regions[selectedRegionId]?.faithUnrest,
+             devastacao: state.world.regions[selectedRegionId]?.devastation
+          } : "Nenhuma região inspecionada no Raio-X"
+        };
+        
+        console.log("%c================ HOLTER DE SIMULAÇÃO (RAIO-X PARA A IA) ================", "color: #ff3366; background: #220000; font-weight: bold; font-size: 14px; padding: 5px;");
+        console.log(JSON.stringify(dump, null, 2));
+        console.log("%c========================================================================", "color: #ff3366; background: #220000; font-weight: bold; font-size: 14px; padding: 5px;");
+        
+        showToast("Exame Holter gerado no Console (F12).");
+        break;
+      }
+      case "toggle_telemetry": {
+        const telemetryBtnEl = document.getElementById("btn-toggle-telemetry");
+        if (!isRecordingTelemetry) {
+          isRecordingTelemetry = true;
+          telemetryData = {
+            periodo: {
+              inicioTick: state.meta.tick,
+              inicioData: new Date().toISOString(),
+            },
+            configuracaoMundo: {
+              velocidade: currentWorkerSpeed,
+              progressoOffline: state.meta.offlineProgression
+            },
+            timelineEconomica: [],
+            eventosOcorridos: []
+          };
+          if (telemetryBtnEl) {
+            telemetryBtnEl.textContent = "⏹️ Parar Gravação Contínua (Holter)";
+            telemetryBtnEl.style.background = "#ff3366";
+            telemetryBtnEl.style.color = "#fff";
+          }
+          showToast("🔴 Holter Iniciado. Monitorando a mente das IAs e todos os eventos...");
+        } else {
+          isRecordingTelemetry = false;
+          telemetryData.periodo.fimTick = state.meta.tick;
+          telemetryData.periodo.fimData = new Date().toISOString();
+          telemetryData.duracaoTicks = telemetryData.periodo.fimTick - telemetryData.periodo.inicioTick;
+          
+          console.log("%c================ RELATÓRIO HOLTER CONTÍNUO (LINHA DO TEMPO) ================", "color: #ff3366; background: #220000; font-weight: bold; font-size: 14px; padding: 5px;");
+          console.log(JSON.stringify(telemetryData, null, 2));
+          console.log("%c============================================================================", "color: #ff3366; background: #220000; font-weight: bold; font-size: 14px; padding: 5px;");
+          
+          if (telemetryBtnEl) {
+            telemetryBtnEl.textContent = "🔴 Iniciar Gravação Contínua (Holter)";
+            telemetryBtnEl.style.background = "#222";
+            telemetryBtnEl.style.color = "#ff3366";
+          }
+          showToast("⏹️ Holter Parado. A Linha do Tempo foi exportada para o Console (F12).");
+        }
         break;
       }
     }
+  }, () => {
+    const state = session.getState();
+    if (!state) return [];
+    return Object.values(state.kingdoms)
+      .filter(k => k.id !== "k_nature")
+      .map(k => ({ id: k.id, name: k.name, isPlayer: k.isPlayer }))
+      .sort((a, b) => {
+        if (a.isPlayer) return -1;
+        if (b.isPlayer) return 1;
+        return a.name.localeCompare(b.name);
+      });
   });
   syncProfileUi();
 
@@ -2595,8 +2928,28 @@ async function bootstrapApp(): Promise<void> {
   });
 
   ui.splashContinueBtn.addEventListener("click", async () => {
+    // UX: Fornece feedback visual de que o jogo está processando dados densos
+    ui.splashContinueBtn.disabled = true;
+    ui.splashNewBtn.disabled = true;
+
     // `currentState` and `initialSlots` are from the outer scope and already loaded.
     let stateToBoot: GameState | null = currentState;
+    let willCalculateOffline = false;
+
+    // Espia a configuração do save para não mentir para o usuário
+    if (!stateToBoot && initialSlots.length > 0) {
+      const mostRecentSlot = [...initialSlots].sort((a, b) => b.savedAt - a.savedAt)[0];
+      const peekState = await session.peekSaveSlot(mostRecentSlot.slotId);
+      if (peekState?.meta.offlineProgression) willCalculateOffline = true;
+    } else if (stateToBoot?.meta.offlineProgression) {
+      willCalculateOffline = true;
+    }
+
+    ui.splashContinueBtn.textContent = willCalculateOffline 
+      ? "Calculando tempo ausente... Aguarde." 
+      : "Restaurando simulação... Aguarde.";
+      
+    await new Promise(resolve => setTimeout(resolve, 50)); // Libera a Thread para o navegador pintar o botão
 
     if (!stateToBoot && initialSlots.length > 0) {
       Diagnostic.system("SYS-BOOT", "Sem estado em memória. Auto-selecionando o save mais recente...");
@@ -2610,6 +2963,8 @@ async function bootstrapApp(): Promise<void> {
       } catch (e) {
         Diagnostic.error("ERR-SYS", "Auto-Boot falhou ao extrair o save mais recente.", e);
         showToast("Falha ao carregar save. Verifique o console.");
+        ui.splashContinueBtn.disabled = false;
+        ui.splashContinueBtn.textContent = "Continuar Jornada";
         return; // Abort on failure
       }
     }
