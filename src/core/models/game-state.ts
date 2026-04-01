@@ -39,6 +39,7 @@ export interface KingdomState {
   victoryProgress: Record<string, number>;
   legitimacy: number;
   stability: number;
+  color?: string; // Cor oficial do estandarte do reino
   npc?: NpcBehaviorState;
 }
 

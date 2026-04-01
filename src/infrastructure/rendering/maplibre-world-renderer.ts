@@ -153,7 +153,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       }
 
       const owner = kingdoms[region.ownerId];
-      const ownerColor = colorForKingdom(owner?.id ?? region.ownerId);
+      const ownerColor = owner?.color || colorForKingdom(owner?.id ?? region.ownerId);
       
       // Extração Total (Eager Loading): Garante troca de camadas O(1) instantânea na interface
       const unrest = Number.isFinite(region.unrest) ? region.unrest : 0;
@@ -602,13 +602,36 @@ function buildPulse(clockMs: number, regionId: string): number {
   return Number(((normalized + 1) * 0.5).toFixed(3));
 }
 
+// Utilitário puro de conversão de cor para WebGL
+function hslToHex(h: number, s: number, l: number): string {
+  l /= 100;
+  const a = s * Math.min(l, 1 - l) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
 function colorForKingdom(kingdomId: string): string {
   if (!kingdomId || typeof kingdomId !== "string") return "rgba(0,0,0,0)";
   if (kingdomId === "k_nature") return "#3b453b"; // Verde Musgo Escuro para a Natureza Selvagem
 
-  const palette = ["#8f5b3c", "#4f6d52", "#5d5277", "#9b6c2e", "#435b78", "#7d4f5f"];
-  const hash = kingdomId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return palette[hash % palette.length] || "rgba(0,0,0,0)";
+  // Geração Procedural Infinita (Golden Ratio Hashing)
+  let hash = 0;
+  for (let i = 0; i < kingdomId.length; i++) {
+    hash = (hash << 5) - hash + kingdomId.charCodeAt(i);
+    hash |= 0;
+  }
+  const absHash = Math.abs(hash);
+  
+  // Multiplicador para garantir pulos grandes na roda de cores, gerando IAs bem distintas
+  const hue = (absHash * 137) % 360; 
+  const saturation = 55 + (absHash % 35); // 55% a 90% (Cores mais vibrantes)
+  const lightness = 45 + ((absHash >> 2) % 15); // 45% a 60% (Evita o excesso de marrom escuro)
+
+  return hslToHex(hue, saturation, lightness);
 }
 
 function colorForFaith(faithId: string, staticData?: StaticWorldData): string {

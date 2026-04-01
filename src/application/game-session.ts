@@ -118,7 +118,7 @@ export class GameSession {
     // Respiro arquitetural: Evita que a Thread principal tranque o navegador ("Page Unresponsive")
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    const offlineResult = this.runOfflineProgression(baseState, now);
+    const offlineResult = await this.runOfflineProgression(baseState, now);
     this.currentState = offlineResult.state;
     this.currentState.meta.lastClosedAt = null;
     this.currentState.meta.lastUpdatedAt = now;
@@ -1392,12 +1392,14 @@ export class GameSession {
     const state = this.requireState();
     const now = this.deps.clock.now();
 
-    // Cria uma cópia profunda para evitar mutações no estado em memória
-    const stateCopy = structuredClone(state);
+    // Cópia Rasa O(1) do estado. Elimina o travamento de 1500ms na hora do Autosave!
+    const stateCopy: GameState = {
+      ...state,
+      meta: { ...state.meta }
+    };
 
     // Converte os Float64Arrays do ECS para Arrays normais para garantir a serialização
-    if (stateCopy.ecs) {
-      // Extração direta da fonte de verdade (imune a quebras de protótipo)
+    if (state.ecs) {
       stateCopy.ecs = {
         gold: Array.from(state.ecs?.gold || []),
         food: Array.from(state.ecs?.food || []),
@@ -1551,7 +1553,7 @@ export class GameSession {
     this.commandHeadHash = latest.hash;
   }
 
-  private runOfflineProgression(state: GameState, now: number): { state: GameState; ticks: number; elapsedMs: number } {
+  private async runOfflineProgression(state: GameState, now: number): Promise<{ state: GameState; ticks: number; elapsedMs: number }> {
     const lastSnapshotAt = state.meta.lastClosedAt ?? state.meta.lastUpdatedAt;
     if (!lastSnapshotAt || lastSnapshotAt >= now) {
       return { state, ticks: 0, elapsedMs: 0 };
@@ -1580,18 +1582,34 @@ export class GameSession {
     const startedAt = this.monotonicNow();
     
     const ecsBackup = state.ecs;
-
-    const batchResult = this.pipeline.runBatch(state, ticksToSimulate, tickDurationMs, lastSnapshotAt, {
-      collectEvents: false,
-      coarseStepTicks
-    });
+    let processedTicks = 0;
+    let currentState = state;
     
+    // Fatia a progressão em pacotes curtos. Evita que a Thread tranque e exiba "Página Não Respondendo"
+    const CHUNK_SIZE = 500;
+
+    while (processedTicks < ticksToSimulate) {
+      const ticksThisChunk = Math.min(CHUNK_SIZE, ticksToSimulate - processedTicks);
+      const startNowForChunk = lastSnapshotAt + (processedTicks * tickDurationMs);
+      
+      const batchResult = this.pipeline.runBatch(currentState, ticksThisChunk, tickDurationMs, startNowForChunk, {
+        collectEvents: false,
+        coarseStepTicks
+      });
+      
+      currentState = batchResult.state;
+      processedTicks += ticksThisChunk;
+      
+      // Cede a CPU de volta ao Navegador para ele respirar e animar telas de loading
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
     if (ecsBackup) {
-      batchResult.state.ecs = ecsBackup;
+      currentState.ecs = ecsBackup;
     }
 
     return {
-      state: batchResult.state,
+      state: currentState,
       ticks: ticksToSimulate,
       elapsedMs: this.monotonicNow() - startedAt
     };

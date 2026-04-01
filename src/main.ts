@@ -70,6 +70,7 @@ interface UiRefs {
   eventList: HTMLElement;
   profileNameInput: HTMLInputElement;
   profileEmailInput: HTMLInputElement;
+  profileColorInput: HTMLInputElement;
   profileIdValue: HTMLElement;
   profileSaveButton: HTMLButtonElement;
   appVersion: HTMLElement;
@@ -82,6 +83,7 @@ interface UiRefs {
   splashForm: HTMLElement;
   splashMonarchInput: HTMLInputElement;
   splashCountrySelect: HTMLSelectElement;
+  splashColorInput: HTMLInputElement;
   splashStartBtn: HTMLButtonElement;
 }
 
@@ -91,6 +93,7 @@ interface LocalPlayerProfile {
   id: string;
   name: string;
   email: string;
+  color?: string;
 }
 
 const PROFILE_STORAGE_KEY = "midk.profile.v1";
@@ -250,7 +253,8 @@ function createDefaultProfile(): LocalPlayerProfile {
   return {
     id: generateProfileId(),
     name: "Monarca Local",
-    email: ""
+    email: "",
+    color: "#d4af37" // Ouro como cor padrão do jogador
   };
 }
 
@@ -264,17 +268,17 @@ function loadLocalProfile(): LocalPlayerProfile {
     }
 
     const parsed = JSON.parse(raw) as Partial<LocalPlayerProfile>;
-    if (typeof parsed.id !== "string" || typeof parsed.name !== "string" || typeof parsed.email !== "string") {
-      const fallback = createDefaultProfile();
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(fallback));
-      return fallback;
-    }
-
-    return {
-      id: parsed.id,
-      name: parsed.name,
-      email: parsed.email
+        
+        // Mesclagem segura: Mantém o que existe, aplica padrão apenas no que faltar
+        const profile: LocalPlayerProfile = {
+          id: typeof parsed.id === "string" ? parsed.id : generateProfileId(),
+          name: typeof parsed.name === "string" ? parsed.name : "Monarca Local",
+          email: typeof parsed.email === "string" ? parsed.email : "",
+          color: typeof parsed.color === "string" ? parsed.color : "#d4af37"
     };
+        
+        localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+        return profile;
   } catch {
     const fallback = createDefaultProfile();
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(fallback));
@@ -368,7 +372,8 @@ async function bootstrapApp(): Promise<void> {
       <div class="splash-card card">
         <h1>Epochs Idle PC</h1>
         <p style="color: #aaa;">A forja de um novo império aguarda o seu comando.</p>
-        <div class="splash-actions">
+        <div id="splash-loading-indicator" style="margin-top: 2rem; color: #888; font-weight: bold; padding: 0.8rem;">Lendo pergaminhos locais...</div>
+        <div id="splash-actions" class="splash-actions" style="display: none;">
           <button id="splash-continue-btn" class="primary" style="display: none;">Continuar Jornada</button>
           <button id="splash-new-btn">Nova Campanha</button>
         </div>
@@ -380,6 +385,9 @@ async function bootstrapApp(): Promise<void> {
           </label>
           <label>Nação Inicial
             <select id="splash-country"></select>
+          </label>
+          <label>Cor do Estandarte
+            <input id="splash-color" type="color" value="${loadLocalProfile().color || '#d4af37'}" style="padding: 0; height: 40px; cursor: pointer;">
           </label>
           <button id="splash-start-btn" class="primary" style="width: 100%; margin-top: 0.5rem; font-size: 1.1rem; padding: 0.8rem;">Fundar Império</button>
         </div>
@@ -599,6 +607,7 @@ async function bootstrapApp(): Promise<void> {
           <div class="form-grid">
             <label>Nome do jogador <input id="profile-name-input" type="text" maxlength="40"></label>
             <label>Email (multiplayer futuro) <input id="profile-email-input" type="email" maxlength="100"></label>
+            <label>Cor do Império <input id="profile-color-input" type="color" style="padding: 0; height: 40px; width: 80px; cursor: pointer; background: none; border: none;"></label>
           </div>
           <div class="form-grid" style="margin-top: 1rem;">
             <label class="inline-check">
@@ -686,6 +695,7 @@ async function bootstrapApp(): Promise<void> {
     eventList: queryElement(appRoot, "#event-list"),
     profileNameInput: queryElement(appRoot, "#profile-name-input"),
     profileEmailInput: queryElement(appRoot, "#profile-email-input"),
+    profileColorInput: queryElement(appRoot, "#profile-color-input"),
     profileIdValue: queryElement(appRoot, "#profile-id-value"),
     profileSaveButton: queryElement(appRoot, "#profile-save-btn"),
     appVersion: queryElement(appRoot, "#app-version"),
@@ -698,6 +708,7 @@ async function bootstrapApp(): Promise<void> {
     splashForm: queryElement(appRoot, "#splash-form"),
     splashMonarchInput: queryElement(appRoot, "#splash-monarch"),
     splashCountrySelect: queryElement(appRoot, "#splash-country"),
+    splashColorInput: queryElement(appRoot, "#splash-color"),
     splashStartBtn: queryElement(appRoot, "#splash-start-btn")
   };
 
@@ -1026,6 +1037,7 @@ async function bootstrapApp(): Promise<void> {
     ui.playerValue.textContent = profile.name;
     ui.profileNameInput.value = profile.name;
     ui.profileEmailInput.value = profile.email;
+    ui.profileColorInput.value = profile.color || "#d4af37";
     ui.profileIdValue.textContent = profile.id;
   }
 
@@ -2634,10 +2646,19 @@ async function bootstrapApp(): Promise<void> {
     profile = {
       ...profile,
       name: nextName,
-      email: nextEmail
+      email: nextEmail,
+      color: ui.profileColorInput.value
     };
     saveLocalProfile(profile);
     syncProfileUi();
+
+    // Aplica a cor em tempo real ao império sem precisar de nova campanha
+    const state = session.getState();
+    if (state) {
+      const player = getPlayerKingdom(state);
+      player.color = profile.color;
+      session.updateEcsState(state.ecs!); // Força commit de UI
+    }
     showToast("Perfil local salvo.");
   });
 
@@ -2917,14 +2938,21 @@ async function bootstrapApp(): Promise<void> {
   const currentState = await persistence.gameStateRepository.loadCurrent();
   const initialSlots = await persistence.saveRepository.listSlots();
 
+  // Impede o "pulo" dos botões. Só mostra a UI quando o banco de dados responder.
+  const splashLoadingIndicator = document.getElementById("splash-loading-indicator");
+  const splashActions = document.getElementById("splash-actions");
+  if (splashLoadingIndicator && splashActions) {
+    splashLoadingIndicator.style.display = "none";
+    splashActions.style.display = "flex";
+  }
+
   if (initialSlots.length > 0 || currentState) {
     ui.splashContinueBtn.style.display = "inline-block";
   }
 
   ui.splashNewBtn.addEventListener("click", () => {
     ui.splashForm.classList.remove("is-hidden");
-    ui.splashNewBtn.style.display = "none";
-    ui.splashContinueBtn.style.display = "none";
+    if (splashActions) splashActions.style.display = "none";
   });
 
   ui.splashContinueBtn.addEventListener("click", async () => {
@@ -2949,7 +2977,8 @@ async function bootstrapApp(): Promise<void> {
       ? "Calculando tempo ausente... Aguarde." 
       : "Restaurando simulação... Aguarde.";
       
-    await new Promise(resolve => setTimeout(resolve, 50)); // Libera a Thread para o navegador pintar o botão
+    // Força 2 frames de repintura nativa da GPU antes de travar a CPU com matemática O(N)
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
     if (!stateToBoot && initialSlots.length > 0) {
       Diagnostic.system("SYS-BOOT", "Sem estado em memória. Auto-selecionando o save mais recente...");
@@ -2975,8 +3004,7 @@ async function bootstrapApp(): Promise<void> {
       // This case should not be reached if the button is only visible when there's something to load.
       // As a fallback, show the new game form.
       ui.splashForm.classList.remove("is-hidden");
-      ui.splashNewBtn.style.display = "none";
-      ui.splashContinueBtn.style.display = "none";
+      if (splashActions) splashActions.style.display = "none";
     }
   });
 
@@ -2989,8 +3017,9 @@ async function bootstrapApp(): Promise<void> {
     ui.splashStartBtn.disabled = true;
     ui.splashStartBtn.textContent = "Forjando mundo...";
 
-    profile = { ...profile, name: ui.splashMonarchInput.value.trim() || "Soberano" };
+    profile = { ...profile, name: ui.splashMonarchInput.value.trim() || "Soberano", color: ui.splashColorInput.value };
     saveLocalProfile(profile);
+    syncProfileUi(); // Força a atualização da aba Configurações imediatamente
 
     session.stop();
     await (persistence.saveRepository as any).clearAll();
@@ -3005,6 +3034,7 @@ async function bootstrapApp(): Promise<void> {
       const monarchName = ui.splashMonarchInput.value.trim() || "Soberano";
       playerKingdom.name = `Tribo de ${monarchName}`;
       playerKingdom.adjective = def ? def.name : "Nativo";
+      playerKingdom.color = profile.color;
     }
 
     await persistence.gameStateRepository.saveCurrent(freshState);
@@ -3015,14 +3045,31 @@ async function bootstrapApp(): Promise<void> {
   });
 
   async function startGameplay(stateToBoot: GameState | null) {
-    ui.splashScreen.classList.add("is-hidden");
-    
+    // Não ocultar a tela ainda. O processo de loading ficará visual!
     const bootState = stateToBoot ?? createInitialState(staticWorldData, undefined, WORLD_DEFINITIONS_V1);
+    
+    // Injeta a cor do jogador escolhida no menu de forma irrevogável
+    const player = getPlayerKingdom(bootState);
+    if (player && profile.color) {
+      player.color = profile.color;
+    }
+
     const finalState = await session.bootstrap(bootState);
+    
+    // Sincroniza o perfil local e a tela inicial com a cor que efetivamente veio do save carregado
+    const loadedPlayer = getPlayerKingdom(finalState);
+    if (loadedPlayer && loadedPlayer.color && loadedPlayer.color !== profile.color) {
+      profile = { ...profile, color: loadedPlayer.color };
+      saveLocalProfile(profile);
+      syncProfileUi();
+    }
     
     mapRenderer.setLayer("owner");
     updateMapLegend("owner");
     await mapRenderer.mount(finalState.world, finalState.kingdoms);
+
+    // Oculta a tela somente APÓS a matemática terminar e o mapa estar desenhado
+    ui.splashScreen.classList.add("is-hidden");
 
     session.subscribe((state) => {
       renderState(state);

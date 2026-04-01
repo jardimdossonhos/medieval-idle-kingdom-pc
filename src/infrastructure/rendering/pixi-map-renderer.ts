@@ -1,4 +1,4 @@
-﻿﻿import { Application, Container, Graphics, Text } from "pixi.js";
+﻿﻿﻿﻿import { Application, Container, Graphics, Text } from "pixi.js";
 import type { KingdomState } from "../../core/models/game-state";
 import type { StaticWorldData } from "../../core/models/static-world-data";
 import type { RegionDefinition, WorldState } from "../../core/models/world";
@@ -80,7 +80,8 @@ export class PixiMapRenderer implements GameMapRenderer {
       const selected = this.selectedRegionId === regionId;
       const recentlyCaptured = recentlyCapturedRegionIds?.has(regionId) ?? false;
 
-      let fillColor = owner ? colorForKingdom(owner.id) : 0x8d816e;
+      const hexStr = owner?.color || colorForKingdom(owner?.id ?? regionState.ownerId);
+      let fillColor = parseInt(hexStr.replace("#", "0x"), 16);
       if (this.mapLayer === "unrest") {
         fillColor = colorForUnrest(regionState.unrest);
       }
@@ -218,10 +219,24 @@ function redrawRegionShape(
   shape.endFill();
 }
 
-function colorForKingdom(kingdomId: string): number {
-  const palette = [0x8f5b3c, 0x4f6d52, 0x5d5277, 0x9b6c2e, 0x435b78, 0x7d4f5f];
-  const hash = kingdomId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return palette[hash % palette.length];
+function hslToHex(h: number, s: number, l: number): string {
+  l /= 100;
+  const a = s * Math.min(l, 1 - l) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function colorForKingdom(kingdomId: string): string {
+  if (!kingdomId || kingdomId === "k_nature") return "#3b453b";
+  let hash = 0;
+  for (let i = 0; i < kingdomId.length; i++) { hash = (hash << 5) - hash + kingdomId.charCodeAt(i); hash |= 0; }
+  const absHash = Math.abs(hash);
+  const hue = (absHash * 137.508) % 360;
+  return hslToHex(hue, 40 + (absHash % 30), 35 + ((absHash >> 2) % 25));
 }
 
 function colorForUnrest(unrest: number): number {
