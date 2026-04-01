@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import { buildSaveSummary } from "./save/build-save-summary";
+﻿import { buildSaveSummary } from "./save/build-save-summary";
 import { Diagnostic } from "./diagnostics";
 import type {
   CommandLogRepository,
@@ -122,6 +122,17 @@ export class GameSession {
     this.runtimeMetrics.offlineCatchUpMs = this.round(offlineResult.elapsedMs, 3);
     this.runtimeMetrics.offlineTicks = offlineResult.ticks;
 
+    // Segurança: Retorna a velocidade para 0.5x ao carregar para evitar sobressaltos
+    this.currentState.meta.speedMultiplier = 0.5;
+
+    // Padrão de Novo Jogo (Ciclo 0): Ativa a automação de expansão para o jogador
+    if (this.currentState.meta.tick === 0) {
+      const player = this.getPlayerKingdom(this.currentState);
+      if (player && player.administration) {
+        player.administration.automation.expansion = AutomationLevel.Assisted;
+      }
+    }
+
     if (offlineResult.ticks > 0) {
       this.currentState.events = [
         this.createSessionLog(
@@ -229,6 +240,14 @@ export class GameSession {
     const state = this.requireState();
     state.meta.disastersEnabled = enabled;
     this.recordPlayerCommand("session.disasters", { enabled });
+    this.persistCurrent();
+    this.emitState();
+  }
+
+  setOfflineProgression(enabled: boolean): void {
+    const state = this.requireState();
+    state.meta.offlineProgression = enabled;
+    this.recordPlayerCommand("session.offline_progression", { enabled });
     this.persistCurrent();
     this.emitState();
   }
@@ -1245,10 +1264,19 @@ export class GameSession {
 
     void now;
 
-    this.accumulatedMs += deltaMs * state.meta.speedMultiplier;
+    // PROTEÇÃO CONTRA ESPIRAL DA MORTE (Spiral of Death)
+    // Limita o tempo máximo lido por pulso a 1000ms. Se a CPU engasgar, 
+    // evitamos que uma dívida de tempo exponencial seja cobrada no próximo frame.
+    const safeDeltaMs = Math.min(deltaMs, 1000);
+
+    this.accumulatedMs += safeDeltaMs * state.meta.speedMultiplier;
 
     let progressed = false;
     let simNow = state.meta.lastUpdatedAt;
+
+    // Trava de Segurança: Número máximo de cálculos estruturais que a Main Thread fará por frame
+    let ticksProcessedThisCycle = 0;
+    const MAX_TICKS_PER_CYCLE = 20;
 
     while (true) {
       const current = this.currentState;
@@ -1259,6 +1287,12 @@ export class GameSession {
       const tickDurationMs = Math.max(1, current.meta.tickDurationMs);
 
       if (this.accumulatedMs < tickDurationMs) {
+        break;
+      }
+
+      if (ticksProcessedThisCycle >= MAX_TICKS_PER_CYCLE) {
+        this.accumulatedMs = 0; // Descarta a dívida de tempo se a CPU não der conta (Game Slowdown Orgânico)
+        Diagnostic.warn("SYS-PERF", "Limite de Ticks atingido. CPU engasgada: descartando débito temporal para salvar a UI.");
         break;
       }
 
@@ -1279,6 +1313,7 @@ export class GameSession {
       progressed = true;
       this.ticksSinceAutosave += 1;
       this.ticksSinceSnapshot += 1;
+      ticksProcessedThisCycle += 1;
 
       for (const event of result.events) {
         this.deps.eventBus.publish(event);
@@ -1482,6 +1517,11 @@ export class GameSession {
   private runOfflineProgression(state: GameState, now: number): { state: GameState; ticks: number; elapsedMs: number } {
     const lastSnapshotAt = state.meta.lastClosedAt ?? state.meta.lastUpdatedAt;
     if (!lastSnapshotAt || lastSnapshotAt >= now) {
+      return { state, ticks: 0, elapsedMs: 0 };
+    }
+
+    // O progresso offline é opcional e deve estar explicitamente ativado
+    if (!state.meta.offlineProgression) {
       return { state, ticks: 0, elapsedMs: 0 };
     }
 

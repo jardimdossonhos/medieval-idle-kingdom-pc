@@ -3,11 +3,12 @@ import { Diagnostic } from "../../../application/diagnostics";
 import type { StaticWorldData } from "../../models/static-world-data";
 import type { SimulationSystem, TickContext } from "../tick-pipeline";
 import type { RegionDefinition } from "../../models/world";
+import { createEventId } from "./utils";
 
 const MIGRATION_THRESHOLD = 150; // População necessária para engatilhar o transbordo
 const MIGRATION_AMOUNT = 50;     // Quantidade demográfica que forma a nova colônia
 
-export function createMigrationSystem(staticData: StaticWorldData, eventBus: { publish: (event: any) => void }, orderedDefinitions: RegionDefinition[]): SimulationSystem {
+export function createMigrationSystem(staticData: StaticWorldData, orderedDefinitions: RegionDefinition[]): SimulationSystem {
   return {
     id: "migration_system",
     run: (context: TickContext) => {
@@ -65,13 +66,35 @@ export function createMigrationSystem(staticData: StaticWorldData, eventBus: { p
             targetRegion.unrest = 0;
             targetRegion.devastation = 0;
 
+            // Mutação local do ECS para suportar progressão offline sem Worker ativo
+            if (state.ecs && state.ecs.populationTotal) {
+              const targetIdx = orderedDefinitions.findIndex(d => d.id === targetId);
+              if (targetIdx !== -1) {
+                (state.ecs.populationTotal as any)[i] -= MIGRATION_AMOUNT;
+                (state.ecs.populationTotal as any)[targetIdx] += MIGRATION_AMOUNT;
+              }
+            }
+
             // 2. Empacota a Intenção Física para a fila
             migrations.push({ sourceId: regionId, targetId, amount: MIGRATION_AMOUNT, kingdomId: region.ownerId });
       }
 
-      // Dispara as emissões em lote para a Interface traduzir em Comandos ECS
+      // Dispara as emissões para a pipeline (Ignoradas no offline, consumidas em tempo real)
+      let eventSeq = 0;
       for (const mig of migrations) {
-        eventBus.publish({ type: "population.migration", payload: mig } as any);
+        context.events.push({
+          id: createEventId({
+            prefix: "evt_mig",
+            tick: state.meta.tick,
+            systemId: "migration",
+            actorId: mig.kingdomId,
+            sequence: eventSeq++
+          }),
+          type: "population.migration",
+          actorKingdomId: mig.kingdomId,
+          payload: mig,
+          occurredAt: context.now
+        });
       }
     }
   };

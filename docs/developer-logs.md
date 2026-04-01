@@ -1079,4 +1079,19 @@ Documentado em `ARCHITECTURE.md` (Seção 6.9). Implementado com sucesso via sis
 **Validação:** A análise cruzada dos logs de sistema atestou o **sucesso incondicional da arquitetura de Save/Load**. O Handshake do Worker, o carregamento via `RESTORE_ECS_STATE` e a reinjeção de modificadores tecnológicos ocorrem perfeitamente. O bug histórico de amnésia do Worker está oficialmente extinto.
 **Novo Alerta Crítico (Gargalo de UI):** Os logs do navegador começaram a disparar `[Violation] 'message' handler took 1300ms+` travando a interface de usuário.
 **Causa Raiz:** O orquestrador `main.ts` escuta o `TICK` do Worker a cada 250ms e repassa a carga para o `renderState()`. A sub-função `buildMapRenderContext` está recalculando as razões de riqueza de **todas as 19.472 regiões de terra firme** a cada pulso (4 vezes por segundo), colapsando a thread principal e gerando input lag severo.
-**Próximo Passo (Imediato):** Otimizar o loop de renderização da UI no `main.ts`. Implementar *Throttle/Memoization* no `buildMapRenderContext` ou mover o cálculo pesado para rodar apenas 1x por segundo (acompanhando o relógio de UI) em vez de ser refém dos micro-pulsos físicos do Worker.
+**Próximo Passo (Imediato):** Otimizar o loop de renderização da UI no `main.ts`. Implementar o plano documentado na Entrada 73.
+
+---
+
+## Entrada: 73
+
+**Data:** 26/03/2024
+
+### Plano de Ação: Desacoplamento de Loop de Renderização (UI Performance)
+**Objetivo:** Erradicar o Gargalo Crítico de Interface (Travamentos ao receber dados do Worker) documentado na Entrada 72, blindando a arquitetura para suportar o *late-game* e as fases futuras.
+**Estratégia (3 Pilares no `main.ts`):**
+1.  **Pilar A (Throttling / Estrangulamento):** O Worker continuará rodando a 4Hz (250ms) para precisão matemática da física. No entanto, a UI pesada (`renderState` e `mapRenderer.render`) só será acionada **1 vez por segundo** (1000ms), ancorada ao tick histórico do jogo. Apenas os números rápidos do HUD (Ouro, Comida) poderão atualizar em tempo real.
+2.  **Pilar B (Lazy Evaluation Geográfica):** A sub-função assassina de performance `buildMapRenderContext` será interceptada. Atualmente ela varre 19.472 nações para calcular riqueza econômica e tensões de guerra em todo ciclo. Passará a calcular estritamente o que a aba selecionada exige. (Se a visão for 'Religião', o loop ignora cálculos de 'Ouro').
+3.  **Pilar C (DOM Anti-Thrashing):** Preparar o terreno nas renderizações para parar de destruir o DOM (`innerHTML = ""`) e adotar transições granulares, trocando apenas o `textContent` quando houver de fato um delta matemático.
+**Impacto e Riscos:** Risco Zero para o motor matemático ECS (Worker), que continuará rodando intocado. Garantia de alívio instantâneo do Input Lag no clique do mouse do usuário.
+**Status:** Plano aprovado. Implementação iminente no `main.ts`.

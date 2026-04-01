@@ -71,6 +71,7 @@ interface UiRefs {
   appVersion: HTMLElement;
   tabButtons: HTMLButtonElement[];
   tabPanels: HTMLElement[];
+  offlineProgressionToggle: HTMLInputElement;
   splashScreen: HTMLElement;
   splashContinueBtn: HTMLButtonElement;
   splashNewBtn: HTMLButtonElement;
@@ -576,6 +577,12 @@ async function bootstrapApp(): Promise<void> {
             <label>Nome do jogador <input id="profile-name-input" type="text" maxlength="40"></label>
             <label>Email (multiplayer futuro) <input id="profile-email-input" type="email" maxlength="100"></label>
           </div>
+          <div class="form-grid" style="margin-top: 1rem;">
+            <label class="inline-check">
+              <input id="settings-offline-progression" type="checkbox">
+              Simular progresso offline (cálculo de tempo fechado)
+            </label>
+          </div>
           <div class="summary-grid">
             <span>ID local</span><strong id="profile-id-value">-</strong>
             <span>Tempo da simulação</span><strong>12 ciclos = 1 Ano Histórico</strong>
@@ -657,6 +664,7 @@ async function bootstrapApp(): Promise<void> {
     appVersion: queryElement(appRoot, "#app-version"),
     tabButtons: Array.from(appRoot.querySelectorAll<HTMLButtonElement>(".tab-btn")),
     tabPanels: Array.from(appRoot.querySelectorAll<HTMLElement>(".tab-panel")),
+    offlineProgressionToggle: queryElement(appRoot, "#settings-offline-progression"),
     splashScreen: queryElement(appRoot, "#splash-screen"),
     splashContinueBtn: queryElement(appRoot, "#splash-continue-btn"),
     splashNewBtn: queryElement(appRoot, "#splash-new-btn"),
@@ -845,10 +853,11 @@ async function bootstrapApp(): Promise<void> {
     }
     
     cachedPlayerRegionIndices = [];
-    for (const regionId in state.world.regions) {
-      if (state.world.regions[regionId].ownerId === player.id) {
-        const idx = REGION_INDEX_MAP.get(regionId);
-        if (idx !== undefined) cachedPlayerRegionIndices.push(idx);
+    const len = WORLD_DEFINITIONS_V1.length;
+    for (let i = 0; i < len; i++) {
+      const def = WORLD_DEFINITIONS_V1[i];
+      if (!def.isWater && state.world.regions[def.id]?.ownerId === player.id) {
+        cachedPlayerRegionIndices.push(i);
       }
     }
     return cachedPlayerRegionIndices;
@@ -857,10 +866,11 @@ async function bootstrapApp(): Promise<void> {
   // Extrai índices geográficos dinâmicos para aplicar efeitos em qualquer nação (Player ou NPC)
   function getKingdomRegionIndices(state: GameState, kingdomId: string): number[] {
     const indices: number[] = [];
-    for (const regionId in state.world.regions) {
-      if (state.world.regions[regionId].ownerId === kingdomId) {
-        const idx = REGION_INDEX_MAP.get(regionId);
-        if (idx !== undefined) indices.push(idx);
+    const len = WORLD_DEFINITIONS_V1.length;
+    for (let i = 0; i < len; i++) {
+      const def = WORLD_DEFINITIONS_V1[i];
+      if (!def.isWater && state.world.regions[def.id]?.ownerId === kingdomId) {
+        indices.push(i);
       }
     }
     return indices;
@@ -1395,18 +1405,20 @@ async function bootstrapApp(): Promise<void> {
 
   function renderRiskIndicators(state: GameState): void {
     const player = getPlayerKingdom(state);
-    
-    const ownedRegions = [];
-    for (const regionId in state.world.regions) {
-      const region = state.world.regions[regionId];
-      if (region.ownerId === player.id) ownedRegions.push(region);
+    const playerIndices = getPlayerRegionIndicesCached(state, player);
+
+    let maxUnrest = 0;
+    for (const idx of playerIndices) {
+      const regionId = WORLD_DEFINITIONS_V1[idx].id;
+      const unrest = state.world.regions[regionId]?.unrest || 0;
+      if (unrest > maxUnrest) maxUnrest = unrest;
     }
 
     // A necessidade de comida e o estoque agora são baseados nos dados do ECS.
     const totalFood = getPlayerTotalResource(state, ResourceType.Food);
     const foodNeed = getPlayerTotalPopulation(state) / 8_000;
     const famine = foodNeed <= 0 ? 0 : Math.max(0, (foodNeed - totalFood) / foodNeed);
-    const revolt = ownedRegions.length === 0 ? 0 : Math.max(...ownedRegions.map((region) => region.unrest));
+    const revolt = maxUnrest;
 
     const atWar = Object.keys(state.wars)
       .sort()
@@ -1469,9 +1481,10 @@ async function bootstrapApp(): Promise<void> {
     }
 
     let highUnrestRegions = 0;
-    for (const regionId in state.world.regions) {
-      const region = state.world.regions[regionId];
-      if (region.ownerId === player.id && region.unrest > 0.45) {
+    const playerIndices = getPlayerRegionIndicesCached(state, player);
+    for (const idx of playerIndices) {
+      const regionId = WORLD_DEFINITIONS_V1[idx].id;
+      if ((state.world.regions[regionId]?.unrest || 0) > 0.45) {
         highUnrestRegions++;
       }
     }
@@ -1887,15 +1900,13 @@ async function bootstrapApp(): Promise<void> {
 
   function renderDiplomacy(state: GameState): void {
     const player = getPlayerKingdom(state);
+    const playerIndices = getPlayerRegionIndicesCached(state, player);
     const neighborIds = new Set<string>();
 
-    for (const regionId in state.world.regions) {
-      const region = state.world.regions[regionId];
-      if (region.ownerId !== player.id) {
-        continue;
-      }
-
+    for (const idx of playerIndices) {
+      const regionId = WORLD_DEFINITIONS_V1[idx].id;
       const definition = staticWorldData.definitions[regionId];
+      
       for (const neighborRegionId of definition?.neighbors ?? []) {
         const neighborOwner = state.world.regions[neighborRegionId]?.ownerId;
         if (neighborOwner && neighborOwner !== player.id) {
@@ -1997,6 +2008,7 @@ async function bootstrapApp(): Promise<void> {
   }
 
   function buildMapRenderContext(state: GameState): MapRenderContext {
+    const activeLayer = ui.mapLayerSelect.value as MapLayerMode;
     const contestedRegionIds = new Set<string>();
     const recentlyCapturedRegionIds = new Set<string>();
     const activeWarMarkerRegionIds = new Set<string>();
@@ -2005,22 +2017,7 @@ async function bootstrapApp(): Promise<void> {
     const regionWealthRatio: Record<string, number> = {};
     const recentCaptureWindowMs = Math.max(30_000, state.meta.tickDurationMs * 24);
 
-    for (const warId of Object.keys(state.wars).sort()) {
-      const war = state.wars[warId];
-
-      for (const front of [...war.fronts].sort((left, right) => left.regionId.localeCompare(right.regionId))) {
-        contestedRegionIds.add(front.regionId);
-        activeWarMarkerRegionIds.add(front.regionId);
-      }
-    }
-
-    for (const regionId in state.world.regions) {
-      const region = state.world.regions[regionId];
-      if (region.unrest > 0.62 || region.devastation > 0.35) {
-        contestedRegionIds.add(regionId);
-      }
-    }
-
+    // O pulso de captura recente (animação de borda) precisa rodar sempre
     for (const event of state.events) {
       if (event.occurredAt < state.meta.lastUpdatedAt - recentCaptureWindowMs) {
         continue;
@@ -2030,43 +2027,68 @@ async function bootstrapApp(): Promise<void> {
       }
     }
 
-    const player = getPlayerKingdom(state);
-    const enemyIds = new Set<string>();
+    // AVALIAÇÃO PREGUIÇOSA (LAZY EVALUATION)
+    // O processamento pesado só ocorre se a camada correspondente estiver ativa na tela.
+    if (activeLayer === "war" || activeLayer === "unrest") {
+      for (const warId in state.wars) {
+        const war = state.wars[warId];
+        for (const front of war.fronts) {
+          contestedRegionIds.add(front.regionId);
+          activeWarMarkerRegionIds.add(front.regionId);
+        }
+      }
 
-    // 1. Mapeia quem são os inimigos de guerras ativas
-    for (const warId in state.wars) {
-      const war = state.wars[warId];
-      if (war.attackers.includes(player.id)) {
-        war.defenders.forEach((id) => enemyIds.add(id));
-      } else if (war.defenders.includes(player.id)) {
-        war.attackers.forEach((id) => enemyIds.add(id));
+      const len = WORLD_DEFINITIONS_V1.length;
+      for (let i = 0; i < len; i++) {
+        const def = WORLD_DEFINITIONS_V1[i];
+        if (def.isWater) continue;
+        const region = state.world.regions[def.id];
+        if (region && (region.unrest > 0.62 || region.devastation > 0.35)) {
+          contestedRegionIds.add(def.id);
+        }
       }
     }
 
-    // 2. Avalia a posse e sentimento de cada região
-    for (const regionId in state.world.regions) {
-      const region = state.world.regions[regionId];
-      const ownerId = region.ownerId;
+    if (activeLayer === "diplomacy") {
+      const player = getPlayerKingdom(state);
+      const enemyIds = new Set<string>();
 
-      if (ownerId === player.id) {
-        playerAlliedRegionIds.add(regionId);
-      } else if (enemyIds.has(ownerId)) {
-        playerEnemyRegionIds.add(regionId);
-      } else {
-        const relation = player.diplomacy.relations[ownerId];
-        if (relation) {
-          if (relation.score.trust > 0.6) {
-            playerAlliedRegionIds.add(regionId);
-          } else if (relation.score.rivalry > 0.6) {
-            playerEnemyRegionIds.add(regionId);
+      for (const warId in state.wars) {
+        const war = state.wars[warId];
+        if (war.attackers.includes(player.id)) {
+          war.defenders.forEach((id) => enemyIds.add(id));
+        } else if (war.defenders.includes(player.id)) {
+          war.attackers.forEach((id) => enemyIds.add(id));
+        }
+      }
+
+      const len = WORLD_DEFINITIONS_V1.length;
+      for (let i = 0; i < len; i++) {
+        const def = WORLD_DEFINITIONS_V1[i];
+        if (def.isWater) continue;
+        const ownerId = state.world.regions[def.id]?.ownerId;
+        if (!ownerId) continue;
+
+        if (ownerId === player.id) {
+          playerAlliedRegionIds.add(def.id);
+        } else if (enemyIds.has(ownerId)) {
+          playerEnemyRegionIds.add(def.id);
+        } else {
+          const relation = player.diplomacy.relations[ownerId];
+          if (relation) {
+            if (relation.score.trust > 0.6) {
+              playerAlliedRegionIds.add(def.id);
+            } else if (relation.score.rivalry > 0.6) {
+              playerEnemyRegionIds.add(def.id);
+            }
           }
         }
       }
     }
 
-    // 3. Calcula a Riqueza Econômica Relativa com base nos dados do Worker (ECS)
-    const goldData = currentSimulationState.goldData;
-    if (goldData && goldData.length > 0) {
+    if (activeLayer === "economy") {
+      const goldData = currentSimulationState.goldData;
+      if (goldData && goldData.length > 0) {
       let maxGold = Number.NEGATIVE_INFINITY;
       let minGold = Number.POSITIVE_INFINITY;
 
@@ -2094,6 +2116,7 @@ async function bootstrapApp(): Promise<void> {
             regionWealthRatio[def.id] = Math.max(0, Math.min(1, ratio));
           }
         }
+      }
       }
     }
 
@@ -2296,6 +2319,7 @@ async function bootstrapApp(): Promise<void> {
     renderMilitary(state);
     renderEventLog(state);
     mapRenderer.render(state.world, state.kingdoms, buildMapRenderContext(state));
+    ui.offlineProgressionToggle.checked = state.meta.offlineProgression ?? false;
   }
 
   ui.tabButtons.forEach((button) => {
@@ -2460,6 +2484,11 @@ async function bootstrapApp(): Promise<void> {
     saveLocalProfile(profile);
     syncProfileUi();
     showToast("Perfil local salvo.");
+  });
+
+  ui.offlineProgressionToggle.addEventListener("change", () => {
+    session.setOfflineProgression(ui.offlineProgressionToggle.checked);
+    showToast(`Progresso offline ${ui.offlineProgressionToggle.checked ? "ativado" : "desativado"}.`);
   });
 
   new GodModeConsole(ui.appVersion, (command) => {

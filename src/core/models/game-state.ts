@@ -74,6 +74,7 @@ export interface GameMeta {
   speedMultiplier: number;
   paused: boolean;
   disastersEnabled: boolean;
+  offlineProgression?: boolean;
   createdAt: TimestampMs;
   lastUpdatedAt: TimestampMs;
   lastClosedAt: TimestampMs | null;

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import type { DiplomacyResolver, INpcDecisionService, WarResolver } from "../contracts/services";
+﻿import type { DiplomacyResolver, INpcDecisionService, WarResolver } from "../contracts/services";
 import type { StaticWorldData } from "../models/static-world-data";
 import type { RegionDefinition } from "../models/world";
 import type { SimulationSystem } from "./tick-pipeline";
@@ -29,7 +29,7 @@ export interface SimulationServices {
 
 export function createDefaultSimulationSystems(services: SimulationServices): SimulationSystem[] {
   return [
-    createMigrationSystem(services.staticData, services.eventBus, services.orderedDefinitions),
+    createMigrationSystem(services.staticData, services.orderedDefinitions),
     createDisasterSystem(),
     createAutomationSystem(),
     createEconomySystem(),

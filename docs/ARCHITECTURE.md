@@ -1,4 +1,4 @@
-﻿﻿# Arquitetura - Epochs Idle
+﻿# Arquitetura - Epochs Idle
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -395,6 +395,14 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     *   **Sistema de Tooltips Inteligentes:** Interceptação dos dados do Worker para explicar o "Porquê" das coisas. Passar o mouse sobre um ganho revelará a fórmula destrinchada (ex: *Produção Base + Bônus Tecnológico - Penalidade Climática*).
     *   **Automação (Modo Idle de Fim de Jogo):** A introdução de caixas de seleção estratégicas (`[x] Priorizar Defesa`, `[x] Focar Expansão`). Desbloqueáveis como "Burocracia de Estado" em Eras avançadas, permitindo que a própria thread principal faça o microgerenciamento dos *sliders* a cada ciclo, abraçando a natureza *Idle* do projeto.
     *   **Feedback Visual Imediato (Regra Global de UX):** Todas as ações do jogador que interagem com o Worker (e, portanto, possuem latência) devem seguir o padrão de *Optimistic UI*. A interface deve reagir instantaneamente (ex: desabilitando ou mudando a cor de um botão) para confirmar ao jogador que seu comando foi recebido, evitando cliques múltiplos e frustração.
+
+### 6.8.1. Padrão de Desacoplamento de Renderização (Render Decoupling)
+
+Para garantir que o processamento do motor WebWorker (que roda em alta frequência a 4 ticks por segundo reais) não asfixie a *Main Thread* da interface do usuário (causando *Input Lag*, perdas de frames e congelamentos do navegador), a arquitetura visual é obrigada a adotar os três pilares de proteção a seguir:
+
+1.  **Estrangulamento de Frequência (Throttling):** Atualizações críticas de DOM, destruição de listas complexas e repinturas de mapas vetorizados (MapLibre) **não devem ser sincronizadas 1:1 com os micro-pulsos do Worker**. Elas devem sofrer um *throttle* (estrangulamento) e ocorrer em um ritmo estável (ex: apenas 1 vez por segundo ou estritamente quando a mudança for ativada pelo jogador).
+2.  **Avaliação Preguiçosa Geográfica (Lazy Context):** Funções O(N) que iteram pela totalidade das regiões do mundo para processar dados de contexto do mapa (Riqueza global, Zonas de Guerra globais) só devem ser executadas se a Camada Visual (`MapLayerMode`) ou o Filtro ativo do jogador requisitarem esta informação naquele momento específico.
+3.  **Updates Granulares (Anti-Thrashing):** Evitar a destruição leviana de árvores DOM completas via reescrita direta (`element.innerHTML = ""`) durante os ciclos normais de física. A UI deve comparar o novo valor com o anterior e atualizar atomicamente apenas os nós de texto (`textContent`) ou atributos (`value`) que mutaram.
 
 ### 6.9. Mecânicas de Sobrevivência Inicial (Êxodo Nômade e Clima Realista)
 
