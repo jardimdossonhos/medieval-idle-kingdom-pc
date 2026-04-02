@@ -17,6 +17,7 @@ import {
   IndexedDbSnapshotRepository
 } from "./indexeddb-repositories";
 import { getDesktopBridge } from "../runtime/desktop-bridge";
+import { WebFsGameStateRepository, WebFsSaveRepository } from "./web-fs-repositories";
 
 export interface RuntimePersistenceBundle {
   mode: "desktop" | "browser";
@@ -26,7 +27,7 @@ export interface RuntimePersistenceBundle {
   snapshotRepository: SnapshotRepository;
 }
 
-export function createRuntimePersistenceBundle(campaignId: string): RuntimePersistenceBundle {
+export function createRuntimePersistenceBundle(campaignId: string, fsDirHandle?: any): RuntimePersistenceBundle {
   const bridge = getDesktopBridge();
 
   if (bridge) {
@@ -36,6 +37,17 @@ export function createRuntimePersistenceBundle(campaignId: string): RuntimePersi
       saveRepository: new DesktopFileSaveRepository(bridge),
       commandLogRepository: new DesktopFileCommandLogRepository(bridge),
       snapshotRepository: new DesktopFileSnapshotRepository(bridge)
+    };
+  }
+
+  // Solução 3 (Web File System API): Escrita profunda em HD Bypassando a Sandbox
+  if (fsDirHandle) {
+    return {
+      mode: "browser",
+      gameStateRepository: new WebFsGameStateRepository(fsDirHandle),
+      saveRepository: new WebFsSaveRepository(fsDirHandle),
+      commandLogRepository: new IndexedDbCommandLogRepository(campaignId), // Logs pesados continuam temporários no navegador
+      snapshotRepository: new IndexedDbSnapshotRepository(campaignId)
     };
   }
 

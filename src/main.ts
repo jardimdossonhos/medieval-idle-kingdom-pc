@@ -23,6 +23,7 @@ import { BrowserClockService } from "./infrastructure/runtime/browser-clock-serv
 import { LocalEventBus } from "./infrastructure/runtime/local-event-bus";
 import { LocalWarResolver } from "./infrastructure/war/local-war-resolver";
 import { calculateTechnologyBonuses } from "./core/models/technology-effects-service";
+import { loadDirectoryHandle, saveDirectoryHandle, clearDirectoryHandle, WebFsGameStateRepository, WebFsSaveRepository } from "./infrastructure/persistence/web-fs-repositories";
 
 interface UiRefs {
   playerValue: HTMLElement;
@@ -332,6 +333,38 @@ async function bootstrapApp(): Promise<void> {
       default: STATIC_BIOME[i] = 0;
     }
   }
+  
+  let fsDirHandle: any = null;
+  if ('showDirectoryPicker' in window) {
+    fsDirHandle = await loadDirectoryHandle();
+    if (fsDirHandle) {
+      const permission = await fsDirHandle.queryPermission({ mode: 'readwrite' });
+      if (permission === 'prompt') {
+        await new Promise<void>((resolve) => {
+          const overlay = document.createElement("div");
+          overlay.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 20000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;";
+          overlay.innerHTML = `
+            <h2 style="color: #d4af37;">Sincronização de Saves Ativa</h2>
+            <p style="margin-bottom: 30px;">O jogo está configurado para salvar diretamente na sua pasta do Windows.</p>
+            <button id="grant-btn" style="padding: 15px 30px; font-size: 18px; margin-top: 20px; background: #3e6b57; color: white; border: none; border-radius: 8px; cursor: pointer;">Autorizar Acesso à Pasta</button>
+            <button id="cancel-btn" style="padding: 10px 20px; margin-top: 15px; background: transparent; border: 1px solid #ff5555; color: #ff5555; border-radius: 4px; cursor: pointer;">Desvincular e usar armazenamento do navegador</button>
+          `;
+          document.body.appendChild(overlay);
+
+          overlay.querySelector("#grant-btn")!.addEventListener("click", async () => {
+            const res = await fsDirHandle.requestPermission({ mode: 'readwrite' });
+            if (res === 'granted') { overlay.remove(); resolve(); } 
+            else { alert("Permissão negada. O jogo será carregado sem acesso à pasta."); fsDirHandle = null; overlay.remove(); resolve(); }
+          });
+          overlay.querySelector("#cancel-btn")!.addEventListener("click", async () => {
+            await clearDirectoryHandle(); fsDirHandle = null; overlay.remove(); resolve();
+          });
+        });
+      } else if (permission !== 'granted') {
+        fsDirHandle = null;
+      }
+    }
+  }
 
   const appRoot = document.getElementById("app");
 
@@ -379,7 +412,7 @@ async function bootstrapApp(): Promise<void> {
         </div>
         <div id="splash-form" class="splash-form is-hidden">
           <hr />
-          <h3 style="margin-bottom: 1rem; text-align: center;">Fundar Novo Império</h3>
+          <h3 style="margin-bottom: 1rem; text-align: center; color: var(--primary-color, #d4af37);">Fundar Novo Império</h3>
           <label>Nome do Monarca
             <input id="splash-monarch" type="text" value="${loadLocalProfile().name || 'Soberano'}" maxlength="30">
           </label>
@@ -614,6 +647,15 @@ async function bootstrapApp(): Promise<void> {
               <input id="settings-offline-progression" type="checkbox">
               Simular progresso offline (cálculo de tempo fechado)
             </label>
+          </div>
+          <div style="margin-top: 1.5rem; padding: 1rem; border: 1px solid #444; border-radius: 6px; background: rgba(0,0,0,0.2);">
+            <h3 style="margin-top: 0;">💾 Armazenamento Multi-Navegador</h3>
+            <p style="font-size: 0.9rem; color: #bbb; margin-bottom: 1rem;">Selecione uma pasta no seu computador para guardar os saves. Isso permite continuar o jogo no Chrome, Edge ou Opera localmente usando o mesmo arquivo físico.</p>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button id="btn-link-folder" class="primary">Vincular Pasta Local</button>
+              <button id="btn-unlink-folder" class="danger" style="display: none;">Desvincular Pasta</button>
+              <span id="fs-status" style="color: #bbb; margin-left: 10px;">Nenhuma pasta vinculada.</span>
+            </div>
           </div>
           <div class="summary-grid">
             <span>ID local</span><strong id="profile-id-value">-</strong>
@@ -854,7 +896,7 @@ async function bootstrapApp(): Promise<void> {
   const npcDecisionService = new UtilityNpcDecisionService();
   const diplomacyResolver = new LocalDiplomacyResolver();
   const warResolver = new LocalWarResolver(staticWorldData);
-  const persistence = createRuntimePersistenceBundle(activeCampaignId);
+  const persistence = createRuntimePersistenceBundle(activeCampaignId, fsDirHandle);
 
   const session = new GameSession({
     gameStateRepository: persistence.gameStateRepository,
@@ -2666,6 +2708,76 @@ async function bootstrapApp(): Promise<void> {
     session.setOfflineProgression(ui.offlineProgressionToggle.checked);
     showToast(`Progresso offline ${ui.offlineProgressionToggle.checked ? "ativado" : "desativado"}.`);
   });
+  
+  const btnLinkFolder = document.getElementById("btn-link-folder") as HTMLButtonElement;
+  const btnUnlinkFolder = document.getElementById("btn-unlink-folder") as HTMLButtonElement;
+  const fsStatus = document.getElementById("fs-status") as HTMLSpanElement;
+
+  if (!('showDirectoryPicker' in window)) {
+    btnLinkFolder.disabled = true;
+    fsStatus.textContent = "Navegador não suportado (Use Chrome/Edge).";
+  } else {
+    if (fsDirHandle) {
+      btnLinkFolder.style.display = "none"; btnUnlinkFolder.style.display = "inline-block";
+      fsStatus.textContent = `Pasta vinculada: ${fsDirHandle.name}`; fsStatus.style.color = "#4ade80";
+    }
+    btnLinkFolder.addEventListener("click", async () => {
+      try {
+        const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+        
+        // VERIFICAÇÃO DE SEGURANÇA: Evita sobrescrever saves de outros navegadores (Edge vs Chrome)
+        let hasExistingSave = false;
+        try {
+          await handle.getFileHandle("current_state.json");
+          hasExistingSave = true;
+        } catch (e) {}
+
+        if (hasExistingSave) {
+          const overwrite = confirm(
+            "⚠️ ATENÇÃO: Esta pasta já contém um jogo salvo (possivelmente do seu outro navegador)!\n\n" +
+            "• Clique em [OK] para APAGAR o save da pasta e colocar o jogo DESTE navegador lá.\n" +
+            "• Clique em [CANCELAR] para MANTER o jogo da pasta (Recomendado para continuar o jogo do outro navegador)."
+          );
+          
+          if (!overwrite) {
+            await saveDirectoryHandle(handle);
+            showToast("Pasta vinculada! Recarregue a página (F5) para carregar o jogo que já estava nela.");
+            btnLinkFolder.style.display = "none"; btnUnlinkFolder.style.display = "inline-block";
+            fsStatus.textContent = `Pasta vinculada: ${handle.name}`; fsStatus.style.color = "#4ade80";
+            return; // Interrompe a migração para não apagar o save do outro navegador
+          }
+        }
+
+        await saveDirectoryHandle(handle);
+        
+        // MIGRACÃO INSTANTÂNEA: Copia os saves que estavam escondidos no navegador para a nova pasta visível
+        try {
+          const state = session.getState();
+          if (state) {
+            const fsStateRepo = new WebFsGameStateRepository(handle);
+            await fsStateRepo.saveCurrent(state);
+            
+            const fsSaveRepo = new WebFsSaveRepository(handle);
+            const slots = await persistence.saveRepository.listSlots();
+            for (const slot of slots) {
+              const snap = await persistence.saveRepository.loadFromSlot(slot.slotId);
+              if (snap) await fsSaveRepo.saveToSlot(snap);
+            }
+          }
+        } catch (e) {
+          console.warn("Apenas criando pasta nova. Ignorando cópia (nenhum jogo ativo ou erro).", e);
+        }
+
+        showToast("Saves copiados para a pasta! Recarregue a página (F5) para aplicar a sincronização.");
+      } catch (e) { console.error(e); }
+    });
+    btnUnlinkFolder.addEventListener("click", async () => {
+      await clearDirectoryHandle();
+      btnLinkFolder.style.display = "inline-block"; btnUnlinkFolder.style.display = "none";
+      fsStatus.textContent = "Nenhuma pasta vinculada."; fsStatus.style.color = "#bbb";
+      showToast("Pasta desvinculada! Recarregue a página para voltar ao banco de dados interno.");
+    });
+  }
 
   new GodModeConsole(ui.appVersion, (command, targetId) => {
     const state = session.getState();
