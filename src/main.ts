@@ -400,6 +400,16 @@ async function bootstrapApp(): Promise<void> {
       .map-legend-title { font-weight: bold; margin-bottom: 8px; color: #fff; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 4px; }
       .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
       .legend-color { width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.15); box-sizing: border-box; }
+      
+      /* Religion Customizer Styles */
+      .tenet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; max-height: 280px; overflow-y: auto; padding: 5px; margin-top: 10px; border: 1px solid #333; background: rgba(0,0,0,0.2); border-radius: 6px; }
+      .tenet-card { background: rgba(0,0,0,0.4); border: 1px solid #444; padding: 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; user-select: none; }
+      .tenet-card:hover { border-color: #d4af37; }
+      .tenet-card.selected { background: rgba(212, 175, 55, 0.15); border-color: #d4af37; box-shadow: inset 0 0 15px rgba(212, 175, 55, 0.2); }
+      .tenet-card h4 { margin: 0 0 6px 0; color: #e5e7eb; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center; }
+      .tenet-card p { margin: 0; font-size: 0.8rem; color: #9ca3af; line-height: 1.3; }
+      .tenet-cost { font-weight: bold; color: #4ade80; font-size: 0.9rem; }
+      .tenet-cost.negative { color: #f87171; }
     </style>
     <div id="splash-screen" class="splash-overlay">
       <div class="splash-card card">
@@ -423,6 +433,37 @@ async function bootstrapApp(): Promise<void> {
             <input id="splash-color" type="color" value="${loadLocalProfile().color || '#d4af37'}" style="padding: 0; height: 40px; cursor: pointer;">
           </label>
           <button id="splash-start-btn" class="primary" style="width: 100%; margin-top: 0.5rem; font-size: 1.1rem; padding: 0.8rem;">Fundar Império</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Fundação de Religião -->
+    <div id="religion-founder-modal" class="splash-overlay is-hidden" style="z-index: 10001;">
+      <div class="splash-card card" style="max-width: 700px; text-align: left;">
+        <h2 style="color: var(--primary-color, #d4af37); margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">Forjar Nova Fé (O Profeta)</h2>
+        <div style="background: rgba(255, 235, 59, 0.1); border: 1px solid #ffeb3b; color: #ffeb3b; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 0.85rem;">
+          ⚠️ <strong>Atenção:</strong> O preenchimento de todos os campos (Nome, Deus e Descrição) é obrigatório.
+        </div>
+        <div class="form-grid" style="margin-bottom: 15px;">
+          <label style="color: #e5e7eb; font-weight: bold;">Nome da Religião <input id="rf-name" type="text" placeholder="Ex: Ordem do Fogo Branco"></label>
+          <label style="color: #e5e7eb; font-weight: bold;">Cor no Mapa <input id="rf-color" type="color" value="#d4af37" style="padding: 0; height: 40px; cursor: pointer; background: transparent; border: none;"></label>
+          <label style="grid-column: 1 / -1; color: #e5e7eb; font-weight: bold;">O Deus ou Panteão adorado <input id="rf-deity-name" type="text" placeholder="Ex: O Único Criador"></label>
+          <label style="grid-column: 1 / -1; color: #e5e7eb; font-weight: bold;">Descrição Teológica Base <input id="rf-deity-desc" type="text" placeholder="Ex: A adoração purificadora que busca limpar o mundo através das chamas."></label>
+        </div>
+        <h3 style="margin-top: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; font-size: 1.1rem;">
+          <span>Dogmas (Combine livremente)</span>
+          <span id="rf-budget-text" style="color: #4ade80;">Orçamento: 100 Pontos</span>
+        </h3>
+        <div id="rf-tenets-grid" class="tenet-grid"></div>
+        <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #444; padding-top: 15px;">
+          <div style="font-size: 0.9rem; color: #bbb;">
+            Custo de Fundação:<br>
+            <strong style="color: #ffeb3b;">1.000 Fé</strong> | <strong style="color: #d4af37;">50 Legitimidade</strong>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button id="rf-cancel-btn" style="background: transparent; border: 1px solid #ff5555; color: #ff5555;">Abandonar Visão</button>
+            <button id="rf-submit-btn" class="primary">Decretar Nova Religião</button>
+          </div>
         </div>
       </div>
     </div>
@@ -565,6 +606,12 @@ async function bootstrapApp(): Promise<void> {
           </div>
           <p class="hint-text">Mudar a religião oficial causa um severo choque cultural (-40 Legitimidade, -30 Estabilidade), mas permite alinhar o estado com a fé da maioria para evitar revoltas.</p>
 
+          <div style="margin-top: 20px; padding: 20px; border: 1px solid #333; border-left: 4px solid #d4af37; border-radius: 6px; background: rgba(15, 15, 20, 0.9); text-align: left;">
+            <h3 style="margin-top: 0; color: #d4af37;">O Profeta</h3>
+            <p style="font-size: 0.95rem; color: #e5e7eb; margin-bottom: 15px; line-height: 1.5;">Acumule vasta influência espiritual e governamental para romper definitivamente com os dogmas arcaicos e revelar as verdades supremas do seu próprio panteão à humanidade.</p>
+            <button id="btn-open-founder" class="primary" style="font-size: 1.1rem; padding: 10px 20px; width: 100%;">Forjar Nova Fé</button>
+          </div>
+
           <h3 style="margin-top: 20px;">Poderes Divinos</h3>
           <p>O acúmulo de Fé permite canalizar milagres que afetam diretamente o mundo material.</p>
           <div class="summary-grid">
@@ -572,7 +619,7 @@ async function bootstrapApp(): Promise<void> {
           </div>
           <div class="action-grid" style="margin-top: 15px;">
             <button id="btn-bless-crops" style="background: #002200; border-color: #00ff00; color: #00ff00;">Bênção da Colheita (-500 Fé)</button>
-            <button id="btn-smite-rebels" style="background: #220000; border-color: #ff3333; color: #ff3333;" disabled>Expurgo Divino (Em breve)</button>
+            <button id="btn-smite-rebels" style="background: rgba(34, 0, 0, 0.8); border-color: #ff5555; color: #ff5555;" disabled>Fúria Divina (Em Desenvolvimento)</button>
           </div>
         </article>
 
@@ -754,6 +801,77 @@ async function bootstrapApp(): Promise<void> {
     splashStartBtn: queryElement(appRoot, "#splash-start-btn")
   };
 
+  // Lógica do Modal de Forjar Religião (Interface Dinâmica)
+  const btnOpenFounder = queryOptionalElement<HTMLButtonElement>(appRoot, "#btn-open-founder");
+  const rfModal = queryOptionalElement<HTMLElement>(appRoot, "#religion-founder-modal");
+  const rfCancel = queryOptionalElement<HTMLButtonElement>(appRoot, "#rf-cancel-btn");
+  const rfSubmit = queryOptionalElement<HTMLButtonElement>(appRoot, "#rf-submit-btn");
+  const rfTenetsGrid = queryOptionalElement<HTMLElement>(appRoot, "#rf-tenets-grid");
+  const rfBudgetText = queryOptionalElement<HTMLElement>(appRoot, "#rf-budget-text");
+  const selectedTenets = new Set<string>();
+
+  function updateRfModal() {
+    if (!rfTenetsGrid || !rfBudgetText || !rfSubmit) return;
+    rfTenetsGrid.innerHTML = "";
+    const tenets = staticWorldData.tenets;
+    
+    let usedBudget = 0;
+    selectedTenets.forEach(id => usedBudget += tenets[id]?.cost || 0);
+    const remaining = 100 - usedBudget;
+    
+    rfBudgetText.textContent = `Orçamento: ${remaining} Pontos`;
+    rfBudgetText.style.color = remaining < 0 ? "#ff5555" : "#4ade80";
+
+    for (const tId in tenets) {
+      const t = tenets[tId];
+      const isSelected = selectedTenets.has(tId);
+      const card = document.createElement("div");
+      card.className = `tenet-card ${isSelected ? 'selected' : ''}`;
+      const costClass = t.cost > 0 ? "tenet-cost negative" : "tenet-cost";
+      const costSign = t.cost > 0 ? "-" : "+";
+      card.innerHTML = `<h4><span>${t.name}</span> <span class="${costClass}">${costSign}${Math.abs(t.cost)}</span></h4><p>${t.description}</p>`;
+      
+      card.addEventListener("click", () => {
+        if (isSelected) selectedTenets.delete(tId);
+        else {
+          selectedTenets.add(tId);
+        }
+        updateRfModal();
+      });
+      rfTenetsGrid.appendChild(card);
+    }
+    
+    const state = session.getState();
+    const canAffordBase = state ? playerFaithCache >= 1000 && getPlayerTotalResource(state, ResourceType.Legitimacy) >= 50 : false;
+    rfSubmit.disabled = remaining < 0 || !canAffordBase || selectedTenets.size === 0;
+  }
+
+  if (btnOpenFounder && rfModal) {
+    btnOpenFounder.addEventListener("click", () => { selectedTenets.clear(); updateRfModal(); rfModal.classList.remove("is-hidden"); });
+  }
+  if (rfCancel && rfModal) rfCancel.addEventListener("click", () => rfModal.classList.add("is-hidden"));
+  if (rfSubmit && rfModal) {
+    rfSubmit.addEventListener("click", () => {
+      const res = session.foundCustomReligion({
+        name: (document.getElementById("rf-name") as HTMLInputElement).value.trim(),
+        color: (document.getElementById("rf-color") as HTMLInputElement).value,
+        deityName: (document.getElementById("rf-deity-name") as HTMLInputElement).value.trim(),
+        deityDescription: (document.getElementById("rf-deity-desc") as HTMLInputElement).value.trim(),
+        tenets: Array.from(selectedTenets)
+      });
+      if (res.ok) {
+        rfModal.classList.add("is-hidden"); showToast(res.message);
+        const state = session.getState();
+        if (state) {
+          const p = getPlayerKingdom(state); const idxs = getPlayerRegionIndicesCached(state, p);
+          simulationWorker.postMessage({ type: "APPLY_ECS_EFFECTS", payload: { target: "faith", operation: "subtract_empire_total", value: 1000, indices: idxs } });
+          simulationWorker.postMessage({ type: "APPLY_ECS_EFFECTS", payload: { target: "legitimacy", operation: "subtract_empire_total", value: 50, indices: idxs } });
+          playerFaithCache -= 1000; updateUIPanel();
+        }
+      } else showToast(res.message);
+    });
+  }
+
   const simulationWorker = new Worker(
     new URL("./infrastructure/worker/simulation.worker.ts", import.meta.url),
     { type: "module" }
@@ -882,15 +1000,6 @@ async function bootstrapApp(): Promise<void> {
   
   const activeCampaignId = `campaign:${profile.id}`;
   const staticWorldData = createStaticWorldData(WORLD_DEFINITIONS_V1, WORLD_DEFINITIONS_MAP_ID);
-
-  // Popula o select de religiões disponíveis (Agora sim, o staticWorldData existe!)
-  const religions = staticWorldData.religions;
-  for (const faithId in religions) {
-    const opt = document.createElement("option");
-    opt.value = faithId;
-    opt.textContent = religions[faithId].name;
-    ui.religionChangeSelect.appendChild(opt);
-  }
 
   const eventBus = new LocalEventBus();
   const npcDecisionService = new UtilityNpcDecisionService();
@@ -1702,9 +1811,9 @@ async function bootstrapApp(): Promise<void> {
       autonomyText = `${formatNumber(region.autonomy * 100)}%`;
       assimilationText = `${formatNumber(region.assimilation * 100)}%`;
       devText = `${formatNumber(region.devastation * 100)}%`;
-      const dominantFaith = staticWorldData.religions[region.dominantFaith];
+      const dominantFaith = state.world.religions[region.dominantFaith];
       dominantFaithText = `${dominantFaith?.name ?? region.dominantFaith} (${formatNumber(region.dominantShare * 100)}%)`;
-      const minorityFaith = region.minorityFaith ? staticWorldData.religions[region.minorityFaith] : null;
+      const minorityFaith = region.minorityFaith ? state.world.religions[region.minorityFaith] : null;
       minorityFaithText = region.minorityFaith && typeof region.minorityShare === "number"
         ? `${minorityFaith?.name ?? region.minorityFaith} (${formatNumber(region.minorityShare * 100)}%)`
         : "Nenhuma";
@@ -1717,7 +1826,7 @@ async function bootstrapApp(): Promise<void> {
       autonomyText = region.autonomy > 0.5 ? "Alta" : region.autonomy > 0.2 ? "Média" : "Baixa";
       assimilationText = region.assimilation > 0.5 ? "Alta" : region.assimilation > 0.2 ? "Média" : "Baixa";
       devText = region.devastation > 0.5 ? "Severa" : region.devastation > 0.2 ? "Moderada" : "Mínima";
-      const dominantFaith = staticWorldData.religions[region.dominantFaith];
+      const dominantFaith = state.world.religions[region.dominantFaith];
       dominantFaithText = `${dominantFaith?.name ?? "Desconhecida"} (Maioria)`;
       minorityFaithText = "Presente";
       manpowerText = "Desconhecido";
@@ -1819,7 +1928,7 @@ async function bootstrapApp(): Promise<void> {
       const warBtn = document.createElement("button");
       warBtn.className = "danger";
       warBtn.disabled = !canWar;
-      warBtn.innerHTML = `<span>Declarar Guerra</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${warCostStrings.join(", ")}</small><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Chance de Sucesso na Corte: ${formatNumber(warConfig.chance * 100)}%</small>`;
+      warBtn.innerHTML = `<span>Declarar Guerra</span><small style="display:block; font-size:0.8em; color:#e5e7eb; margin-top:4px;">Custo: ${warCostStrings.join(", ")}</small><small style="display:block; font-size:0.8em; color:#ff6b6b; margin-top:2px;">Apoio do Conselho: ${formatNumber(warConfig.chance * 100)}%</small>`;
       warBtn.addEventListener("click", () => {
         const result = session.executeDiplomaticAction(targetId, "war");
         showToast(result.message);
@@ -1831,7 +1940,7 @@ async function bootstrapApp(): Promise<void> {
       const canMissionary = session.canAfford(relConfig.cost);
       const relBtn = document.createElement("button");
       relBtn.disabled = !canMissionary;
-      relBtn.innerHTML = `<span>Enviar Missionários</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${relCostStrings.join(", ")}</small><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Chance de Sucesso: ${formatNumber(relConfig.chance * 100)}%</small>`;
+      relBtn.innerHTML = `<span>Enviar Missionários</span><small style="display:block; font-size:0.8em; color:#e5e7eb; margin-top:4px;">Custo: ${relCostStrings.join(", ")}</small><small style="display:block; font-size:0.8em; color:#60a5fa; margin-top:2px;">Eficácia da Conversão: ${formatNumber(relConfig.chance * 100)}%</small>`;
       relBtn.addEventListener("click", () => {
         const result = session.executeReligiousAction(targetId, "send_missionaries");
         showToast(result.message);
@@ -1985,12 +2094,25 @@ async function bootstrapApp(): Promise<void> {
   function renderReligion(state: GameState): void {
     const player = getPlayerKingdom(state);
     const playerIndices = getPlayerRegionIndicesCached(state, player);
-    const currentFaithDef = staticWorldData.religions[player.religion.stateFaith];
+    const currentFaithDef = state.world.religions[player.religion.stateFaith];
 
     ui.religionSummary.innerHTML = `
       <span>Religião de Estado</span><strong style="color: ${currentFaithDef?.color ?? '#fff'}">${currentFaithDef?.name ?? "Nenhuma"}</strong>
       <span>Tolerância</span><strong>${formatNumber(player.religion.tolerance * 100)}%</strong>
     `;
+
+    // Preenche o dropdown dinamicamente com as religiões vivas do mundo (incluindo as fundadas)
+    const currentSelectValue = ui.religionChangeSelect.value;
+    ui.religionChangeSelect.innerHTML = "";
+    for (const faithId in state.world.religions) {
+      const opt = document.createElement("option");
+      opt.value = faithId;
+      opt.textContent = state.world.religions[faithId].name;
+      ui.religionChangeSelect.appendChild(opt);
+    }
+    if (state.world.religions[currentSelectValue]) {
+      ui.religionChangeSelect.value = currentSelectValue;
+    }
 
     // Calcula demografia iterando as regiões do player
     const faithCounts: Record<string, number> = {};
@@ -2006,7 +2128,7 @@ async function bootstrapApp(): Promise<void> {
     const totalRegions = playerIndices.length;
     
     for (const [faithId, count] of Object.entries(faithCounts).sort((a, b) => b[1] - a[1])) {
-      const faithDef = staticWorldData.religions[faithId];
+      const faithDef = state.world.religions[faithId];
       const percent = totalRegions > 0 ? (count / totalRegions) * 100 : 0;
       const item = document.createElement("li");
       item.innerHTML = `<span style="color: ${faithDef?.color ?? '#fff'}; font-weight: bold;">${faithDef?.name ?? faithId}</span> <strong>Maioria em ${count} região(ões) (${formatNumber(percent, 1)}% do Império)</strong>`;
@@ -2020,6 +2142,18 @@ async function bootstrapApp(): Promise<void> {
       ui.religionChangeBtn.innerHTML = `Decretar Nova Fé <small style="display:block; font-size: 0.7em;">Falta Legitimidade (40)</small>`;
     } else {
       ui.religionChangeBtn.innerHTML = `Decretar Nova Fé`;
+    }
+
+    // Validação de Orçamento de Fundação Customizada
+    const btnOpenFounderRender = document.getElementById("btn-open-founder") as HTMLButtonElement | null;
+    if (btnOpenFounderRender) {
+      const canFound = playerFaithCache >= 1000 && getPlayerTotalResource(state, ResourceType.Legitimacy) >= 50;
+      btnOpenFounderRender.disabled = !canFound;
+      if (!canFound) {
+        btnOpenFounderRender.innerHTML = `Forjar Nova Fé <small style="display:block; font-size: 0.7em;">Requer 1000 Fé e 50 Legitimidade</small>`;
+      } else {
+        btnOpenFounderRender.innerHTML = `Forjar Nova Fé`;
+      }
     }
   }
 
@@ -2720,6 +2854,7 @@ async function bootstrapApp(): Promise<void> {
     if (fsDirHandle) {
       btnLinkFolder.style.display = "none"; btnUnlinkFolder.style.display = "inline-block";
       fsStatus.textContent = `Pasta vinculada: ${fsDirHandle.name}`; fsStatus.style.color = "#4ade80";
+      fsStatus.textContent = `Pasta vinculada: ${fsDirHandle.name}`; fsStatus.style.color = "#d4af37";
     }
     btnLinkFolder.addEventListener("click", async () => {
       try {
@@ -2744,6 +2879,7 @@ async function bootstrapApp(): Promise<void> {
             showToast("Pasta vinculada! Recarregue a página (F5) para carregar o jogo que já estava nela.");
             btnLinkFolder.style.display = "none"; btnUnlinkFolder.style.display = "inline-block";
             fsStatus.textContent = `Pasta vinculada: ${handle.name}`; fsStatus.style.color = "#4ade80";
+            fsStatus.textContent = `Pasta vinculada: ${handle.name}`; fsStatus.style.color = "#d4af37";
             return; // Interrompe a migração para não apagar o save do outro navegador
           }
         }
@@ -3134,7 +3270,10 @@ async function bootstrapApp(): Promise<void> {
     syncProfileUi(); // Força a atualização da aba Configurações imediatamente
 
     session.stop();
-    await (persistence.saveRepository as any).clearAll();
+    const slotsToDelete = await persistence.saveRepository.listSlots();
+    for (const slot of slotsToDelete) {
+      await persistence.saveRepository.deleteSlot(slot.slotId);
+    }
     await persistence.gameStateRepository.clearCurrent();
     
     const selectedRegionId = ui.splashCountrySelect.value;

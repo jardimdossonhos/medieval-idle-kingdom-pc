@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
+﻿import { createDefaultBudgetPriority, createEmptyStock, type EconomyState } from "../../core/models/economy";
 import {
   ArmyPosture,
   AutomationLevel,
@@ -16,6 +16,7 @@ import type { PopulationState } from "../../core/models/population";
 import type { StaticWorldData } from "../../core/models/static-world-data";
 import type { ReligionId } from "../../core/models/types";
 import type { RegionDefinition, RegionState, RegionZone, WorldState } from "../../core/models/world";
+import type { WorldReligion } from "../../core/models/religion";
 import { createStaticWorldData } from "./static-world-data";
 
 interface KingdomBlueprint {
@@ -92,22 +93,22 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 const DEFAULT_RELIGION_BY_ZONE: Record<RegionZone, ReligionId> = {
-  europe: "imperial_church",
-  north_africa: "desert_faith",
-  near_east: "desert_faith",
-  north_america: "ancestral_cults",
-  south_america: "lotus_order",
-  sub_saharan_africa: "ancestral_cults",
-  central_asia: "northern_old_gods",
-  south_asia: "lotus_order",
-  east_asia: "scholar_sun",
-  oceania: "sea_saints"
+  europe: "catholicism",
+  north_africa: "sunni_islam",
+  near_east: "sunni_islam",
+  north_america: "tengriism",
+  south_america: "tengriism",
+  sub_saharan_africa: "sunni_islam",
+  central_asia: "tengriism",
+  south_asia: "hinduism",
+  east_asia: "buddhism",
+  oceania: "buddhism"
 };
 
 function listReligionIds(staticData: StaticWorldData): ReligionId[] {
   const ids = Object.keys(staticData.religions).sort();
   if (ids.length === 0) {
-    return ["imperial_church"];
+    return ["catholicism"];
   }
   return ids;
 }
@@ -490,7 +491,8 @@ function createRegionState(
 function createWorldState(
   ownerByRegionId: Record<string, string>,
   staticData: StaticWorldData,
-  faithByKingdomId: Record<string, ReligionId>
+  faithByKingdomId: Record<string, ReligionId>,
+  now: number
 ): WorldState {
   const definitions = toDefinitionMap(listDefinitionsSorted(staticData));
   const regions: Record<string, RegionState> = {};
@@ -502,9 +504,27 @@ function createWorldState(
     regions[regionId] = createRegionState(definition, ownerId, ownerFaith, staticData);
   }
 
+  const dynamicReligions: Record<ReligionId, WorldReligion> = {};
+  for (const [id, def] of Object.entries(staticData.religions)) {
+    dynamicReligions[id as ReligionId] = {
+      id: id as ReligionId,
+      name: def.name,
+      deityName: def.deityName,
+      deityDescription: def.deityDescription,
+      color: def.color,
+      tenets: [...def.tenets],
+      holyCityRegionId: null,
+      headOfFaithKingdomId: null,
+      founderId: null,
+      foundedAt: now,
+      parentReligionId: null
+    };
+  }
+
   return {
     mapId: staticData.mapId,
-    regions
+    regions,
+    religions: dynamicReligions
   };
 }
 
@@ -550,7 +570,7 @@ function createKingdoms(ownerByRegionId: Record<string, string>, capitalByOwner:
     const ownedRegions = byOwner.get(blueprint.id) ?? [];
     const capitalRegionId = capitalByOwner[blueprint.id] ?? blueprint.preferredCapitalRegionId;
     const capitalZone = definitionsById[capitalRegionId]?.zone ?? "europe";
-    const chosenFaith = staticData.religions["imperial_church"] ? "imperial_church" : religionByZone(capitalZone, staticData);
+    const chosenFaith = staticData.religions["catholicism"] ? "catholicism" : religionByZone(capitalZone, staticData);
     kingdoms[blueprint.id] = createKingdom(blueprint, capitalRegionId, ownedRegions.length, chosenFaith);
   }
 
@@ -561,7 +581,7 @@ function createKingdoms(ownerByRegionId: Record<string, string>, capitalByOwner:
     adjective: "Selvagem",
     isPlayer: false,
     preferredCapitalRegionId: "r_hex_0"
-  }, "r_hex_0", 0, "ancestral_cults");
+  }, "r_hex_0", 0, "tengriism");
 
   return kingdoms;
 }
@@ -615,6 +635,7 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
       tickDurationMs: 3_000,
       speedMultiplier: 1,
       paused: false,
+      disastersEnabled: true,
       createdAt: now,
       lastUpdatedAt: now,
       lastClosedAt: null
@@ -632,7 +653,7 @@ export function createInitialState(staticData: StaticWorldData = createStaticWor
         { path: VictoryPath.DynasticLegacy, threshold: 0.72 }
       ]
     },
-    world: createWorldState(ownerByRegionId, staticData, faithByKingdomId),
+    world: createWorldState(ownerByRegionId, staticData, faithByKingdomId, now),
     kingdoms,
     wars: {},
     events: [

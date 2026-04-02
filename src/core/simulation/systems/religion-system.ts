@@ -273,12 +273,24 @@ export function createReligionSystem(): SimulationSystem {
           const nextShare = clamp(currentShare + drift, 0, 1);
           applyFaithShare(region, kingdomFaith, nextShare);
 
-          const mismatch = Math.abs(nextShare - kingdom.religion.cohesion);
-          region.faithUnrest = roundTo(clamp(region.faithUnrest + mismatch * 0.03 * tickScale - 0.005 * tickScale, 0, 1));
+          // NOVA MECÂNICA: Atrito Religioso e Choque de Fé
+          // A heresia é a ausência da fé estatal na província (0 = 100% nossa religião, 1 = 0%)
+          const heresyLevel = 1 - nextShare;
+          
+          // A Tensão Religiosa cresce em terras hereges, mitigada se o império for tolerante
+          const tensionGrowth = heresyLevel * 0.045 * (1 - (kingdom.religion.tolerance * 0.5));
+          const tensionDecay = 0.005 + (kingdom.religion.tolerance * 0.015);
+          
+          region.faithUnrest = roundTo(clamp(region.faithUnrest + (tensionGrowth - tensionDecay) * tickScale, 0, 1));
 
-          if (kingdom.religion.tolerance < 0.3 && mismatch > 0.24) {
-            region.unrest = roundTo(clamp(region.unrest + 0.012 * tickScale, 0, 1));
-            faithConflict += 0.012 * tickScale;
+          // EFEITO CASCATA: A Tensão Religiosa vaza e alimenta a Instabilidade Civil (Unrest)
+          // Se o governo é intolerante, os hereges se armam e a província entra em ebulição
+          const intoleranceFactor = 1 - kingdom.religion.tolerance;
+          const unrestLeak = region.faithUnrest * intoleranceFactor * 0.015 * tickScale;
+
+          if (unrestLeak > 0.001) {
+            region.unrest = roundTo(clamp(region.unrest + unrestLeak, 0, 1));
+            faithConflict += unrestLeak;
           }
         }
 

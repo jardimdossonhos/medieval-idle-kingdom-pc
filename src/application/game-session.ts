@@ -105,6 +105,31 @@ export class GameSession {
     this.pipeline = new TickPipeline(deps.systems, deps.staticWorldData);
   }
 
+  private migrateLegacyState(state: GameState): void {
+    if (state.meta.disastersEnabled === undefined) {
+      state.meta.disastersEnabled = true;
+    }
+    if (!state.world.religions) {
+      state.world.religions = {} as any;
+      const now = this.deps.clock.now();
+      for (const [id, def] of Object.entries(this.deps.staticWorldData.religions)) {
+        state.world.religions[id] = {
+          id,
+          name: def.name,
+          deityName: def.deityName,
+          deityDescription: def.deityDescription,
+          color: def.color,
+          tenets: [...def.tenets],
+          holyCityRegionId: null,
+          headOfFaithKingdomId: null,
+          founderId: null,
+          foundedAt: now,
+          parentReligionId: null
+        };
+      }
+    }
+  }
+
   async bootstrap(initialState: GameState): Promise<GameState> {
     await this.bootstrapCommandHead();
 
@@ -113,6 +138,9 @@ export class GameSession {
     const persisted = await this.deps.gameStateRepository.loadCurrent();
     const recovered = persisted ?? (await this.restoreFromSnapshotOrSave());
     const baseState = recovered ?? initialState;
+    
+    this.migrateLegacyState(baseState);
+
     const now = this.deps.clock.now();
     
     // Respiro arquitetural: Evita que a Thread principal tranque o navegador ("Page Unresponsive")
@@ -762,6 +790,7 @@ export class GameSession {
     }
 
     this.currentState = structuredClone(snapshot.state);
+    this.migrateLegacyState(this.currentState);
     this.currentState.meta.lastUpdatedAt = this.deps.clock.now();
     // Inicia pausado ao carregar um save manual
     this.currentState.meta.paused = true;
@@ -786,7 +815,10 @@ export class GameSession {
   }
 
   async clearAllSaves(): Promise<void> {
-    await (this.deps.saveRepository as any).clearAll();
+    const slots = await this.deps.saveRepository.listSlots();
+    for (const slot of slots) {
+      await this.deps.saveRepository.deleteSlot(slot.slotId);
+    }
   }
 
   getState(): GameState {
@@ -796,7 +828,7 @@ export class GameSession {
   changeStateReligion(newFaithId: string): PlayerActionResult {
     const state = this.requireState();
     const player = this.getPlayerKingdom(state);
-    const faithDef = this.deps.staticWorldData.religions[newFaithId];
+    const faithDef = state.world.religions[newFaithId]; // Lê do mundo vivo e não do arquivo estático
 
     if (!faithDef) {
       return { ok: false, message: "Fé desconhecida." };
@@ -822,6 +854,70 @@ export class GameSession {
     this.emitState();
 
     return { ok: true, message: `Religião estatal alterada para ${faithDef.name}.` };
+  }
+
+  public foundCustomReligion(params: {
+    name: string;
+    deityName: string;
+    deityDescription: string;
+    color: string;
+    tenets: string[];
+  }): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+
+    const cost = { [ResourceType.Faith]: 1000, [ResourceType.Legitimacy]: 50 };
+    if (!this.canAfford(cost)) {
+      return { ok: false, message: "Recursos insuficientes (Requer 1.000 Fé, 50 Legitimidade)." };
+    }
+    if (params.name.length < 3 || params.deityName.length < 3) {
+      return { ok: false, message: "Os nomes devem ter no mínimo 3 caracteres." };
+    }
+    if (params.deityDescription.length < 5) {
+      return { ok: false, message: "A descrição teológica é obrigatória." };
+    }
+    if (params.tenets.length === 0) {
+      return { ok: false, message: "Você deve escolher ao menos um dogma sagrado." };
+    }
+
+    let budgetUsed = 0;
+    for (const tId of params.tenets) {
+      const tenet = this.deps.staticWorldData.tenets[tId];
+      if (!tenet) return { ok: false, message: `Dogma inválido: ${tId}` };
+      budgetUsed += tenet.cost;
+    }
+    if (budgetUsed > 100) return { ok: false, message: "Orçamento de 100 Pontos de Doutrina excedido." };
+
+    this.applyCost(cost);
+
+    const newReligionId = `rel_custom_${Date.now()}`;
+    const now = this.deps.clock.now();
+
+    state.world.religions[newReligionId] = {
+      id: newReligionId,
+      name: params.name,
+      deityName: params.deityName,
+      deityDescription: params.deityDescription,
+      color: params.color,
+      tenets: [...params.tenets],
+      holyCityRegionId: player.capitalRegionId,
+      headOfFaithKingdomId: player.id,
+      founderId: player.id,
+      foundedAt: now,
+      parentReligionId: player.religion.stateFaith
+    };
+
+    player.religion.stateFaith = newReligionId;
+    player.religion.authority = 1.0;
+    player.legitimacy = 100;
+    player.stability = 100; // A fé recém-formada unifica perfeitamente a nação
+
+    this.appendActionLog("Fé Inédita Forjada", `${player.name} iluminou o mundo ao fundar o(a) ${params.name}. O antigo panteão foi destruído e a Capital declarada Cidade Santa.`, "critical");
+    this.recordPlayerCommand("religion.found_custom", { religionId: newReligionId });
+    this.persistCurrent();
+    this.emitState();
+
+    return { ok: true, message: `O mundo se curva perante o(a) ${params.name}!` };
   }
 
   executeReligiousAction(targetKingdomId: string, actionType: ReligiousActionType): PlayerActionResult {

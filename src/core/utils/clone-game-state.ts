@@ -8,7 +8,8 @@ export function cloneGameStateForSimulation(previousState: GameState): GameState
     campaign: previousState.campaign,
     world: {
       mapId: previousState.world.mapId,
-      regions: structuredClone(previousState.world.regions)
+      regions: structuredClone(previousState.world.regions),
+      religions: structuredClone(previousState.world.religions)
     },
     kingdoms: structuredClone(previousState.kingdoms),
     wars: structuredClone(previousState.wars),

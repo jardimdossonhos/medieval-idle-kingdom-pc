@@ -161,7 +161,8 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
       const wealthRatio = Number.isFinite(rawWealth) ? rawWealth! : 0;
       const isAllied = playerAlliedRegionIds.has(regionId) ? 1 : 0;
       const isEnemy = playerEnemyRegionIds.has(regionId) ? 1 : 0;
-      const faithColor = colorForFaith(region.dominantFaith, this.staticData);
+      const activeReligion = world.religions[region.dominantFaith];
+      const faithColor = activeReligion?.color || colorForFaith(region.dominantFaith, this.staticData);
       const dominantShare = Number.isFinite(region.dominantShare) ? region.dominantShare : 0;
 
       // Quantização do Hash: Impede que frações decimais gerem recálculos exaustivos na GPU

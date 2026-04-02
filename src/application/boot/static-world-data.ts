@@ -1,5 +1,6 @@
 import type { ReligionDefinition, StaticWorldData } from "../../core/models/static-world-data";
 import type { RegionDefinition, StrategicRoute } from "../../core/models/world";
+import type { ReligionTenet } from "../../core/models/religion";
 import { WORLD_DEFINITIONS_MAP_ID, WORLD_DEFINITIONS_V1 } from "./generated/world-definitions-v1";
 
 function round(value: number, decimals = 2): number {
@@ -36,104 +37,91 @@ function buildRoutes(definitions: Record<string, RegionDefinition>): StrategicRo
   return routes;
 }
 
+const TENETS_V1: ReligionTenet[] = [
+  { id: "warmonger", name: "Militarismo Sagrado", description: "A guerra é um rito de adoração. Exércitos fanatizados, mas o império sofre com constante instabilidade.", cost: 40, effects: [] },
+  { id: "pacifism", name: "Pacifismo", description: "Toda vida é divina. Bônus econômico absurdo de produtividade, em detrimento do fervor militar.", cost: 30, effects: [] },
+  { id: "monasticism", name: "Monasticismo", description: "O isolamento purifica a alma. Multiplica imensamente a produção de Fé mensal.", cost: 20, effects: [] },
+  { id: "human_sacrifice", name: "Culto de Sangue", description: "Os deuses exigem sacrifícios de escravos para manter o mundo vivo. Gera extrema Legitimidade pelo terror.", cost: 50, effects: [] },
+  { id: "scholarly_tradition", name: "Tradição Erudita", description: "O conhecimento das estrelas e da alquimia é a verdadeira voz do divino.", cost: 30, effects: [] },
+  { id: "asceticism", name: "Ascetismo (Ônus)", description: "A riqueza material corrompe a salvação. Reduz gravemente os impostos comerciais, mas concede pontos de doutrina.", cost: -30, effects: [] },
+  { id: "jizya_tax", name: "Dízimo de Hereges", description: "Infiéis em solo conquistado pagam tributos estratosféricos pelo direito de existir.", cost: 40, effects: [] },
+  { id: "pluralism", name: "Sincretismo Universal", description: "Todas as fés são faces da mesma verdade suprema. Extingue quase toda Tensão Religiosa e revoltas.", cost: 40, effects: [] },
+  { id: "divine_right", name: "Direito Divino", description: "O monarca é a representação física do panteão absoluto na Terra.", cost: 50, effects: [] },
+  { id: "fertility_rites", name: "Ritos de Fertilidade", description: "Celebra a vida e a reprodução. Aumenta substancialmente o teto do crescimento populacional.", cost: 40, effects: [] },
+  { id: "vow_of_poverty", name: "Voto de Pobreza (Ônus)", description: "A igreja exige doações extremas dos lordes. Sangra as reservas de ouro do governo em troca de Fé pura e Pontos Extras.", cost: -40, effects: [] },
+  { id: "holy_architecture", name: "Arquitetura Sagrada", description: "A construção de Mega-Templos maravilha a população, reduzindo passivamente a instabilidade civil.", cost: 30, effects: [] },
+  { id: "mendicant_preachers", name: "Pregadores Mendicantes", description: "Oradores andam descalços espalhando a palavra nas fronteiras, dobrando a força missionária externa.", cost: 20, effects: [] },
+  { id: "folk_syncretism", name: "Panteão Menor (Ônus)", description: "A religião se funde aos mitos de pequenas vilas perdendo o apelo universal, mas concedendo generosos pontos doutrinários.", cost: -20, effects: [] },
+  { id: "manifest_destiny", name: "Destino Manifesto", description: "O mundo foi prometido a vocês pelos Deuses. Reduz agressivamente a pressão e a penalidade diplomática nas expansões militares.", cost: 40, effects: [] },
+  { id: "reincarnation", name: "Ciclo de Reencarnação", description: "A morte em combate é uma bênção da Roda da Vida. As tropas não sofrem exaustão e recuperam Manpower de forma assustadora.", cost: 40, effects: [] },
+  { id: "ancestor_worship", name: "Veneração aos Ancestrais", description: "O passado guia o presente. Estabelece um alto ganho inquebrável de Legitimidade da coroa.", cost: 20, effects: [] },
+  { id: "esoteric_mysticism", name: "Misticismo Isolado (Ônus)", description: "Apenas uma pequena elite detém os segredos do panteão. Dificulta muito a taxa de conversão pública, concedendo pontos.", cost: -30, effects: [] },
+  { id: "inquisition", name: "Inquisição Implacável", description: "Extirpação cirúrgica do paganismo. Converte as massas rapidamente, mas queima a região com tensão permanente até que os infiéis sumam.", cost: 20, effects: [] }
+];
+
 const RELIGIONS_V1: ReligionDefinition[] = [
   {
-    id: "imperial_church",
-    name: "Igreja Imperial",
-    color: "#7b4a33",
-    bonuses: {
-      economyMult: 1.02,
-      stabilityMult: 1.03,
-      militaryMoraleMult: 1.01,
-      missionaryPower: 1.06,
-      authorityGrowth: 1.07,
-      toleranceBaseline: 0.32,
-      warZeal: 1.02
-    }
+    id: "catholicism",
+    name: "Catolicismo Romano",
+    color: "#e6b322",
+    deityName: "A Santíssima Trindade",
+    deityDescription: "Deus único e onipotente em três pessoas (Pai, Filho e Espírito Santo). Enfatiza a autoridade central do Papa, os sete sacramentos e a redenção divina.",
+    tenets: ["papal_primacy", "monasticism"],
+    bonuses: { economyMult: 1, stabilityMult: 1, militaryMoraleMult: 1, missionaryPower: 1, authorityGrowth: 1, toleranceBaseline: 1, warZeal: 1 }
   },
   {
-    id: "desert_faith",
-    name: "Fé do Deserto",
-    color: "#ad7b2f",
-    bonuses: {
-      economyMult: 1.01,
-      stabilityMult: 1.01,
-      militaryMoraleMult: 1.03,
-      missionaryPower: 1.08,
-      authorityGrowth: 1.04,
-      toleranceBaseline: 0.28,
-      warZeal: 1.08
-    }
+    id: "sunni_islam",
+    name: "Islã Sunita",
+    color: "#228b22",
+    deityName: "Alá",
+    deityDescription: "A submissão absoluta à vontade do Deus único, misericordioso e criador, revelada através do selo dos profetas, Maomé.",
+    tenets: ["jizya_tax", "scholarly_tradition"],
+    bonuses: { economyMult: 1, stabilityMult: 1, militaryMoraleMult: 1, missionaryPower: 1, authorityGrowth: 1, toleranceBaseline: 1, warZeal: 1 }
   },
   {
-    id: "ancestral_cults",
-    name: "Cultos Ancestrais",
-    color: "#4f6c3e",
-    bonuses: {
-      economyMult: 1.01,
-      stabilityMult: 1.05,
-      militaryMoraleMult: 1,
-      missionaryPower: 0.94,
-      authorityGrowth: 0.99,
-      toleranceBaseline: 0.45,
-      warZeal: 0.95
-    }
-  },
-  {
-    id: "lotus_order",
-    name: "Ordem do Lótus",
-    color: "#b66a6a",
-    bonuses: {
-      economyMult: 1.02,
-      stabilityMult: 1.02,
-      militaryMoraleMult: 0.99,
-      missionaryPower: 1.04,
-      authorityGrowth: 1,
-      toleranceBaseline: 0.48,
-      warZeal: 0.97
-    }
-  },
-  {
-    id: "northern_old_gods",
-    name: "Velhos Deuses do Norte",
+    id: "norse_paganism",
+    name: "Paganismo Nórdico",
     color: "#49657a",
-    bonuses: {
-      economyMult: 0.99,
-      stabilityMult: 1,
-      militaryMoraleMult: 1.06,
-      missionaryPower: 0.92,
-      authorityGrowth: 1.02,
-      toleranceBaseline: 0.25,
-      warZeal: 1.11
-    }
+    deityName: "O Panteão Aesir (Odin, Thor, Freyja)",
+    deityDescription: "Deuses guerreiros e forças da natureza que valorizam a coragem, a morte honrosa em batalha (Valhalla) e rituais de sacrifício.",
+    tenets: ["warmonger", "blot_sacrifices"],
+    bonuses: { economyMult: 1, stabilityMult: 1, militaryMoraleMult: 1, missionaryPower: 1, authorityGrowth: 1, toleranceBaseline: 1, warZeal: 1 }
   },
   {
-    id: "scholar_sun",
-    name: "Sol dos Eruditos",
+    id: "hinduism",
+    name: "Hinduísmo",
+    color: "#ff8c00",
+    deityName: "A Trimurti (Brahma, Vishnu, Shiva)",
+    deityDescription: "A compreensão do ciclo eterno de criação, preservação e destruição, guiado pelo Karma em busca da libertação (Moksha).",
+    tenets: ["caste_system", "pluralism"],
+    bonuses: { economyMult: 1, stabilityMult: 1, militaryMoraleMult: 1, missionaryPower: 1, authorityGrowth: 1, toleranceBaseline: 1, warZeal: 1 }
+  },
+  {
+    id: "buddhism",
+    name: "Budismo Mahayana",
+    color: "#b66a6a",
+    deityName: "O Dharma (Filosofia Não-Teísta)",
+    deityDescription: "A busca pela iluminação (Nirvana) através do Nobre Caminho Óctuplo, eliminando o sofrimento ao extinguir o desejo material.",
+    tenets: ["pacifism", "monasticism"],
+    bonuses: { economyMult: 1, stabilityMult: 1, militaryMoraleMult: 1, missionaryPower: 1, authorityGrowth: 1, toleranceBaseline: 1, warZeal: 1 }
+  },
+  {
+    id: "tengriism",
+    name: "Tengriismo",
+    color: "#4b8da3",
+    deityName: "Tengri (O Céu Eterno)",
+    deityDescription: "A reverência xamânica ao Grande Céu Azul, à Mãe Terra (Umai) e aos espíritos dos ancestrais que cavalgam pelas estepes infinitas.",
+    tenets: ["horse_lords", "sky_burials"],
+    bonuses: { economyMult: 1, stabilityMult: 1, militaryMoraleMult: 1, missionaryPower: 1, authorityGrowth: 1, toleranceBaseline: 1, warZeal: 1 }
+  },
+  {
+    id: "hellenic_paganism",
+    name: "Panteão Helênico",
     color: "#8a6a9b",
-    bonuses: {
-      economyMult: 1.04,
-      stabilityMult: 1.01,
-      militaryMoraleMult: 0.98,
-      missionaryPower: 1.03,
-      authorityGrowth: 1,
-      toleranceBaseline: 0.52,
-      warZeal: 0.94
-    }
-  },
-  {
-    id: "sea_saints",
-    name: "Santos do Mar",
-    color: "#2f6f74",
-    bonuses: {
-      economyMult: 1.03,
-      stabilityMult: 1.01,
-      militaryMoraleMult: 1.01,
-      missionaryPower: 1.02,
-      authorityGrowth: 1.01,
-      toleranceBaseline: 0.4,
-      warZeal: 1
-    }
+    deityName: "Os Deuses do Olimpo (Zeus, Atena, Ares)",
+    deityDescription: "Divindades antropomórficas poderosas e falhas que exigem templos majestosos, rituais cívicos e reverenciam o heroísmo mortal.",
+    tenets: ["pantheon_dedication", "mystery_cults"],
+    bonuses: { economyMult: 1, stabilityMult: 1, militaryMoraleMult: 1, missionaryPower: 1, authorityGrowth: 1, toleranceBaseline: 1, warZeal: 1 }
   }
 ];
 
@@ -161,11 +149,17 @@ export function createStaticWorldData(
       .map((religion) => [religion.id, religion] as const)
   );
 
+  const tenets = Object.fromEntries(
+    [...TENETS_V1]
+      .map((tenet) => [tenet.id, tenet] as const)
+  );
+
   return {
     mapId: mId,
     definitions,
     neighborsByRegionId,
     routes: buildRoutes(definitions),
-    religions
+    religions,
+    tenets
   };
 }
