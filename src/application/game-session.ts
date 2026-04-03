@@ -11,7 +11,7 @@ import type {
 } from "../core/contracts/game-ports";
 import { getTechnologyNode, isTechnologyAvailable, listAvailableTechnologyNodes, listTechnologyNodes, selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../core/data/technology-tree";
 import { createEmptyStock } from "../core/models/economy";
-import { AutomationLevel, DiplomaticRelation, ResourceType, TechnologyDomain, TreatyType } from "../core/models/enums";
+import { AutomationLevel, DiplomaticRelation, ReligiousPolicy, ResourceType, TechnologyDomain, TreatyType } from "../core/models/enums";
 import type { BudgetPriority, TaxPolicy } from "../core/models/economy";
 import type { ClockService, DiplomacyResolver, EventBus, WarResolver } from "../core/contracts/services";
 import type { CommandLogEntry, SnapshotReason, StateSnapshot } from "../core/models/commands";
@@ -305,6 +305,17 @@ export class GameSession {
 
     this.appendActionLog("Automação de expansão atualizada", `Nível definido para ${level}.`, "info");
     this.recordPlayerCommand("expansion.automation", { level });
+    this.persistCurrent();
+    this.emitState();
+  }
+
+  setReligiousPolicy(policy: ReligiousPolicy): void {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    player.religion.policy = policy;
+
+    this.appendActionLog("Diretriz Religiosa", `O império alterou sua postura oficial sobre tolerância e conversão.`, "info");
+    this.recordPlayerCommand("religion.policy", { policy: policy as any });
     this.persistCurrent();
     this.emitState();
   }

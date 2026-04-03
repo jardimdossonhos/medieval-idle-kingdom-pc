@@ -10,7 +10,7 @@ import {
   type TechnologyChoice
 } from "./application/game-session";
 import { GodModeConsole } from "./application/god-mode";
-import { AutomationLevel, ResourceType, TechnologyDomain } from "./core/models/enums";
+import { AutomationLevel, ReligiousPolicy, ResourceType, TechnologyDomain } from "./core/models/enums";
 import { createDefaultSimulationSystems } from "./core/simulation/create-default-systems";
 import type { SaveSummary } from "./core/contracts/game-ports";
 import type { GameState, KingdomState } from "./core/models/game-state";
@@ -65,6 +65,8 @@ interface UiRefs {
   religionDemographics: HTMLElement;
   religionChangeSelect: HTMLSelectElement;
   religionChangeBtn: HTMLButtonElement;
+  religionPolicySelect: HTMLSelectElement;
+  religionActiveTenets: HTMLElement;
   diplomacyList: HTMLElement;
   militarySummary: HTMLElement;
   saveList: HTMLElement;
@@ -400,6 +402,9 @@ async function bootstrapApp(): Promise<void> {
       .map-legend-title { font-weight: bold; margin-bottom: 8px; color: #fff; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 4px; }
       .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
       .legend-color { width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.15); box-sizing: border-box; }
+
+      /* Trava de scroll para modais */
+      body.is-modal-open { overflow: hidden !important; }
       
       /* Religion Customizer Styles */
       .tenet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; max-height: 280px; overflow-y: auto; padding: 5px; margin-top: 10px; border: 1px solid #333; background: rgba(0,0,0,0.2); border-radius: 6px; }
@@ -595,6 +600,20 @@ async function bootstrapApp(): Promise<void> {
           <h2>Religião de Estado e Demografia</h2>
           <div id="religion-summary" class="summary-grid"></div>
           
+          <div class="inline-form" style="margin-top: 15px; border-top: 1px solid #333; padding-top: 15px;">
+            <label>Postura do Clero (Automação)
+              <select id="religion-policy-select"></select>
+            </label>
+          </div>
+
+          <div id="religion-deity-info" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 6px; border-left: 4px solid var(--primary-color, #d4af37);">
+            <h3 style="margin-top:0; margin-bottom:8px; font-size:1.1rem;" id="rd-name">Deus Supremo</h3>
+            <p style="margin:0; font-size:0.95rem; color:#e5e7eb; line-height:1.4;" id="rd-desc">Descrição Teológica</p>
+          </div>
+
+          <h3 style="margin-top: 20px;">Dogmas Consagrados</h3>
+          <div id="religion-active-tenets" class="tenet-grid" style="margin-bottom: 20px;"></div>
+
           <h3>Fé Dominante por Território (Geopolítica)</h3>
           <ul id="religion-demographics" class="list compact" style="margin-bottom: 20px;"></ul>
 
@@ -778,6 +797,8 @@ async function bootstrapApp(): Promise<void> {
     religionDemographics: queryElement(appRoot, "#religion-demographics"),
     religionChangeSelect: queryElement(appRoot, "#religion-change-select"),
     religionChangeBtn: queryElement(appRoot, "#religion-change-btn"),
+    religionPolicySelect: queryElement(appRoot, "#religion-policy-select"),
+    religionActiveTenets: queryElement(appRoot, "#religion-active-tenets"),
     diplomacyList: queryElement(appRoot, "#diplomacy-list"),
     militarySummary: queryElement(appRoot, "#military-summary"),
     saveList: queryElement(appRoot, "#save-list"),
@@ -847,9 +868,15 @@ async function bootstrapApp(): Promise<void> {
   }
 
   if (btnOpenFounder && rfModal) {
-    btnOpenFounder.addEventListener("click", () => { selectedTenets.clear(); updateRfModal(); rfModal.classList.remove("is-hidden"); });
+    btnOpenFounder.addEventListener("click", () => { 
+      document.body.classList.add("is-modal-open");
+      selectedTenets.clear(); updateRfModal(); rfModal.classList.remove("is-hidden"); 
+    });
   }
-  if (rfCancel && rfModal) rfCancel.addEventListener("click", () => rfModal.classList.add("is-hidden"));
+  if (rfCancel && rfModal) rfCancel.addEventListener("click", () => {
+    rfModal.classList.add("is-hidden");
+    document.body.classList.remove("is-modal-open");
+  });
   if (rfSubmit && rfModal) {
     rfSubmit.addEventListener("click", () => {
       const res = session.foundCustomReligion({
@@ -860,7 +887,9 @@ async function bootstrapApp(): Promise<void> {
         tenets: Array.from(selectedTenets)
       });
       if (res.ok) {
-        rfModal.classList.add("is-hidden"); showToast(res.message);
+        rfModal.classList.add("is-hidden"); 
+        document.body.classList.remove("is-modal-open");
+        showToast(res.message);
         const state = session.getState();
         if (state) {
           const p = getPlayerKingdom(state); const idxs = getPlayerRegionIndicesCached(state, p);
@@ -1730,6 +1759,28 @@ async function bootstrapApp(): Promise<void> {
       });
     }
 
+    let schismRegions = 0;
+    for (const idx of playerIndices) {
+      const regionId = WORLD_DEFINITIONS_V1[idx].id;
+      const r = state.world.regions[regionId];
+      if (r && r.dominantFaith !== player.religion.stateFaith) {
+        const rDef = state.world.religions[r.dominantFaith];
+        const sDef = state.world.religions[player.religion.stateFaith];
+        if (rDef && sDef && (rDef.parentReligionId === sDef.id || sDef.parentReligionId === rDef.id)) {
+           schismRegions++;
+        }
+      }
+    }
+
+    if (schismRegions > 0) {
+      explainers.push({
+        label: "Cisma Religioso",
+        reason: `${schismRegions} região(ões) seguem uma heresia declarada, sofrendo +250% de tensão.`,
+        suggestion: "Envie missionários ou ative a política Fanática para expurgar a heresia rapidamente.",
+        level: schismRegions >= 2 ? "high" : "medium"
+      });
+    }
+
     if (explainers.length === 0) {
       explainers.push({
         label: "Situação estável",
@@ -1812,7 +1863,17 @@ async function bootstrapApp(): Promise<void> {
       assimilationText = `${formatNumber(region.assimilation * 100)}%`;
       devText = `${formatNumber(region.devastation * 100)}%`;
       const dominantFaith = state.world.religions[region.dominantFaith];
-      dominantFaithText = `${dominantFaith?.name ?? region.dominantFaith} (${formatNumber(region.dominantShare * 100)}%)`;
+      
+      let schismWarning = "";
+      const stateFaithDef = state.world.religions[player.religion.stateFaith];
+      if (dominantFaith && stateFaithDef && region.dominantFaith !== player.religion.stateFaith) {
+        const isSchism = dominantFaith.parentReligionId === player.religion.stateFaith || stateFaithDef.parentReligionId === region.dominantFaith;
+        if (isSchism) {
+          schismWarning = `<br><span style="color: #ff5555; font-size: 0.85em; font-weight: bold; text-shadow: 0 1px 2px #000; display: inline-block; margin-top: 4px;">⚠️ Cisma Ativo (Instabilidade Extrema)</span>`;
+        }
+      }
+      dominantFaithText = `${dominantFaith?.name ?? region.dominantFaith} (${formatNumber(region.dominantShare * 100)}%)${schismWarning}`;
+      
       const minorityFaith = region.minorityFaith ? state.world.religions[region.minorityFaith] : null;
       minorityFaithText = region.minorityFaith && typeof region.minorityShare === "number"
         ? `${minorityFaith?.name ?? region.minorityFaith} (${formatNumber(region.minorityShare * 100)}%)`
@@ -2100,6 +2161,39 @@ async function bootstrapApp(): Promise<void> {
       <span>Religião de Estado</span><strong style="color: ${currentFaithDef?.color ?? '#fff'}">${currentFaithDef?.name ?? "Nenhuma"}</strong>
       <span>Tolerância</span><strong>${formatNumber(player.religion.tolerance * 100)}%</strong>
     `;
+
+    if (ui.religionPolicySelect.options.length === 0) {
+      ui.religionPolicySelect.add(new Option("Tolerante (Permite osmose livre, +Paz)", String(ReligiousPolicy.Tolerant)));
+      ui.religionPolicySelect.add(new Option("Ortodoxa (Equilíbrio Padrão)", String(ReligiousPolicy.Orthodoxy)));
+      ui.religionPolicySelect.add(new Option("Fanática (Inquisição e Alta Conversão)", String(ReligiousPolicy.Zealous)));
+    }
+    ui.religionPolicySelect.value = String(player.religion.policy);
+
+    const rdName = document.getElementById("rd-name");
+    const rdDesc = document.getElementById("rd-desc");
+    if (rdName && rdDesc && currentFaithDef) {
+       rdName.textContent = currentFaithDef.deityName;
+       rdName.style.color = currentFaithDef.color;
+       rdName.style.textShadow = `0 1px 3px rgba(0,0,0,0.8)`;
+       rdDesc.textContent = currentFaithDef.deityDescription;
+       (rdName.parentElement as HTMLElement).style.borderLeftColor = currentFaithDef.color;
+    }
+
+    ui.religionActiveTenets.innerHTML = "";
+    if (currentFaithDef && currentFaithDef.tenets) {
+        for (const tId of currentFaithDef.tenets) {
+            const tenet = staticWorldData.tenets[tId];
+            if (tenet) {
+                const card = document.createElement("div");
+                card.className = "tenet-card";
+                card.style.cursor = "default";
+                card.style.borderColor = "rgba(255,255,255,0.1)";
+                const isOnus = tenet.cost < 0;
+                card.innerHTML = `<h4 style="color: ${currentFaithDef.color}; text-shadow: 0 1px 2px rgba(0,0,0,0.8);"><span>${tenet.name}</span> <span class="tenet-cost ${isOnus ? 'negative' : ''}">${isOnus ? '-' : '+'}${Math.abs(tenet.cost)}</span></h4><p style="color: #ddd;">${tenet.description}</p>`;
+                ui.religionActiveTenets.appendChild(card);
+            }
+        }
+    }
 
     // Preenche o dropdown dinamicamente com as religiões vivas do mundo (incluindo as fundadas)
     const currentSelectValue = ui.religionChangeSelect.value;
@@ -2798,6 +2892,13 @@ async function bootstrapApp(): Promise<void> {
   ui.religionChangeBtn.addEventListener("click", () => {
     const result = session.changeStateReligion(ui.religionChangeSelect.value);
     showToast(result.message);
+  });
+
+  ui.religionPolicySelect.addEventListener("change", () => {
+    const rawVal = ui.religionPolicySelect.value;
+    const policyVal = isNaN(Number(rawVal)) ? rawVal : Number(rawVal);
+    session.setReligiousPolicy(policyVal as ReligiousPolicy);
+    showToast("Postura oficial do clero atualizada.");
   });
 
   ui.techHideCompletedToggle.addEventListener("change", () => {

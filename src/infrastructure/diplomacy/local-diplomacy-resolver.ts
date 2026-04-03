@@ -1,4 +1,4 @@
-﻿import type { DiplomacyResolver, NpcDecision } from "../../core/contracts/services";
+﻿﻿import type { DiplomacyResolver, NpcDecision } from "../../core/contracts/services";
 import type { BilateralRelation, Treaty } from "../../core/models/diplomacy";
 import { DiplomaticRelation, TreatyType } from "../../core/models/enums";
 import type { GameState, KingdomState } from "../../core/models/game-state";
@@ -196,6 +196,22 @@ export class LocalDiplomacyResolver implements DiplomacyResolver {
           relation.status = DiplomaticRelation.Friendly;
         } else if (relation.status !== DiplomaticRelation.Truce) {
           relation.status = DiplomaticRelation.Neutral;
+        }
+
+        // MECÂNICA DE CISMA: Ódio diplomático entre a fé-mãe e a heresia.
+        const otherKingdom = state.kingdoms[relationId];
+        if (otherKingdom) {
+          const kingdomFaithDef = state.world.religions[kingdom.religion.stateFaith];
+          const otherFaithDef = state.world.religions[otherKingdom.religion.stateFaith];
+
+          if (kingdomFaithDef && otherFaithDef) {
+            const isSchism = kingdomFaithDef.parentReligionId === otherFaithDef.id || otherFaithDef.parentReligionId === kingdomFaithDef.id;
+            if (isSchism) {
+              relation.score.trust = roundTo(clamp(relation.score.trust - 0.025, 0, 1)); // Ódio corrói a confiança
+              relation.score.rivalry = roundTo(clamp(relation.score.rivalry + 0.015, 0, 1)); // Aumenta a rivalidade
+              relation.grievance = roundTo(clamp(relation.grievance + 0.01, 0, 1)); // Gera agravo contínuo
+            }
+          }
         }
       }
 

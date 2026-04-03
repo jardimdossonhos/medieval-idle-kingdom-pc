@@ -144,8 +144,14 @@ export function createReligionSystem(): SimulationSystem {
           clamp(kingdom.religion.cohesion + (cohesionTarget - kingdom.religion.cohesion) * 0.08 * tickScale, 0, 1)
         );
 
-        const conversionBase = (1 - kingdom.religion.tolerance) * 0.08 + kingdom.religion.authority * 0.07;
-        kingdom.religion.conversionPressure = roundTo(clamp(conversionBase, 0, 1));
+        let conversionBase = (1 - kingdom.religion.tolerance) * 0.08 + kingdom.religion.authority * 0.07;
+
+        // A política Fanática (Zelosa) triplica a pressão de conversão interna
+        if (kingdom.religion.policy === ReligiousPolicy.Zealous) {
+          conversionBase *= 3.0;
+        }
+
+        kingdom.religion.conversionPressure = roundTo(clamp(conversionBase, 0, 1.5));
 
         const influenceKeys = Object.keys(kingdom.religion.externalInfluenceIn).sort();
         for (const sourceId of influenceKeys) {
@@ -277,11 +283,47 @@ export function createReligionSystem(): SimulationSystem {
           // A heresia é a ausência da fé estatal na província (0 = 100% nossa religião, 1 = 0%)
           const heresyLevel = 1 - nextShare;
           
+          // MECÂNICA DE CISMA: Verifica se a província é herege ou ortodoxa em relação à fé estatal
+          let schismMultiplier = 1.0;
+          const regDomFaithDef = state.world.religions[region.dominantFaith];
+          const stateFaithDef = state.world.religions[kingdomFaith];
+          
+          if (regDomFaithDef && stateFaithDef) {
+            const isSchism = regDomFaithDef.parentReligionId === kingdomFaith || stateFaithDef.parentReligionId === region.dominantFaith;
+            if (isSchism) schismMultiplier = 2.5; // O ódio sectário multiplica a instabilidade civil em 250%
+          }
+
           // A Tensão Religiosa cresce em terras hereges, mitigada se o império for tolerante
-          const tensionGrowth = heresyLevel * 0.045 * (1 - (kingdom.religion.tolerance * 0.5));
+          const tensionGrowth = heresyLevel * 0.045 * schismMultiplier * (1 - (kingdom.religion.tolerance * 0.5));
           const tensionDecay = 0.005 + (kingdom.religion.tolerance * 0.015);
           
           region.faithUnrest = roundTo(clamp(region.faithUnrest + (tensionGrowth - tensionDecay) * tickScale, 0, 1));
+
+          // MECÂNICA DE OSMOSE: Difusão orgânica de religiões pelas fronteiras
+          // Roda a cada 5 ciclos para proteger a CPU, compensando a força com multiplicador 5x
+          if (state.meta.tick % 5 === 0) {
+            const neighbors = context.staticData.neighborsByRegionId[regionId] ?? [];
+            for (const nId of neighbors) {
+              const nRegion = state.world.regions[nId];
+              if (!nRegion || nRegion.ownerId === "k_nature") continue;
+
+              const nFaith = nRegion.dominantFaith;
+              if (nFaith !== kingdomFaith) {
+                const nKingdom = state.kingdoms[nRegion.ownerId];
+                if (nKingdom) {
+                  // Pressão base de 0.05% por pulso. Escala com o Fanatismo vizinho e a sua Tolerância.
+                  const osmosisPressure = 0.0005 * 5 * (0.5 + nKingdom.religion.authority * 0.5) * (0.2 + kingdom.religion.tolerance * 0.8);
+                  
+                  const currentShare = faithShare(region, nFaith);
+                  const nextShare = clamp(currentShare + osmosisPressure * tickScale, 0, 1);
+                  applyFaithShare(region, nFaith, nextShare);
+                  
+                  // A fricção de borda gera uma leve tensão constante
+                  region.faithUnrest = roundTo(clamp(region.faithUnrest + osmosisPressure * 0.1 * tickScale, 0, 1));
+                }
+              }
+            }
+          }
 
           // EFEITO CASCATA: A Tensão Religiosa vaza e alimenta a Instabilidade Civil (Unrest)
           // Se o governo é intolerante, os hereges se armam e a província entra em ebulição
