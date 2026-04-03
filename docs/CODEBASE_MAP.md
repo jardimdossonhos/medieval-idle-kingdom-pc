@@ -86,6 +86,8 @@ O núcleo intocável do jogo. Agnostico de JS, Web ou Bancos de Dados. Represent
 Roda os cálculos de alto nível estruturais não transferidos para a memória do Worker (como Guerras Globais).
 *   **`src/core/simulation/`**:
     *   `tick-pipeline.ts`: O loop. Invoca em fila rigorosa todos os sistemas (AI, Eventos, Guerras).
+    *   `systems/council-system.ts`: IA de Ministros com consciência de contexto e geográfica. Varre a `StaticWorldData` para sugerir obras (Fortalezas) em hexágonos de fronteira vulneráveis.
+    *   **Ponto Crítico:** Ao criar espelhos do estado (`cloneGameStateForSimulation`), certifique-se de que dicionários dinâmicos (como as Novas Religiões) não sejam acidentalmente limpos do `WorldState`.
     *   `create-default-systems.ts`: O Injetor de Dependência que agrupa todos os motores.
 
 ### 4.4. O Motor de Alta Performance (ECS Sub-Domain)
@@ -107,12 +109,16 @@ Centenas de megabytes rodando a cada segundo em arrays coladas e contínuas na M
     *   `main.ts` (Renderizar a Pedra na UI e receber do worker)
     *   `game-session.ts` (Atualizar o ECS backup com a Pedra)
 
-**Cenário B: Criar um botão "Ação Global" (Ex: Decretar Édito):**
+**Cenário B: Adicionar Dicionários Dinâmicos (Ex: Facções, Religiões):**
+    *   Definir no `game-state.ts`.
+    *   **OBRIGATÓRIO:** Atualizar o `cloneGameStateForSimulation` em `src/core/utils/clone-game-state.ts`. Se omitir, a variável de memória sumirá na transição de Ticks do simulador.
+
+**Cenário C: Criar um botão "Ação Global" (Ex: Decretar Édito):**
     *   `main.ts` (A UI invoca `session.executeEdito()`)
     *   `game-session.ts` (Aplica a lógica de negócios, paga custos do ECS copiados e salva logs)
     *   `models/events.ts` (Se o edito logar um evento)
 
-**Cenário C: Alterar propriedades da malha hexagonal do mundo (Clima, Tamanho do Tabuleiro):**
+**Cenário D: Alterar propriedades da malha hexagonal do mundo (Clima, Tamanho do Tabuleiro):**
     *   Alterar a lógica procedural (Turf.js) no `scripts/generate-world-geojson.mjs`.
     *   Rodar `npm run map:build` para fatiar o mundo e gerar os Vector Tiles (`.pbf`).
     *   O build reescreverá `world-definitions-v1.ts`. O ECS ajustará automaticamente a memória RAM com base no tamanho novo do Array.

@@ -1,8 +1,8 @@
-﻿﻿import type { WarResolver } from "../../core/contracts/services";
+﻿import type { WarResolver } from "../../core/contracts/services";
 import type { Treaty } from "../../core/models/diplomacy";
 import { DiplomaticRelation, TreatyType } from "../../core/models/enums";
 import type { GameState, KingdomState, WarFront, WarState } from "../../core/models/game-state";
-import { buildTreatyId, buildWarId, sortUniqueIds } from "../../core/models/identifiers";
+import { buildTreatyId, sortUniqueIds, buildWarIdFromSides } from "../../core/models/identifiers";
 import type { StaticWorldData } from "../../core/models/static-world-data";
 import type { KingdomId } from "../../core/models/types";
 
@@ -19,6 +19,13 @@ function clamp(value: number, min: number, max: number): number {
 function roundTo(value: number, decimals = 3): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
+}
+
+function getDistance(defs: StaticWorldData["definitions"], regionA: string, regionB: string): number {
+  const a = defs[regionA]?.center;
+  const b = defs[regionB]?.center;
+  if (!a || !b) return Infinity;
+  return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
 }
 
 function relationCooldownUntil(state: GameState, leftId: KingdomId, rightId: KingdomId): number {
@@ -165,6 +172,37 @@ function addPeaceTreaty(state: GameState, leftId: KingdomId, rightId: KingdomId,
   addTreaty(right, treaty);
 }
 
+function findBorderFrontsMany(
+  state: GameState,
+  definitions: StaticWorldData["definitions"],
+  attackers: string[],
+  defenders: string[]
+): WarFront[] {
+  const fronts: WarFront[] = [];
+  const defenderRegionSet = new Set<string>();
+  for (const d of defenders) {
+    for (const rId of Object.keys(state.world.regions)) {
+      if (state.world.regions[rId].ownerId === d) defenderRegionSet.add(rId);
+    }
+  }
+  for (const a of attackers) {
+    const attackerRegions = Object.keys(state.world.regions).filter(rId => state.world.regions[rId].ownerId === a);
+    for (const rId of attackerRegions) {
+      const def = definitions[rId];
+      if (!def) continue;
+      for (const nId of def.neighbors) {
+        if (defenderRegionSet.has(nId)) fronts.push({ regionId: nId, pressureAttackers: 50, pressureDefenders: 50 });
+      }
+    }
+  }
+  if (fronts.length > 0) {
+    const unique = new Map<string, WarFront>();
+    for (const f of fronts) unique.set(f.regionId, f);
+    return Array.from(unique.values());
+  }
+  return findBorderFronts(state, definitions, attackers[0], defenders[0]);
+}
+
 function findBorderFronts(
   state: GameState,
   definitions: StaticWorldData["definitions"],
@@ -208,9 +246,24 @@ function findBorderFronts(
     return fronts;
   }
 
+  const defenderRegions = Object.keys(state.world.regions).filter(r => state.world.regions[r].ownerId === defenderId);
+  const attackerCenter = definitions[state.kingdoms[attackerId]?.capitalRegionId]?.center;
+  let bestFallback = state.kingdoms[defenderId]?.capitalRegionId ?? state.kingdoms[attackerId].capitalRegionId;
+  
+  if (attackerCenter && defenderRegions.length > 0) {
+      let minDist = Infinity;
+      for (const rId of defenderRegions) {
+          const dist = getDistance(definitions, state.kingdoms[attackerId].capitalRegionId, rId);
+          if (dist < minDist) {
+              minDist = dist;
+              bestFallback = rId;
+          }
+      }
+  }
+
   return [
     {
-      regionId: state.kingdoms[defenderId]?.capitalRegionId ?? state.kingdoms[attackerId].capitalRegionId,
+      regionId: bestFallback,
       pressureAttackers: 50,
       pressureDefenders: 50
     }
@@ -287,11 +340,16 @@ function applyConquest(
 
     targetRegionId = sortedCandidates[0] ?? null;
   } else {
-    const fallback = Object.keys(state.world.regions)
-      .sort()
-      .filter((regionId) => loserSet.has(state.world.regions[regionId].ownerId))
-      .sort()[0];
-
+    const loserRegions = Object.keys(state.world.regions).filter(regionId => loserSet.has(state.world.regions[regionId].ownerId));
+    let fallback = loserRegions[0];
+    let minDistance = Infinity;
+    for (const rId of loserRegions) {
+        const dist = getDistance(definitions, state.kingdoms[winnerId]?.capitalRegionId, rId);
+        if (dist < minDistance) {
+            minDistance = dist;
+            fallback = rId;
+        }
+    }
     targetRegionId = fallback ?? null;
   }
 
@@ -328,6 +386,10 @@ export class LocalWarResolver implements WarResolver {
     if (relationCooldownUntil(state, attacker.id, defender.id) > now) {
       return 0;
     }
+
+  if (getDistance(this.staticWorldData.definitions, attacker.capitalRegionId, defender.capitalRegionId) > 15.0) {
+    return 0; // Limite de alcance logístico histórico inicial
+  }
 
     const relation = attacker.diplomacy.relations[defender.id];
     const tension = relation
@@ -367,32 +429,60 @@ export class LocalWarResolver implements WarResolver {
       return state;
     }
 
-    const warId = buildWarId(attackerId, defenderId, state.meta.tick);
+    const attackers = new Set([attackerId]);
+    const defenders = new Set([defenderId]);
+
+    // Cascatas de Alianças e Estados Lacaios
+    const defenderObj = state.kingdoms[defenderId];
+    for (const treaty of defenderObj.diplomacy.treaties) {
+        if (treaty.type === TreatyType.Alliance) {
+            const ally = treaty.parties.find(p => p !== defenderId);
+            if (ally && state.kingdoms[ally] && !areInActiveWar(state, ally, attackerId)) defenders.add(ally);
+        }
+        if (treaty.type === TreatyType.Vassalage) {
+            const overlord = treaty.terms.overlordId as string;
+            const vassal = treaty.terms.vassalId as string;
+            if (vassal === defenderId && overlord !== attackerId && state.kingdoms[overlord]) defenders.add(overlord);
+            if (overlord === defenderId && vassal !== attackerId && state.kingdoms[vassal]) defenders.add(vassal);
+        }
+    }
+
+    const attackerObj = state.kingdoms[attackerId];
+    for (const treaty of attackerObj.diplomacy.treaties) {
+        if (treaty.type === TreatyType.Vassalage && treaty.terms.overlordId === attackerId) {
+            const vassal = treaty.terms.vassalId as string;
+            if (vassal !== defenderId && state.kingdoms[vassal]) attackers.add(vassal);
+        }
+    }
+
+    const warId = buildWarIdFromSides(Array.from(attackers), Array.from(defenders), state.meta.tick);
     if (state.wars[warId]) {
       return state;
     }
 
-    const fronts = findBorderFronts(state, this.staticWorldData.definitions, attackerId, defenderId);
+    const fronts = findBorderFrontsMany(state, this.staticWorldData.definitions, Array.from(attackers), Array.from(defenders));
 
     state.wars[warId] = {
       id: warId,
-      attackers: [attackerId],
-      defenders: [defenderId],
+      attackers: Array.from(attackers),
+      defenders: Array.from(defenders),
       warScore: 0,
       startedAt: now,
       fronts,
       casualties: {}
     };
 
-    setPairStatus(state, attackerId, defenderId, DiplomaticRelation.Hostile);
-    applyRelationCooldown(state, attackerId, defenderId, now + WAR_DECLARATION_COOLDOWN_MS);
-
-    state.kingdoms[attackerId].diplomacy.warExhaustion = roundTo(
-      clamp(state.kingdoms[attackerId].diplomacy.warExhaustion + 0.02, 0, 1)
-    );
-    state.kingdoms[defenderId].diplomacy.warExhaustion = roundTo(
-      clamp(state.kingdoms[defenderId].diplomacy.warExhaustion + 0.03, 0, 1)
-    );
+    for (const a of attackers) {
+      for (const d of defenders) {
+        setPairStatus(state, a, d, DiplomaticRelation.Hostile);
+        applyRelationCooldown(state, a, d, now + WAR_DECLARATION_COOLDOWN_MS);
+      }
+      state.kingdoms[a].diplomacy.warExhaustion = roundTo(clamp(state.kingdoms[a].diplomacy.warExhaustion + 0.02, 0, 1));
+    }
+    
+    for (const d of defenders) {
+      state.kingdoms[d].diplomacy.warExhaustion = roundTo(clamp(state.kingdoms[d].diplomacy.warExhaustion + 0.03, 0, 1));
+    }
 
     return state;
   }

@@ -39,28 +39,43 @@ Todo imposto arrecadado vai para um "Pote de Orçamento". Você deve dividir 100
 
 ---
 
-## 3. Religião e Poderes Divinos
+## 3. O Conselho Real e os Ministros
+
+Para auxiliá-lo na microgestão, você pode nomear **Ministros** (Chanceler, Marechal, etc.). Cada um tem uma personalidade (ex: Militarista, Cauteloso) que dita como eles aconselham.
+*   **Idempotência e Relatórios:** Eles não vão implorar pela mesma coisa duas vezes. Se o Intendente pedir aumento de impostos e você aprovar, na próxima reunião ele apenas relatará que os cofres estão se recuperando.
+*   **Inteligência Geográfica:** Se um Império inimigo ameaçar suas terras, o Grão-Chanceler não pedirá defesas aleatórias. Ele olhará o mapa, identificará exatamente **qual fronteira** corre perigo, e vai propor a você financiar a construção de uma **Fortaleza** ou **Quartel** especificamente naquele local.
+*   **Decisões e Lealdade:** Se você tomar decisões que contrariam a personalidade do Ministro, a lealdade dele cai. Se cair abaixo de 15%, ele renuncia ao cargo levando segredos de estado.
+
+---
+
+## 4. Religião e Poderes Divinos
 
 O jogo possui um sistema de **Fé** que se acumula passivamente com o tempo, especialmente se você isentar o clero de impostos.
 *   **Poderes Divinos (Ações Ativas):** Você pode canalizar a Fé acumulada para realizar "Milagres". Exemplo:
     *   *Bênção da Colheita (-500 Fé):* Injeta imediatamente uma vasta quantidade de Comida na simulação.
 *   A interface reflete o custo instantaneamente (*Optimistic UI*), impedindo o uso caso não haja fé suficiente e protegendo a economia do jogo.
+*   **O Profeta (Religião Customizada):** Com vasta fé e legitimidade, você pode "Forjar Nova Fé". Use os 100 pontos orçamentários para combinar Dogmas Sagrados (como *Ritos de Fertilidade* ou *Monasticismo*). Combinar *Ônus* (Dificuldades como o Ascetismo) permite comprar dogmas mais caros.
+*   **Postura do Clero:** Defina se a sua igreja será Tolerante (favorece a paz), Ortodoxa ou Fanática (multiplica a conversão, expurgando inimigos).
+*   **Cuidado com as Heresias:** Ao fundar uma nova religião ou conquistar terras com fés radicalmente diferentes (Cisma Religioso), a Instabilidade Civil nessas províncias subirá **250% mais rápido**. Aja enviando missionários, e esteja ciente de que antigos aliados de mesma fé agora te odiarão diplomaticamente.
+*   **A Osmose:** Religiões vazam naturalmente pelas fronteiras abertas. Vizinhos radicais tentarão converter passivamente suas áreas.
 
-## 4. Painel Militar e Diplomacia
+## 5. Painel Militar e Diplomacia
 
 *   **Pontuação Militar (Military Power):** É um número matemático que resume a sua força bélica total. Ele é calculado somando a quantidade de soldados ativos (Manpower), o nível da sua Tecnologia Militar e os Bônus de Qualidade de Tropa. A Inteligência Artificial (NPCs) usa este número para decidir se vai te atacar ou se deve ter medo de você.
 *   **Reserva (Manpower):** Soldados disponíveis para repor as baixas após uma guerra.
 *   **Diplomacia (Rivalidade vs Confiança):** Interações na aba Diplomacia afetam o que as outras nações pensam de você. Acima de 60% de confiança, a chance de aliança é alta.
+*   **A Distância (Alcance Logístico):** Você e os NPCs não são oniscientes. Ações bélicas diretas requerem fronteira conectada ou estar dentro do alcance logístico territorial do exército (aprox. 3 a 5 províncias vizinhas terrestres). Reinos nos pólos opostos do globo sequer se enxergam na Antiguidade.
+*   **Colapso Demográfico:** Se as baixas da guerra ou a fome matarem toda a população civil, a província é arruinada. Seu império perderá o controle e o território retornará à Natureza (Terra Selvagem).
 
 ---
 
-## 5. A Inteligência do Mundo (Como os NPCs pensam)
+## 6. A Inteligência do Mundo (Como os NPCs pensam)
 Neste jogo, as nações controladas pelo computador **não são oniscientes e não jogam de forma "perfeita"**. 
 * Eles sofrem de **Racionalidade Limitada**: Um vizinho pode superestimar a própria força, tentar invadir você e falhar miseravelmente.
 * Eles possuem **Memória Histórica**: Se você traiu um aliado 200 anos atrás, o ressentimento diminui com o tempo, mas não some instantaneamente.
 * Eles sofrem **Pressão Estrutural**: O líder NPC pode querer declarar guerra a você, mas se a população dele estiver faminta ou as elites oprimidas (Alta Instabilidade), a sociedade o impedirá de agir. Espione as nações vizinhas através dos painéis de *Inteligência Global* para prever essas falhas.
 
-## 6. Salvamento e Proteção de Dados (Persistência)
+## 7. Salvamento e Proteção de Dados (Persistência)
 
 O jogo foi projetado para rodar localmente no seu navegador.
 *   **Autosave:** O jogo salva a si mesmo automaticamente a cada 5 ciclos (5 segundos).
@@ -70,7 +85,7 @@ O jogo foi projetado para rodar localmente no seu navegador.
 
 ---
 
-## 7. Guia para o Criador / Testador (Uso do Painel Dev)
+## 8. Guia para o Criador / Testador (Uso do Painel Dev)
 
 Ao rodar o jogo localmente com `npm run dev`, você terá acesso ao **Painel de Depuração** no canto inferior da tela. Este painel existe apenas para testar sistemas sem precisar esperar horas.
 

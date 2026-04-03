@@ -1,6 +1,7 @@
 ﻿import type { DomainEvent, EventLogEntry } from "../../models/events";
 import type { GameState } from "../../models/game-state";
 import type { SimulationSystem } from "../tick-pipeline";
+import type { StaticWorldData } from "../../models/static-world-data";
 
 interface EventDescriptor {
   title: string;
@@ -50,7 +51,7 @@ function describeNpcDecision(event: DomainEvent, state: GameState): EventDescrip
   };
 }
 
-function describeEvent(event: DomainEvent, state: GameState): EventDescriptor {
+function describeEvent(event: DomainEvent, state: GameState, staticData: StaticWorldData): EventDescriptor {
   switch (event.type) {
     case "economy.food_shortage": {
       const actor = kingdomName(state, event.actorKingdomId);
@@ -70,6 +71,15 @@ function describeEvent(event: DomainEvent, state: GameState): EventDescriptor {
         severity: "warning",
         suggestedAction: "Use a ação Pacificar na região crítica e reduza pressão fiscal.",
         groupKey: `population.unrest_warning|${event.actorKingdomId ?? "none"}`
+      };
+    }
+    case "population.extinction": {
+      const regionName = String(event.payload.regionName ?? "região");
+      return {
+        title: "Colapso Demográfico",
+        details: `A população de ${regionName} foi extinta pela fome. O território foi devolvido à natureza selvagem.`,
+        severity: "critical",
+        suggestedAction: "Aumente a produção de alimentos para evitar novas extinções."
       };
     }
     case "technology.completed": {
@@ -139,9 +149,15 @@ function describeEvent(event: DomainEvent, state: GameState): EventDescriptor {
     case "war.started": {
       const actor = kingdomName(state, event.actorKingdomId);
       const target = kingdomName(state, event.targetKingdomId);
+      const attackers = event.payload.attackers as string[];
+      const defenders = event.payload.defenders as string[];
+      let extra = "";
+      if (attackers && defenders && (attackers.length > 1 || defenders.length > 1)) {
+          extra = " Alianças e vassalos foram arrastados para o conflito!";
+      }
       return {
         title: "Guerra declarada",
-        details: `${actor} iniciou guerra contra ${target}.`,
+        details: `${actor} iniciou guerra contra ${target}.${extra}`,
         severity: "critical",
         suggestedAction: "Priorize orçamento militar e prepare defesa de fronteira."
       };
@@ -198,6 +214,17 @@ function describeEvent(event: DomainEvent, state: GameState): EventDescriptor {
         groupKey: "world.activity_summary"
       };
     }
+    case "automation.build_structure": {
+      const actor = kingdomName(state, event.actorKingdomId);
+      const bType = String(event.payload.buildingType);
+      const rName = staticData.definitions[String(event.payload.regionId)]?.name ?? "região";
+      const bName = bType === "market" ? "Mercado" : bType === "barracks" ? "Quartel" : bType === "monastery" ? "Mosteiro" : bType === "university" ? "Universidade" : "Fortaleza";
+      return {
+        title: "Infraestrutura Automatizada",
+        details: `${actor} concluiu a construção de um(a) ${bName} em ${rName}.`,
+        severity: "info"
+      };
+    }
     default:
       return {
         title: "Evento estratégico",
@@ -226,7 +253,7 @@ export function createEventLogSystem(maxEntries = 180, dedupeWindowMs = 45_000):
       const mergedLog = [...context.nextState.events];
 
       for (const event of context.events) {
-        const descriptor = describeEvent(event, context.nextState);
+        const descriptor = describeEvent(event, context.nextState, context.staticData);
         const groupKey = buildGroupKey(event, descriptor.groupKey);
         const regionId = typeof event.payload.regionId === "string" ? event.payload.regionId : undefined;
 

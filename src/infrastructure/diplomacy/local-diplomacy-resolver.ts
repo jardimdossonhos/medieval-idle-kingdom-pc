@@ -1,4 +1,4 @@
-﻿﻿import type { DiplomacyResolver, NpcDecision } from "../../core/contracts/services";
+﻿﻿﻿﻿import type { DiplomacyResolver, NpcDecision } from "../../core/contracts/services";
 import type { BilateralRelation, Treaty } from "../../core/models/diplomacy";
 import { DiplomaticRelation, TreatyType } from "../../core/models/enums";
 import type { GameState, KingdomState } from "../../core/models/game-state";
@@ -340,6 +340,20 @@ export class LocalDiplomacyResolver implements DiplomacyResolver {
         registerPairTreaty(state, actor.id, target.id, TreatyType.Tribute, now, now + DEFAULT_TREATY_DURATION_MS, {
           tributeRate: 0.1
         });
+        break;
+      }
+      case "exigir_vassalagem": {
+        actorRelation.score.fear = roundTo(clamp(actorRelation.score.fear + 0.15, 0, 1));
+        targetRelation.score.fear = roundTo(clamp(targetRelation.score.fear + 0.2, 0, 1));
+        targetRelation.grievance = roundTo(clamp(targetRelation.grievance + 0.15, 0, 1));
+
+        registerPairTreaty(state, actor.id, target.id, TreatyType.Vassalage, now, null, {
+          overlordId: actor.id,
+          vassalId: target.id,
+          tributeRate: 0.15
+        });
+        ensureRelation(actor, target.id).status = DiplomaticRelation.Vassal;
+        ensureRelation(target, actor.id).status = DiplomaticRelation.Overlord;
         break;
       }
       case "proposta_paz": {

@@ -429,6 +429,9 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
     const WATER_COLOR = "#6b8696";
     const WATER_OPACITY = 0.55;
 
+    // Wrapper data-driven para contornar o bug do MapLibre de avaliar feature-state em propriedades mistas
+    const TRANSPARENT_OUTLINE: any = ["case", ["==", ["get", "isWater"], true], "rgba(0,0,0,0)", "rgba(0,0,0,0)"];
+
     switch (this.layerMode) {
       case "owner":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", ["case", ["==", ["get", "isWater"], true], WATER_COLOR, ["coalesce", ["feature-state", "ownerColor"], "#8d816e"]]);
@@ -449,7 +452,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           ]
         ]);
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", ["case", ["==", ["get", "isWater"], true], WATER_OPACITY, 0.9]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", TRANSPARENT_OUTLINE);
         break;
       case "war":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
@@ -466,7 +469,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           0.95,
           0.75
         ]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", TRANSPARENT_OUTLINE);
         break;
       case "religion":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
@@ -485,7 +488,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           1,
           0.9
         ]]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", TRANSPARENT_OUTLINE);
         break;
       case "diplomacy":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
@@ -498,7 +501,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           "#8d816e"  // Neutro
         ]);
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", ["case", ["==", ["get", "isWater"], true], WATER_OPACITY, 0.85]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", TRANSPARENT_OUTLINE);
         break;
       case "economy":
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-color", [
@@ -515,7 +518,7 @@ export class MapLibreWorldRenderer implements GameMapRenderer {
           ]
         ]);
         this.map.setPaintProperty(FILL_LAYER_ID, "fill-opacity", ["case", ["==", ["get", "isWater"], true], WATER_OPACITY, 0.85]);
-        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", "rgba(0,0,0,0)");
+        this.map.setPaintProperty(FILL_LAYER_ID, "fill-outline-color", TRANSPARENT_OUTLINE);
         break;
     }
   }

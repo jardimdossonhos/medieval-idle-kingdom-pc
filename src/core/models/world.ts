@@ -1,5 +1,5 @@
 import type { KingdomId, Point2D, RegionId, ReligionId } from "./types";
-import { BiomeType } from "./enums";
+import { BiomeType, BuildingType } from "./enums";
 import type { WorldReligion } from "./religion";
 
 export type RegionZone =
@@ -42,6 +42,7 @@ export interface RegionState {
   minorityShare?: number;
   faithUnrest: number;
   actionCooldowns?: Record<string, number>;
+  buildings?: BuildingType[]; // Matriz de edifícios construídos nos Slots locais
 }
 
 export interface StrategicRoute {

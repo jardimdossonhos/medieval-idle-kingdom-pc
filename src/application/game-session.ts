@@ -11,7 +11,7 @@ import type {
 } from "../core/contracts/game-ports";
 import { getTechnologyNode, isTechnologyAvailable, listAvailableTechnologyNodes, listTechnologyNodes, selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../core/data/technology-tree";
 import { createEmptyStock } from "../core/models/economy";
-import { AutomationLevel, DiplomaticRelation, ReligiousPolicy, ResourceType, TechnologyDomain, TreatyType } from "../core/models/enums";
+import { AutomationLevel, DiplomaticRelation, ReligiousPolicy, ResourceType, TechnologyDomain, TreatyType, BuildingType, MinisterRole, MinisterPersonality } from "../core/models/enums";
 import type { BudgetPriority, TaxPolicy } from "../core/models/economy";
 import type { ClockService, DiplomacyResolver, EventBus, WarResolver } from "../core/contracts/services";
 import type { CommandLogEntry, SnapshotReason, StateSnapshot } from "../core/models/commands";
@@ -22,6 +22,7 @@ import type { StaticWorldData } from "../core/models/static-world-data";
 import { buildStateHash } from "../core/utils/state-fingerprint";
 import { hashDeterministic } from "../core/utils/stable-hash";
 import { TickPipeline, type SimulationSystem } from "../core/simulation/tick-pipeline";
+import { generateRoutineAdvice } from "../core/simulation/systems/council-system";
 import { WORLD_DEFINITIONS_V1 } from "./boot/generated/world-definitions-v1";
 import { AUTOSAVE_SLOT_ID, MANUAL_SLOT_ID } from "../infrastructure/persistence/save-slots";
 
@@ -44,7 +45,7 @@ export interface GameSessionDeps {
 
 type StateListener = (state: GameState) => void;
 
-export type DiplomaticActionType = "alliance" | "non_aggression" | "peace" | "tribute" | "embargo" | "war";
+export type DiplomaticActionType = "alliance" | "non_aggression" | "peace" | "tribute" | "embargo" | "war" | "demand_vassalage";
 export type ReligiousActionType = "send_missionaries";
 
 export type RegionActionType = "invest_agriculture" | "invest_infrastructure" | "garrison" | "pacify" | "change_capital" | "colonize" | "exodus";
@@ -307,6 +308,212 @@ export class GameSession {
     this.recordPlayerCommand("expansion.automation", { level });
     this.persistCurrent();
     this.emitState();
+  }
+
+  setConstructionAutomation(level: AutomationLevel): void {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    player.administration.automation.construction = level;
+
+    this.appendActionLog("Automação de construções atualizada", `Nível definido para ${level}.`, "info");
+    this.recordPlayerCommand("construction.automation", { level });
+    this.persistCurrent();
+    this.emitState();
+  }
+
+  toggleGlobalAutomation(active: boolean): void {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const auto = player.administration.automation;
+
+    auto.globalToggleActive = active;
+
+    if (active) {
+      auto.previousState = {
+        economy: auto.economy,
+        construction: auto.construction || AutomationLevel.Manual,
+        defense: auto.defense,
+        diplomacyReactive: auto.diplomacyReactive,
+        expansion: auto.expansion,
+        technology: auto.technology
+      };
+
+      auto.economy = AutomationLevel.NearlyAutomatic;
+      auto.construction = AutomationLevel.NearlyAutomatic;
+      auto.defense = AutomationLevel.NearlyAutomatic;
+      auto.diplomacyReactive = AutomationLevel.NearlyAutomatic;
+      auto.expansion = AutomationLevel.Assisted; // Migração só possui Manual ou Assistida
+      auto.technology = AutomationLevel.NearlyAutomatic;
+    } else if (auto.previousState) {
+      Object.assign(auto, auto.previousState);
+    }
+
+    this.appendActionLog("Modo Automático Total", active ? "Ativado" : "Desativado", "info");
+    this.persistCurrent();
+    this.emitState();
+  }
+
+  public hireMinister(candidateId: string): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const admin = player.administration;
+
+    admin.candidatePool = admin.candidatePool || [];
+    admin.council = admin.council || {};
+
+    const candidateIndex = admin.candidatePool.findIndex(c => c.id === candidateId);
+    if (candidateIndex === -1) {
+      return { ok: false, message: "Candidato não encontrado." };
+    }
+    
+    const candidate = admin.candidatePool[candidateIndex];
+    if (admin.council[candidate.role]) {
+      return { ok: false, message: `O cargo de ${candidate.role} já está ocupado.` };
+    }
+
+    admin.candidatePool.splice(candidateIndex, 1);
+    admin.council[candidate.role] = candidate;
+    
+    this.appendActionLog("Novo Conselheiro", `${candidate.name} foi nomeado para o cargo de ${candidate.role}.`, "info");
+    this.recordPlayerCommand("council.hire", { candidateId, role: candidate.role });
+    this.persistCurrent();
+    this.emitState();
+    
+    return { ok: true, message: "Conselheiro contratado." };
+  }
+
+  public fireMinister(role: MinisterRole): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const admin = player.administration;
+
+    admin.candidatePool = admin.candidatePool || [];
+    admin.council = admin.council || {};
+
+    const minister = admin.council[role];
+    if (!minister) {
+      return { ok: false, message: "Nenhum ministro neste cargo." };
+    }
+
+    delete admin.council[role];
+    minister.loyalty = Math.max(0, minister.loyalty - 25);
+    admin.candidatePool.push(minister);
+
+    this.appendActionLog("Conselheiro Demitido", `${minister.name} foi removido do cargo de ${role}.`, "warning");
+    this.recordPlayerCommand("council.fire", { role });
+    this.persistCurrent();
+    this.emitState();
+
+    return { ok: true, message: "Conselheiro demitido." };
+  }
+
+  public resolveCouncilAdvice(adviceId: string, optionId: string): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const advice = player.administration.activeAdvice.find(a => a.id === adviceId);
+    
+    if (!advice || advice.resolved) return { ok: false, message: "Aviso inválido ou já resolvido." };
+    
+    const option = advice.options?.find(o => o.id === optionId);
+    if (!option) return { ok: false, message: "Opção inválida." };
+
+    // Aplica Lealdade do Ministro baseado se você concordou ou contrariou ele
+    const minister = player.administration.council[advice.role];
+    if (minister) {
+      minister.loyalty = this.clamp(minister.loyalty + option.loyaltyImpact, 0, 100);
+    }
+
+    advice.resolved = true; // Marca a lei como julgada
+    
+    // O Orquestrador executa fisicamente a proposta do Ministro
+    switch (option.actionType) {
+      case "update_tax":
+        this.updateTaxPolicy(option.payload);
+        break;
+      case "update_budget":
+        this.updateBudgetPriority(option.payload);
+        break;
+      case "set_religious_policy":
+        this.setReligiousPolicy(option.payload.policy);
+        break;
+      case "change_salary":
+        if (minister) {
+          minister.salary = Math.max(0, minister.salary + option.payload.amount);
+          this.appendActionLog("Reajuste Salarial", `O salário de ${minister.name} foi alterado para ${minister.salary} Ouro.`, "info");
+        }
+        break;
+      case "build_structure": {
+        const targetRegion = option.payload.regionId || player.capitalRegionId;
+        const res = this.executeBuildStructure(targetRegion, option.payload.buildingType);
+        if (!res.ok) {
+           return { ok: false, message: `O decreto falhou: ${res.message}` };
+        }
+        break;
+      }
+      case "declare_war": {
+        const res = this.executeDiplomaticAction(option.payload.targetId, "war");
+        if (!res.ok) {
+           return { ok: false, message: `Falha ao declarar guerra: ${res.message}` };
+        }
+        break;
+      }
+      case "ignore":
+        this.appendActionLog("Decisão do Conselho", `O governante rejeitou o conselho de ${minister?.name ?? 'um ministro'}.`, "warning");
+        this.persistCurrent();
+        this.emitState();
+        break;
+    }
+    return { ok: true, message: `Decisão tomada: ${option.label}` };
+  }
+
+  public interactMinister(role: MinisterRole, interaction: "praise" | "threaten" | "consult" | "raise_salary" | "cut_salary"): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const minister = player.administration.council[role];
+
+    if (!minister) return { ok: false, message: "Nenhum ministro neste cargo." };
+
+    if (interaction === "praise") {
+      const isGreedy = minister.personality === MinisterPersonality.Greedy;
+      const isZealous = minister.personality === MinisterPersonality.Zealous;
+      const boost = isGreedy ? 1 : isZealous ? 8 : 5;
+      
+      minister.loyalty = this.clamp(minister.loyalty + boost, 0, 100);
+      const response = isGreedy ? "Palavras não enchem cofres, mas ele agradece." : "Ele se sente honrado pelo reconhecimento.";
+      this.appendActionLog("Ministro Elogiado", `Você elogiou o trabalho de ${minister.name}. ${response}`, "info");
+      
+    } else if (interaction === "raise_salary") {
+      minister.salary += 5;
+      const boost = minister.personality === MinisterPersonality.Greedy ? 18 : minister.personality === MinisterPersonality.Zealous ? 4 : 10;
+      minister.loyalty = this.clamp(minister.loyalty + boost, 0, 100);
+      this.appendActionLog("Aumento Salarial", `O salário de ${minister.name} subiu para ${minister.salary} Ouro.`, "info");
+
+    } else if (interaction === "cut_salary") {
+      if (minister.salary < 5) return { ok: false, message: "O salário já está no mínimo." };
+      minister.salary -= 5;
+      const penalty = minister.personality === MinisterPersonality.Greedy ? -30 : minister.personality === MinisterPersonality.Zealous ? -8 : -15;
+      minister.loyalty = this.clamp(minister.loyalty + penalty, 0, 100);
+      this.appendActionLog("Corte Salarial", `O salário de ${minister.name} caiu para ${minister.salary} Ouro. Ele não gostou.`, "warning");
+      
+    } else if (interaction === "threaten") {
+      minister.loyalty = this.clamp(minister.loyalty - 20, 0, 100);
+      // O medo faz a corrupção administrativa cair temporariamente!
+      player.administration.corruption = this.clamp(player.administration.corruption - 0.05, 0, 1); 
+      this.appendActionLog("Ministro Ameaçado", `Você ameaçou ${minister.name}. A corrupção caiu pelo medo, mas a lealdade dele despencou.`, "warning");
+      
+    } else if (interaction === "consult") {
+      const advice = generateRoutineAdvice(minister, state, player.id);
+      if (advice) {
+        player.administration.activeAdvice.unshift(advice);
+        if (player.administration.activeAdvice.length > 15) player.administration.activeAdvice.pop();
+      } else {
+        return { ok: false, message: "Este conselheiro não tem sugestões no momento." };
+      }
+    }
+
+    this.persistCurrent();
+    this.emitState();
+    return { ok: true, message: interaction === "consult" ? "Conselho adicionado aos relatórios." : "Ação realizada." };
   }
 
   setReligiousPolicy(policy: ReligiousPolicy): void {
@@ -624,6 +831,46 @@ export class GameSession {
     };
   }
 
+  public getBuildingConfig(building: BuildingType): { label: string; effectStr: string; cost: Partial<Record<ResourceType, number>> } {
+    switch (building) {
+      case BuildingType.Market:
+        return { label: "Mercado", effectStr: "+25% Ouro local", cost: { [ResourceType.Gold]: 300, [ResourceType.Wood]: 150 } };
+      case BuildingType.Barracks:
+        return { label: "Quartel", effectStr: "+25% Recrutas (Manpower)", cost: { [ResourceType.Gold]: 200, [ResourceType.Iron]: 100, [ResourceType.Wood]: 100 } };
+      case BuildingType.Monastery:
+        return { label: "Mosteiro", effectStr: "+Fé passiva e Proteção contra Cismas", cost: { [ResourceType.Gold]: 250, [ResourceType.Wood]: 200, [ResourceType.Faith]: 50 } };
+      case BuildingType.University:
+        return { label: "Universidade", effectStr: "Acelera Pesquisa Nacional", cost: { [ResourceType.Gold]: 400, [ResourceType.Wood]: 200 } };
+      case BuildingType.Fortress:
+        return { label: "Fortaleza", effectStr: "Mitiga Devastação e Instabilidade", cost: { [ResourceType.Gold]: 500, [ResourceType.Wood]: 300, [ResourceType.Iron]: 200 } };
+    }
+  }
+
+  public executeBuildStructure(regionId: string, buildingType: BuildingType): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const region = state.world.regions[regionId];
+
+    if (!region || region.ownerId !== player.id) return { ok: false, message: "Você só pode construir em seus próprios territórios." };
+    
+    region.buildings = region.buildings || [];
+    if (region.buildings.length >= 2) return { ok: false, message: "Esta região já atingiu o limite de infraestruturas (2)." };
+    if (region.buildings.includes(buildingType)) return { ok: false, message: "Esta estrutura já existe nesta região." };
+
+    const config = this.getBuildingConfig(buildingType);
+    if (!this.canAfford(config.cost)) return { ok: false, message: "Recursos insuficientes para a construção." };
+
+    this.applyCost(config.cost);
+    region.buildings.push(buildingType);
+
+    this.appendActionLog("Nova Infraestrutura", `${config.label} construído com sucesso em uma de suas províncias.`, "info");
+    this.recordPlayerCommand("region.build", { regionId, buildingType });
+    this.persistCurrent();
+    this.emitState();
+    this.deps.eventBus.publish({ type: "region.building_completed", payload: { regionId, buildingType } } as any);
+    return { ok: true, message: `${config.label} construído com sucesso!` };
+  }
+
   executeRegionAction(regionId: string, actionType: RegionActionType): PlayerActionResult {
     Diagnostic.trace("CMD-REGION", `Intenção de Ação Regional: ${actionType} em ${regionId}`);
     const state = this.requireState();
@@ -718,6 +965,9 @@ export class GameSession {
         region.ownerId = player.id;
         region.controllerId = player.id;
         region.dominantFaith = player.religion.stateFaith;
+        region.dominantShare = 1.0;
+        region.minorityFaith = undefined;
+        region.minorityShare = undefined;
         region.unrest = 0;
         region.devastation = 0;
         
@@ -733,6 +983,9 @@ export class GameSession {
         region.ownerId = player.id;
         region.controllerId = player.id;
         region.dominantFaith = player.religion.stateFaith;
+        region.dominantShare = 1.0;
+        region.minorityFaith = undefined;
+        region.minorityShare = undefined;
         region.unrest = 0;
         region.devastation = 0;
         // Envia o transbordo populacional para o Worker via EventBus
@@ -1259,6 +1512,15 @@ export class GameSession {
         base.cooldownMs = 65_000;
         base.actionPt = "embargo_comercial";
         break;
+      case "demand_vassalage":
+        base.cost = {
+          [ResourceType.Legitimacy]: 15,
+          [ResourceType.Gold]: 50
+        };
+        base.chance = this.clamp(0.1 + fear * 0.65 + (1 - trust) * 0.1, 0.05, 0.85);
+        base.cooldownMs = 120_000;
+        base.actionPt = "exigir_vassalagem";
+        break;
       case "war": {
         const attacker = state.kingdoms[playerId];
         const defender = state.kingdoms[targetId];
@@ -1692,8 +1954,8 @@ export class GameSession {
     let processedTicks = 0;
     let currentState = state;
     
-    // Fatia a progressão em pacotes curtos. Evita que a Thread tranque e exiba "Página Não Respondendo"
-    const CHUNK_SIZE = 500;
+    // Fatia a progressão em pacotes curtos. Evita que a Thread tranque.
+    const CHUNK_SIZE = 50; // Reduzido drasticamente para não asfixiar a UI
 
     while (processedTicks < ticksToSimulate) {
       const ticksThisChunk = Math.min(CHUNK_SIZE, ticksToSimulate - processedTicks);
@@ -1707,8 +1969,9 @@ export class GameSession {
       currentState = batchResult.state;
       processedTicks += ticksThisChunk;
       
-      // Cede a CPU de volta ao Navegador para ele respirar e animar telas de loading
-      await new Promise(resolve => setTimeout(resolve, 0));
+      // Cede a CPU de volta ao Navegador por 10ms para repintar a barra de loading
+      // e impedir o aviso de [Violation] setInterval took X ms.
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
 
     if (ecsBackup) {
@@ -1724,15 +1987,15 @@ export class GameSession {
 
   private selectOfflineCoarseStep(ticks: number): number {
     if (ticks >= 10_000) {
-      return 8;
+      return 20; // Pulo grosseiro de tempo para simular ausências extremas
     }
 
     if (ticks >= 6_000) {
-      return 6;
+      return 10;
     }
 
     if (ticks >= 3_000) {
-      return 4;
+      return 5;
     }
 
     if (ticks >= 1_500) {

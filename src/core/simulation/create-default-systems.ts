@@ -3,6 +3,7 @@ import type { StaticWorldData } from "../models/static-world-data";
 import type { RegionDefinition } from "../models/world";
 import type { SimulationSystem } from "./tick-pipeline";
 import { createAdministrationSystem } from "./systems/administration-system";
+import { createCouncilSystem } from "./systems/council-system";
 import { createAutomationSystem } from "./systems/automation-system";
 import { createDisasterSystem } from "./systems/disaster-system";
 import { createDiplomacySystem } from "./systems/diplomacy-system";
@@ -31,12 +32,13 @@ export function createDefaultSimulationSystems(services: SimulationServices): Si
   return [
     createMigrationSystem(services.staticData, services.orderedDefinitions),
     createDisasterSystem(),
-    createAutomationSystem(),
+    createAutomationSystem(services.orderedDefinitions),
     createEconomySystem(),
     createPopulationSystem(),
     createMilitarySystem(services.orderedDefinitions),
     createReligionSystem(),
     createAdministrationSystem(),
+    createCouncilSystem(),
     createTechnologySystem(),
     createDiplomacySystem(services.diplomacyResolver),
     createNpcDecisionSystem(services.npcDecisionService, services.diplomacyResolver, services.warResolver),

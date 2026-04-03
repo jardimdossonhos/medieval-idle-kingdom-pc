@@ -1121,3 +1121,91 @@ Documentado em `ARCHITECTURE.md` (Seção 6.9). Implementado com sucesso via sis
 **2. Alvos do Modo Deus:** O God Mode foi expandido com um seletor dinâmico de Reinos. O desenvolvedor agora pode injetar recursos, ditar apocalipses ou forçar crescimentos em qualquer NPC específico do mapa, facilitando testes isolados.
 **3. UX de Boot e Tempo Ausente:** Corrigido o travamento no carregamento de saves com longo tempo de inatividade. O navegador agora respira com um `setTimeout(50ms)` antes de processar o catch-up offline, e o botão de carregamento reflete o status verdadeiro (se fará cálculo de tempo ausente ou não). O jogo agora inicia estritamente pausado após carregamentos.
 **Status:** Funcionalidades de auditoria validadas. O problema do carregamento estático foi extinto. Arquitetura pronta para prosseguir com a Etapa 2 da Religião (Atrito).
+
+---
+
+## Entrada: 76
+
+**Data:** 03/04/2024
+
+### Bug: Amnésia Dinâmica e o Crash da Religião Customizada
+Ao fundar uma religião (Etapa 1), o jogo rodava perfeitamente. No entanto, após um *Save* ou ao passar de *Tick*, a UI travava com `TypeError: Cannot read properties of undefined` no renderizador de religião.
+**Análise (Engenharia):** A função clonadora `cloneGameStateForSimulation` (chamada a cada Tick pela física) fazia uma cópia rasa e estática do `WorldState`, omitindo o dicionário `religions` introduzido na atualização mais recente. O ECS literalmente "deletava" as religiões recém-criadas da RAM.
+**Ação:** O clonador foi reescrito para incluir o dicionário de religiões dinâmicas via `structuredClone`. O problema foi definitivamente sanado e uma regra de precaução foi gravada no `CODEBASE_MAP.md`.
+
+---
+
+## Entrada: 77
+
+**Data:** 03/04/2024
+
+### Violação de Arquitetura Limpa (Botão "Nova Campanha" quebrado)
+O botão de Iniciar Novo Jogo falhava ao invocar `clearAll is not a function`.
+**Causa Raiz:** O orquestrador (`main.ts`) burlava a Interface oficial do `SaveRepository` tentando coagir o repositório nativo com um cast ilegal `(as any).clearAll()`. Na fase 6 (Desktop), migramos o banco de IndexedDB para WebFS nativo de pasta Windows, que rejeitou a coerção.
+**Ação Aplicada:** Erradicação de `any`. O código agora respeita estritamente o contrato `listSlots()` seguido de um loop iterativo em `deleteSlot(slotId)`. Compatibilidade multiplataforma (Web/Desktop) restaurada.
+
+---
+
+## Entrada: 78
+
+**Data:** 03/04/2024
+
+### UX Aprimorada: Estabilidade do Modal e Ativação do Fanatismo
+1. **O Modal Flutuante:** A Janela de forjar religião era cortada pelo *scroll* de fundo do navegador. Resolvido aplicando uma trava geométrica `overflow: hidden` na tag `body` através da classe `.is-modal-open` ativada por JS no evento de clique do Orquestrador.
+2. **A Ação Inerte:** O jogo exibia a política "Fanática", mas ela não gerava efeito no motor ECS. Refatoramos o `religion-system.ts` para capturar a enum `ReligiousPolicy.Zealous` e multiplicar a "Pressão de Conversão Interna" por 3x, conectando a decisão à mecânica pura.
+
+---
+
+## Entrada: 79
+
+**Data:** 03/04/2024
+
+### Etapa 3 da Religião: Cismas, Heresias e a Osmose de Fronteira
+Com a customização pronta, o motor precisava punir rupturas culturais.
+1. **Guerra Civil Religiosa:** O ECS cruza a genealogia das fés (`parentReligionId`). Se a província for Herege da fé mãe ou fé estatal, o motor de tensões aplica um multiplicador punitivo de **250%** no `unrest`, gerando fogueiras e crises no país.
+2. **Diplomacia do Ódio:** O `local-diplomacy-resolver` ataca relações diplomáticas cujos reinos passem pelo Cisma. A *Confiança* despenca e o *Agravo* sobe passivamente todo ciclo.
+3. **A Mecânica de Osmose:** Adicionada difusão cultural natural no mapa. A cada 5 ciclos (Gating Temporal de CPU), religiões vizinhas exercem atrito umas sobre as outras. Fés fanáticas escoam pelas bordas de vizinhos tolerantes sem a necessidade de missionários ativos, gerando uma malha social orgânica e viva.
+
+---
+
+## Entrada: 80
+
+**Data:** 03/04/2024
+
+### Bug Histórico: "Teleporting Conquest" e a Extinção Demográfica
+O Exame Holter detectou uma falha inadmissível de *Game Design*: Tribos do Nilo (África) atacaram e capturaram territórios dos Clãs Xia (China) na Era da Aurora.
+**Análise:** A IA (`utility-npc-decision-service.ts`) operava como um radar global (onisciente), e o Motor de Batalha (quando não achava uma borda de contato) instaciava a guerra via Teletransporte para a capital inimiga.
+**Ação de Geometria Euclidiana:** 
+1. Injetamos a `StaticWorldData` na IA. Criou-se a função O(1) de Distância Cartesiana (`getDistance`). A partir de agora, as nações só avaliam inimizade num raio de **15.0 graus** (Alcance Logístico Inicial), blindando a simulação histórica (Guerra Naval futura cuidará do resto).
+2. **Colapso Ambiental:** Adicionado ao `migration-system` a regra de Extinção. Se uma província cai a menos de 15 habitantes vivos, a administração perece, zera-se o lixo matemático do ECS, e a propriedade do hexágono volta oficialmente a ser `k_nature` (Terra Selvagem).
+
+---
+
+## Entrada: 81
+
+**Data:** 03/04/2024
+
+### Auditoria Restrita: TS Linter Zero e Renderizador WebGL
+**1. Sanitização TS:** Corrigido o aviso `TS6133` (variável `actor` declarada e não lida em `event-log-system.ts`). A base de código permanece blindada sob regra de "No Unused Locals".
+**2. Resiliência Visual:** Validação de que a camada de Orquestração Gráfica (`HybridMapRenderer`) é perfeitamente elástica. Caso falhe em acessar o *WebGPU/WebGL Context* (ex: VMs sem drivers de vídeo, Sandboxing rígido), ela aciona instataneamente o fallback estático de Canvas (`PixiJS`), mantendo a física e o Motor ECS inabaláveis por baixo.
+
+---
+
+## Entrada: 82
+
+**Data:** [DATA_ATUAL]
+
+### Bug de Game Design: O Loop do Pânico e a Burocracia Cega do Conselho
+**Sintoma:** O Chanceler disparava eventos repetitivos de "Ameaça de Guerra" pedindo aumento de orçamento militar. Se o jogador aceitasse, ele continuava pedindo indefinidamente. Além disso, a IA sugeria construção de defesas em locais ineficientes ou sem contexto tático, agindo como um burocrata de planilhas e não um estrategista.
+
+**Análise:** 
+1. **Falta de Idempotência:** A IA avaliava o gatilho da crise, mas não verificava se as ações corretivas já haviam sido aplicadas (falta de consciência de contexto).
+2. **Cegueira Geográfica:** O Conselho desconhecia a estrutura de hexágonos do mapa e as fronteiras reais.
+
+**Ação de Engenharia (Cérebro Geográfico e Obras Públicas):**
+1. **Idempotência (Consciência de Estado):** Adicionada checagem no `council-system.ts`. Se um orçamento já foi elevado, o ministro suprime o botão e altera a narrativa para um *Relatório de Status* tranquilizador, quebrando o loop infinito de *spam*.
+2. **Estrategista Geográfico:** A `StaticWorldData` foi acoplada ao sistema. A IA agora varre todas as províncias, identifica quem é o maior rival diplomático e localiza o hexágono exato de contato (fronteira ativa).
+3. **Construção Contextual:** Ação do Conselho ampliada para abarcar `build_structure`. Ao detectar perigo, o ministro sugere a construção de uma **Fortaleza** ou **Quartel** focados *diretamente na região ameaçada*.
+4. **Correções no Linter:** Os parâmetros ociosos e blocos sintáticos cortados durante os *refactorings* da `GameSession` e `council-system.ts` (erros TS2339 e TS6133) foram higienizados e realinhados para garantir compilação segura.
+
+**Status:** O Sistema de Conselho atua agora de forma orgânica e cirúrgica, provendo UX avançada e tutorando as defesas do jogador com base na realidade geográfica do simulador. Fim dos loops repetitivos.

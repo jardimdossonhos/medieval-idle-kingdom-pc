@@ -1,4 +1,4 @@
-﻿﻿# Epochs Idle
+﻿# Epochs Idle
 
 Browser-first grand strategy idle game architecture focused on local simulation depth.
 
@@ -6,7 +6,7 @@ Browser-first grand strategy idle game architecture focused on local simulation 
 
 - Stage 1 complete: architecture, contracts, domain model, and implementation plan.
 - Stage 2 complete: runtime loop, local persistence, autosave slots, and playable HUD/map shell.
-- Stage 3 in progress: economy/population/technology + religion/administration/war/automation + NPC heuristics.
+- Stage 3 in progress: economy/population/technology + [x]religion/administration/[x]war/automation + [x]NPC heuristics.
 - Milestone M1 complete: world map/state with 200+ countries, owner/unrest/war layers, click-to-select, and zoom/pan.
 - Milestone M2 started: NPC↔NPC decision expansion + aggregated world-activity events.
 

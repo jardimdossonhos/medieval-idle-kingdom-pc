@@ -202,6 +202,28 @@ Para garantir a integridade da base de código e evitar retrabalho, o desenvolvi
 Para auxiliar no balanceamento de longo prazo e limpar a UI para o jogador final, o painel de debug estático será substituído por um **Developer Console ("Modo Deus")** oculto.
 *   **Acesso:** Abordagem "Android-style". O menu é ativado exclusivamente ao clicar rápida e sequencialmente **5 vezes** sobre a label de Versão do jogo na interface.
 *   **Utilidade Estrutural:** O Modo Deus servirá como o grande ambiente de testes para o canal `APPLY_ECS_EFFECTS`.
+
+### 6.13. Dual Engine Architecture (Macro/Micro) e Imersão Tática
+
+**A Grande Visão:** Transformar o simulador em um híbrido perfeito entre Grande Estratégia (Macro) e Tática de Tempo Real (Micro), similar à franquia *Total War* ou *Manor Lords*. Ao dar um zoom profundo em um hexágono ou ao clicar em "Assumir Comando" numa guerra, o jogador transicionará para uma engine gráfica realista onde a vida, economia e combates ocorrem em tempo real na tela.
+
+**Arquitetura Proposta (Motor Duplo):**
+A arquitetura base (MapLibre + ECS Worker) é otimizada para bilhões de cálculos, mas não suporta renderização de agentes individuais (Pathfinding, Animações). Para viabilizar a imersão visual e interatividade fluida sem destruir a performance, o projeto adotará o padrão de **Dual Engine**:
+
+1. **A Fenda no Tempo (Stop-the-World):**
+   * Ao entrar no modo Micro, o Orquestrador (`GameSession`) emite um comando `STOP` incondicional para o WebWorker, congelando a história global (Macro).
+   * O canvas do MapLibre sofre um *fade-out* e é substituído por um novo `<canvas>` baseado em WebGL 2.0 / WebGPU (ex: Babylon.js ou variante 3D/Isométrica), instanciando a arena local.
+2. **Tradução ECS-Visual (Instancing Procedural):**
+   * **Topografia Viva:** O Bioma do ECS (ex: "Deserto") dita a geração do chão. Se o array do ECS possuir `BuildingType.Market`, a engine constrói feiras 3D/2D na tela automaticamente.
+   * **Instanced Rendering:** Para suportar exércitos de 20.000 homens sem travar a CPU, a engine visual usará Instancing. O jogo não renderizará 20.000 IA separadas; 1 modelo visual pode representar "100 homens" (Batalhões formados), como clássicos de estratégia de alta densidade.
+   * **Pathfinding Desacoplado:** A IA dos camponeses e soldados locais utilizará NavMesh (A-Star / Recast Navigation) calculado estritamente sobre a malha da arena atual.
+3. **O Retorno Geopolítico (Resolução de Conflitos):**
+   * Após o jogador finalizar a intervenção (ex: comandar suas tropas à vitória, gerenciar fazendas locais e fechar o zoom), a engine visual é destruída, expurgando agressivamente o lixo da memória RAM.
+   * Um empacotador coleta as interações realizadas na sessão e formula um Delta (ex: *Jogador perdeu 340 soldados, matou 1200, saqueou 50 Ouro*).
+   * O Orquestrador traduz esse Delta em um único pacote `APPLY_ECS_EFFECTS` e envia ao WebWorker.
+   * O Orquestrador emite `START`. O mapa global ressurge com as fronteiras atualizadas e o tempo histórico volta a correr exatamente de onde parou.
+4. **Desafio de Engenharia (Asset Streaming):** 
+   * O maior gargalo não será processamento, mas I/O (Download de Imagens/Modelos 3D). O jogo exigirá uma pipeline de *Lazy-Loading* (carregamento preguiçoso). Texturas de alta qualidade, sons e escudos só devem ser baixados em *background* no cache do navegador quando a frente de guerra estiver se aproximando do jogador, mascarando a tela de Loading para garantir fluidez total.
 *   **Capacidades Planejadas:**
     *   **Recursos & Demografia:** Injeção massiva ou dizimação para engatilhar cenários de crise ou testar transbordos.
     *   **Meta & Tempo:** Desbloqueio imediato de toda a árvore de Tecnologias, saltos de Eras e manipulação de saltos no relógio da simulação (Time Travel).
@@ -275,25 +297,14 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
 
 ### 6.4. Reforma do Sistema de Religião
 
-*   **Problema Identificado:** O sistema de religião atual é passivo e carece de profundidade estratégica e impacto direto no jogo.
-*   **Solução:** Transformar a religião em um sistema ativo de poder, influência e risco, com escolhas significativas para o jogador.
-*   **Plano de Implementação:**
-    1.  **Escolha e Consequências Dinâmicas:**
-        *   Implementar a ação de "Adotar Religião Estatal" na `GameSession`.
-        *   Mudar de religião causará um impacto imediato e severo na `estabilidade` e `legitimidade`, além de redefinir as relações diplomáticas com base na nova fé.
-        *   Introduzir a opção "Irreligioso/Ateu" como uma escolha estratégica, que desabilita a geração de `Fé` mas concede bônus em outras áreas (ex: tecnologia).
-    2.  **Rivalidade e Influência Inter-religiosa:**
-        *   Adicionar uma matriz de `hostilidade` nas definições de cada religião para modelar o quão incompatíveis são com outras fés.
-        *   O `DiplomacySystem` usará essa matriz para aplicar modificadores negativos às relações entre reinos de fés rivais.
-    3.  **Bônus por Expansão (Poder da Fé):**
-        *   O `EconomySystem` (ou um novo `ReligionBonusSystem`) calculará bônus passivos de `Fé` e `Legitimidade` com base na porcentagem de regiões do império que seguem a religião estatal.
-    4.  **Sistema de Bênçãos e Maldições (Poderes Divinos):**
-        *   Criar um novo `ReligionPowerSystem` na `TickPipeline`.
-        *   Permitir que o jogador gaste grandes quantidades de `Fé` para ativar "Poderes Divinos" como ações especiais.
-        *   **Bênçãos (em si mesmo):** Bônus diretos (ex: Bênção da Colheita) utilizando Padrão *Optimistic UI* na interface para mitigar a latência entre a ação do clique e a resposta do Worker.
-        *   **Maldições (em um rival):** Efeitos negativos temporários na estabilidade, economia ou população de um inimigo. Isso utilizará o canal de comunicação `APPLY_ECS_EFFECTS` para o Worker.
-    5.  **Integração com a Árvore Tecnológica:**
-        *   A árvore de tecnologia religiosa se tornará crucial, desbloqueando novos Poderes Divinos, aumentando a eficácia dos missionários e podendo mitigar as penalidades de conversão religiosa.
+**Status:** `Concluído / Estável`
+O sistema de religião foi reescrito de um módulo passivo para um vetor violento de poder, influência e risco geopolítico.
+
+*   **A Forja de Religiões Customizadas:** O jogador pode fundar sua própria fé, combinando Dogmas (com limite orçamentário) que fornecem bônus ou ônus (pontos extras). O Dicionário de religiões tornou-se dinâmico no `WorldState`.
+*   **Cismas e Heresias:** Se a religião dominante de uma província for "filha" (ou "mãe") da fé do estado, isso é classificado como um Cisma. O ódio sectário aplica um multiplicador de **250%** no crescimento da Instabilidade (`unrest`), forçando guerras civis se não for expurgado.
+*   **Ódio Diplomático Externo:** O sistema de IA `local-diplomacy-resolver` detecta cismas geopolíticos. Reinos de fés derivadas odeiam-se passivamente, destruindo `trust` e aumentando `rivalry` a cada ciclo.
+*   **Automação e Políticas:** O clero pode ser definido como *Tolerante*, *Ortodoxo* ou *Fanático*. Fanáticos possuem bônus imenso de pressão de conversão, combatendo heresias instantaneamente.
+*   **Osmose de Fronteira:** O ECS calcula difusão cultural natural. Religiões "vazam" pelas fronteiras organicamente a cada 5 ciclos, anulando a necessidade de micro-gerenciar missionários a todo segundo.
 
 ### 6.5. Reforma do Sistema de Diplomacia
 
@@ -397,6 +408,19 @@ O mapa é a principal ferramenta de visualização do jogador. As seguintes cama
     *   **Automação (Modo Idle de Fim de Jogo):** A introdução de caixas de seleção estratégicas (`[x] Priorizar Defesa`, `[x] Focar Expansão`). Desbloqueáveis como "Burocracia de Estado" em Eras avançadas, permitindo que a própria thread principal faça o microgerenciamento dos *sliders* a cada ciclo, abraçando a natureza *Idle* do projeto.
     *   **Feedback Visual Imediato (Regra Global de UX):** Todas as ações do jogador que interagem com o Worker (e, portanto, possuem latência) devem seguir o padrão de *Optimistic UI*. A interface deve reagir instantaneamente (ex: desabilitando ou mudando a cor de um botão) para confirmar ao jogador que seu comando foi recebido, evitando cliques múltiplos e frustração.
 
+### 6.8.2. Padronização Visual e Paleta de Cores (Theming)
+
+Para garantir legibilidade absoluta independentemente de temas (Claro/Escuro) ou navegadores, o projeto adota regras estritas de renderização visual no DOM:
+
+*   **Proibição de Hexadecimais Hardcoded:** É terminantemente proibido injetar cores literais (ex: `#ffffff`, `#bbb`) diretamente no TypeScript para estilizar textos secundários ou de custos. Isso quebra a legibilidade se o componente-pai (ex: um `<button>`) usar o fundo padrão claro do sistema operacional.
+*   **Uso de Opacidade (Opacity):** Para criar hierarquia visual (textos secundários, dicas, custos), deve-se usar a propriedade CSS `opacity: 0.7` ou similar. Isso força o texto a herdar a cor natural do elemento pai e apenas deixá-lo translúcido, garantindo leitura perfeita tanto no claro quanto no escuro.
+*   **A Paleta Baseada em Eras (CSS Variables):** A aplicação deve ser orquestrada por Variáveis CSS no arquivo `global.css` (ex: `var(--primary-color)`, `var(--bg-surface)`). O Game Design exige que a paleta do jogo sofra **mutações estéticas** à medida que as eras avançam:
+    *   *Era da Aurora / Idade da Pedra:* Tons terrosos, verde-musgo, marrom, UI brutalista.
+    *   *Idade Média:* Dourado (`#d4af37`), vermelho escuro, interfaces que rementem a pergaminhos e pedras.
+    *   *Era Industrial:* Cinza chumbo, ferrugem, cores de fumaça e aço.
+    *   *Era da Informação:* Modo escuro cibernético, azul neon, interfaces de vidro (glassmorphism).
+Ao delegar as cores para variáveis CSS em vez de injetá-las no TypeScript, garantimos que o `GameSession` possa alterar o tema inteiro do jogo ao disparar a transição de Era com um simples comando `document.body.setAttribute('data-era', 'industrial')`.
+
 ### 6.8.1. Padrão de Desacoplamento de Renderização (Render Decoupling)
 
 Para garantir que o processamento do motor WebWorker (que roda em alta frequência a 4 ticks por segundo reais) não asfixie a *Main Thread* da interface do usuário (causando *Input Lag*, perdas de frames e congelamentos do navegador), a arquitetura visual é obrigada a adotar os três pilares de proteção a seguir:
@@ -422,6 +446,12 @@ Esta seção detalha as soluções para falhas de game design que criam cenário
     *   **Custo:** A ação custará apenas um valor em Comida (para a jornada), sem exigir Ouro ou Legitimidade.
     *   **Efeito:** O hexágono de origem é abandonado e retorna ao estado de "Terra Selvagem" (`k_nature`). A totalidade da população e dos recursos do jogador é transferida para o novo hexágono, que se torna a nova capital.
     *   **Impacto no Design:** Isso não apenas resolve o softlock, mas também adiciona uma camada de jogabilidade historicamente coerente, simulando o comportamento nômade de caçadores-coletores em busca de terras mais férteis.
+
+#### 6.9.3. A Lei do Alcance Logístico e o Colapso Demográfico
+
+*   **Problema (Teleporting Conquest / Bordergore):** Na fase inicial, a Inteligência Artificial era "onisciente". Uma tribo na África podia declarar guerra e roubar um hexágono de uma tribo na Ásia.
+*   **Solução Planejada (Alcance Logístico):** Implementou-se a *Geometria Euclidiana Cartesiana*. O `utility-npc-decision-service` e o `local-war-resolver` agora medem a distância em Graus Geográficos entre as Capitais. Na Antiguidade, ataques além de `15.0 graus` são invalidados. Frentes de batalha abstratas agora buscam estritamente o hexágono mais próximo fisicamente do atacante.
+*   **Colapso Demográfico (Devolução à Natureza):** Se o atrito de guerra, fome extrema ou pragas dizimar a população de um hexágono abaixo de 15 pessoas, ocorre a extinção. O território colapsa administrativamente, limpa os recursos fantasmas do Worker e o controle volta a ser Terra Selvagem (`k_nature`), permitindo a resselvagização da região.
 
 ### 6.10. Configuração de Campanha Avançada (A Sala de Guerra)
 
@@ -495,6 +525,8 @@ Para aumentar o fator de imersão, o planejamento futuro inclui a adição de el
     2.  **Consultoria (Semi-Autônomo):** O conselheiro monitora o império, detecta problemas e formula "Projetos de Ação". Ele emite alertas propondo soluções prontas (ex: *"Senhor, preparei um decreto para reduzir os impostos e evitar uma rebelião no sul"*). O jogador tem a palavra final: Aprovar ou Recusar o pacote.
     3.  **Microgerenciamento (Sem Autonomia):** O poder está totalmente centralizado no jogador. O conselheiro atua apenas como um Analista de Dados. Ele diagnostica a situação, explica as consequências das ordens diretas do jogador e reage narrativamente (elogiando decisões que batem com seu perfil ou reclamando amargamente de estratégias que ele considera falhas).
 *   **Vetor de Tutoria (Explicabilidade Histórica):** Os relatórios dos conselheiros quebrarão a "caixa preta" do jogo. Eles traduzirão os cálculos do Worker em texto humano, informando ao jogador exatamente por que uma revolta aconteceu ou por que a economia travou com base nas decisões tomadas em ciclos passados.
+*   **Consciência de Contexto (Idempotência):** A IA dos conselheiros lê o estado atual. Se um orçamento já foi maximizado ou uma política foi adotada, o ministro cessa os pedidos (fim do *spam*) e passa a emitir apenas "Relatórios de Status" narrativos, empurrando a história para frente.
+*   **Consciência Geográfica (Estrategistas):** Conselheiros militares e diplomáticos cruzam dados com a `StaticWorldData`. Eles procuram proativamente por fronteiras vulneráveis (hexágonos que tocam inimigos) e propõem ações físicas (ex: `Erguer Fortaleza`) no ponto exato de invasão, substituindo reações genéricas por táticas precisas.
 *   **Desbloqueio Histórico:** Este sistema não estará disponível na Era da Aurora (Tribal). Ele será desbloqueado quando a civilização atingir o tamanho de um "Reino" formal (Idade do Bronze/Ferro), exigindo tecnologias de Burocracia Estatal para ser suportado.
 
 ## 7. Problemas Anteriores (Resolvidos)

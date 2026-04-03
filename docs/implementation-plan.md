@@ -11,10 +11,10 @@
 ## Stage 3 - Core systems
 
 - [x] Economy/resource production and upkeep formulas
-- Religion cohesion and conversion pressure
+- [x] Religion cohesion, conversion pressure, custom beliefs and border osmosis
 - Diplomacy matrix, treaties, coalition pressure
-- War resolution loop with supply and distance modifiers
-- NPC AI heuristic layer (personality + context + memory)
+- [x] War resolution loop with supply and logistic distance modifiers
+- [x] NPC AI heuristic layer (personality + context + memory + fog of truth)
 - [x] Automation policies (manual/assisted/almost-auto)
 
 ## Stage 4 - Playable UI
@@ -23,7 +23,7 @@
 - Panels: economy, military, diplomacy, religion, tech, administration
 - Message feed with templated narrative events
 - Save manager screen with summaries and restore
-- Risk indicators, tooltips, and advisor hints
+- [x] Risk indicators, tooltips, and advisor hints (Context-Aware Council)
 
 ## Stage 5 - Refinement
 

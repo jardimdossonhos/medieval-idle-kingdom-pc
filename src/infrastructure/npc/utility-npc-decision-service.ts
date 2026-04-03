@@ -1,7 +1,8 @@
-﻿import { NpcArchetype, DiplomaticRelation } from "../../core/models/enums";
+﻿﻿import { NpcArchetype, DiplomaticRelation } from "../../core/models/enums";
 import type { INpcDecisionService, NpcDecision } from "../../core/contracts/services";
 import type { GameState, KingdomState } from "../../core/models/game-state";
 import type { KingdomId, TimestampMs } from "../../core/models/types";
+import type { StaticWorldData } from "../../core/models/static-world-data";
 
 const WAR_COOLDOWN_KEY = "war:declaration";
 
@@ -54,6 +55,13 @@ function getMemoryModifier(actor: KingdomState, targetId: KingdomId, now: Timest
     }
   }
   return totalGrievance;
+}
+
+function getDistance(staticData: StaticWorldData, regionA: string, regionB: string): number {
+  const a = staticData.definitions[regionA]?.center;
+  const b = staticData.definitions[regionB]?.center;
+  if (!a || !b) return Infinity;
+  return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -131,6 +139,8 @@ function scoreOfferAlliance(ctx: ActionContext): number {
 }
 
 export class UtilityNpcDecisionService implements INpcDecisionService {
+  constructor(private readonly staticWorldData: StaticWorldData) {}
+
   decide(state: GameState, actorKingdomId: string, now: TimestampMs): NpcDecision[] {
     const actor = state.kingdoms[actorKingdomId];
 
@@ -144,7 +154,9 @@ export class UtilityNpcDecisionService implements INpcDecisionService {
     }
 
     const potentialTargets = Object.values(state.kingdoms).filter(
-      (kingdom) => kingdom.id !== actor.id && kingdom.id !== "k_nature"
+      (kingdom) => kingdom.id !== actor.id && 
+                   kingdom.id !== "k_nature" &&
+                   getDistance(this.staticWorldData, actor.capitalRegionId, kingdom.capitalRegionId) <= 15.0
     );
 
     const decisions: NpcDecision[] = [];

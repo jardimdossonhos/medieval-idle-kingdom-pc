@@ -10,7 +10,7 @@ import {
   type TechnologyChoice
 } from "./application/game-session";
 import { GodModeConsole } from "./application/god-mode";
-import { AutomationLevel, ReligiousPolicy, ResourceType, TechnologyDomain } from "./core/models/enums";
+import { AutomationLevel, ReligiousPolicy, ResourceType, TechnologyDomain, BuildingType, MinisterRole, MinisterPersonality } from "./core/models/enums";
 import { createDefaultSimulationSystems } from "./core/simulation/create-default-systems";
 import type { SaveSummary } from "./core/contracts/game-ports";
 import type { GameState, KingdomState } from "./core/models/game-state";
@@ -53,7 +53,12 @@ interface UiRefs {
   governmentApplyButton: HTMLButtonElement;
   budgetInputs: Record<string, HTMLInputElement>;
   taxInputs: Record<string, HTMLInputElement>;
+  councilPanel: HTMLElement;
+  councilCandidates: HTMLElement;
+  councilAdvice: HTMLElement;
   expansionAutomationSelect: HTMLSelectElement;
+    constructionAutomationSelect: HTMLSelectElement;
+    globalAutomationToggle: HTMLInputElement;
   techFocusSelect: HTMLSelectElement;
   techAutomationSelect: HTMLSelectElement;
   techHideCompletedToggle: HTMLInputElement;
@@ -415,6 +420,21 @@ async function bootstrapApp(): Promise<void> {
       .tenet-card p { margin: 0; font-size: 0.8rem; color: #9ca3af; line-height: 1.3; }
       .tenet-cost { font-weight: bold; color: #4ade80; font-size: 0.9rem; }
       .tenet-cost.negative { color: #f87171; }
+
+      /* Council Styles */
+      .council-grid, .candidate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+      .rpg-card { background: linear-gradient(145deg, rgba(30,30,35,0.9), rgba(15,15,20,0.95)); border: 1px solid #555; border-radius: 8px; padding: 16px; position: relative; overflow: hidden; box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 4px 10px rgba(0,0,0,0.5); }
+      .rpg-card::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--primary-color, #d4af37); }
+      .rpg-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+      .rpg-header h4 { margin: 0; color: #e5e7eb; font-size: 1.15rem; font-family: serif; text-shadow: 1px 1px 2px #000; }
+      .role-badge { font-size: 0.70rem; text-transform: uppercase; letter-spacing: 1px; background: rgba(212, 175, 55, 0.2); color: #d4af37; padding: 4px 8px; border-radius: 12px; border: 1px solid rgba(212, 175, 55, 0.5); font-weight: bold; }
+      .rpg-desc { font-size: 0.8rem; color: #9ca3af; font-style: italic; margin-bottom: 12px; line-height: 1.4; }
+      .rpg-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem; margin-bottom: 12px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; border: 1px inset #222; }
+      .rpg-stats span { color: #ccc; }
+      .rpg-stats strong { color: #fff; float: right; }
+      .skill-stars { color: #d4af37; letter-spacing: 2px; }
+      .empty-slot { background: rgba(240, 240, 245, 0.95) !important; border: 2px dashed #888 !important; box-shadow: none; }
+      .empty-slot:hover { background: #ffffff !important; border-color: #555 !important; }
     </style>
     <div id="splash-screen" class="splash-overlay">
       <div class="splash-card card">
@@ -586,6 +606,17 @@ async function bootstrapApp(): Promise<void> {
           </div>
           <h3>Automação do Império</h3>
           <div class="form-grid">
+            <label style="grid-column: 1 / -1;" class="inline-check">
+              <input id="global-automation-toggle" type="checkbox">
+              <strong style="color: #4ade80;">Ativar Todas as Automações (Modo Automático Total)</strong>
+            </label>
+            <label>Construções (Edifícios)
+              <select id="construction-automation-select">
+                <option value="manual">Manual (Requer controle)</option>
+                <option value="assisted">Semi-Auto (Proporcional)</option>
+                <option value="nearly_automatic">Automático (IA Contextual)</option>
+              </select>
+            </label>
             <label>Expansão e Migração
               <select id="expansion-automation-select">
                 <option value="manual">Manual (Requer controle)</option>
@@ -593,6 +624,13 @@ async function bootstrapApp(): Promise<void> {
               </select>
             </label>
           </div>
+          <h3 style="margin-top: 2rem; border-top: 1px solid #444; padding-top: 1.5rem;">Conselho Real</h3>
+          <div id="council-panel" class="council-grid"></div>
+          <h3 style="margin-top: 1.5rem;">Candidatos Disponíveis</h3>
+          <div id="council-candidates" class="candidate-grid"></div>
+          <h3 style="margin-top: 1.5rem;">Relatórios do Conselho</h3>
+          <ul id="council-advice" class="list compact"></ul>
+
           <button id="government-apply-btn">Aplicar políticas</button>
         </article>
 
@@ -772,6 +810,9 @@ async function bootstrapApp(): Promise<void> {
     regionInfo: queryElement(appRoot, "#region-info"),
     regionActions: queryElement(appRoot, "#region-actions"),
     governmentApplyButton: queryElement(appRoot, "#government-apply-btn"),
+    councilPanel: queryElement(appRoot, "#council-panel"),
+    councilCandidates: queryElement(appRoot, "#council-candidates"),
+    councilAdvice: queryElement(appRoot, "#council-advice"),
     budgetInputs: {
       economy: queryElement(appRoot, "#budget-economy"),
       military: queryElement(appRoot, "#budget-military"),
@@ -786,6 +827,8 @@ async function bootstrapApp(): Promise<void> {
       tariffRate: queryElement(appRoot, "#tax-tariff")
     },
     expansionAutomationSelect: queryElement(appRoot, "#expansion-automation-select"),
+    constructionAutomationSelect: queryElement(appRoot, "#construction-automation-select"),
+    globalAutomationToggle: queryElement(appRoot, "#global-automation-toggle"),
     techFocusSelect: queryElement(appRoot, "#tech-focus-select"),
     techAutomationSelect: queryElement(appRoot, "#tech-automation-select"),
     techHideCompletedToggle: queryElement(appRoot, "#tech-hide-completed-toggle"),
@@ -1031,7 +1074,7 @@ async function bootstrapApp(): Promise<void> {
   const staticWorldData = createStaticWorldData(WORLD_DEFINITIONS_V1, WORLD_DEFINITIONS_MAP_ID);
 
   const eventBus = new LocalEventBus();
-  const npcDecisionService = new UtilityNpcDecisionService();
+  const npcDecisionService = new UtilityNpcDecisionService(staticWorldData);
   const diplomacyResolver = new LocalDiplomacyResolver();
   const warResolver = new LocalWarResolver(staticWorldData);
   const persistence = createRuntimePersistenceBundle(activeCampaignId, fsDirHandle);
@@ -1142,37 +1185,64 @@ async function bootstrapApp(): Promise<void> {
   };
   let resourcesInitialized = false;
 
+  let syncModifiersTimeout: number | null = null;
+  let pendingStateForSync: GameState | null = null;
+
   // FAGULHA VITAL 3.0: Compila e despacha a soma de todos os bônus tecnológicos para o Motor Matemático
   function syncModifiersToWorker(state: GameState): void {
-    const expectedLength = WORLD_DEFINITIONS_V1.length;
-    const modifiers: Record<string, Float64Array> = {
-      "economy.food_production_multiplier": new Float64Array(expectedLength),
-      "economy.tax_income_multiplier": new Float64Array(expectedLength),
-      "population.growth_rate_multiplier": new Float64Array(expectedLength),
-      "population.carrying_capacity_multiplier": new Float64Array(expectedLength),
-    };
+    pendingStateForSync = state;
+    if (syncModifiersTimeout !== null) return;
+    
+    syncModifiersTimeout = window.setTimeout(() => {
+      syncModifiersTimeout = null;
+      const stateToSync = pendingStateForSync;
+      if (!stateToSync) return;
+      
+      const expectedLength = WORLD_DEFINITIONS_V1.length;
+      const modifiers: Record<string, Float64Array> = {
+        "economy.food_production_multiplier": new Float64Array(expectedLength),
+        "economy.tax_income_multiplier": new Float64Array(expectedLength),
+        "population.growth_rate_multiplier": new Float64Array(expectedLength),
+        "population.carrying_capacity_multiplier": new Float64Array(expectedLength),
+        "military.manpower_modifier": new Float64Array(expectedLength),
+      };
 
-    const kingdomBonuses = new Map<string, Map<string, number>>();
-    for (const kingdomId in state.kingdoms) {
-      kingdomBonuses.set(kingdomId, calculateTechnologyBonuses(state.kingdoms[kingdomId].technology));
-    }
+      const kingdomBonuses = new Map<string, Map<string, number>>();
+      for (const kingdomId in stateToSync.kingdoms) {
+        kingdomBonuses.set(kingdomId, calculateTechnologyBonuses(stateToSync.kingdoms[kingdomId].technology));
+      }
 
-    // Roteia cada Bônus Nacional para as células geográficas que ele governa O(N)
-    for (let i = 0; i < expectedLength; i++) {
-      const regionId = WORLD_DEFINITIONS_V1[i].id;
-      const ownerId = state.world.regions[regionId]?.ownerId;
-      if (ownerId) {
-        const bonuses = kingdomBonuses.get(ownerId);
-        if (bonuses) {
-          modifiers["economy.food_production_multiplier"][i] = bonuses.get("economy.food_production_multiplier") ?? 0;
-          modifiers["economy.tax_income_multiplier"][i] = bonuses.get("economy.tax_income_multiplier") ?? 0;
-          modifiers["population.growth_rate_multiplier"][i] = bonuses.get("population.growth_rate_multiplier") ?? 0;
-          modifiers["population.carrying_capacity_multiplier"][i] = bonuses.get("population.carrying_capacity_multiplier") ?? 0;
+      // Roteia cada Bônus Nacional para as células geográficas que ele governa O(N)
+      for (let i = 0; i < expectedLength; i++) {
+        const regionId = WORLD_DEFINITIONS_V1[i].id;
+        const region = stateToSync.world.regions[regionId];
+        const ownerId = region?.ownerId;
+        if (ownerId) {
+          const bonuses = kingdomBonuses.get(ownerId);
+          if (bonuses) {
+            modifiers["economy.food_production_multiplier"][i] = bonuses.get("economy.food_production_multiplier") ?? 0;
+            modifiers["economy.tax_income_multiplier"][i] = bonuses.get("economy.tax_income_multiplier") ?? 0;
+            modifiers["population.growth_rate_multiplier"][i] = bonuses.get("population.growth_rate_multiplier") ?? 0;
+            modifiers["population.carrying_capacity_multiplier"][i] = bonuses.get("population.carrying_capacity_multiplier") ?? 0;
+            modifiers["military.manpower_modifier"][i] = bonuses.get("military.manpower_modifier") ?? 0;
+          }
+          
+          // Bônus Assímétricos de Edifícios (Locais)
+          if (region.buildings) {
+            for (let b = 0; b < region.buildings.length; b++) {
+               const building = region.buildings[b];
+               if (building === BuildingType.Market) {
+                  modifiers["economy.tax_income_multiplier"][i] += 0.25;
+               } else if (building === BuildingType.Barracks) {
+                  modifiers["military.manpower_modifier"][i] += 0.25;
+               }
+            }
+          }
         }
       }
-    }
 
-    simulationWorker.postMessage({ type: "UPDATE_MODIFIERS", payload: modifiers });
+      simulationWorker.postMessage({ type: "UPDATE_MODIFIERS", payload: modifiers });
+    }, 16);
   }
 
   // Efeito Visual de Feedback (Animação de Pulso de Cores)
@@ -1355,6 +1425,38 @@ async function bootstrapApp(): Promise<void> {
   eventBus.subscribe("war.region_captured", () => {
     const state = session.getState();
     if (state) syncModifiersToWorker(state);
+  });
+
+  eventBus.subscribe("region.building_completed", () => {
+    const state = session.getState();
+    if (state) syncModifiersToWorker(state);
+  });
+
+  eventBus.subscribe("automation.build_structure", (event: any) => {
+    const state = session.getState();
+    if (!state) return;
+    const { regionId, buildingType, cost } = event.payload;
+    const kingdomId = event.actorKingdomId;
+
+    const indices = [REGION_INDEX_MAP.get(state.kingdoms[kingdomId]?.capitalRegionId || "")].filter(i => i !== undefined) as number[];
+    if (indices.length > 0) {
+      for (const [res, val] of Object.entries(cost)) {
+        simulationWorker.postMessage({
+          type: "APPLY_ECS_EFFECTS",
+          payload: { target: res, operation: "subtract", value: val, indices }
+        });
+      }
+    }
+    syncModifiersToWorker(state);
+    if (state.kingdoms[kingdomId]?.isPlayer) {
+      const bName = session.getBuildingConfig(buildingType as BuildingType).label;
+      showToast(`Obras finalizadas: ${bName} em ${staticWorldData.definitions[regionId]?.name || regionId}.`);
+    }
+  });
+
+  eventBus.subscribe("council.advice_issued", (event: any) => {
+    const urgency = event.payload.urgency;
+    showToast(`Novo relatório do Conselho Real ${urgency === 'high' ? 'URGENTE' : ''}!`);
   });
 
   // ALVO B: Ouve eventos da simulação POO e dispara danos instantâneos na Memória ECS (Desastres)
@@ -1869,14 +1971,16 @@ async function bootstrapApp(): Promise<void> {
       if (dominantFaith && stateFaithDef && region.dominantFaith !== player.religion.stateFaith) {
         const isSchism = dominantFaith.parentReligionId === player.religion.stateFaith || stateFaithDef.parentReligionId === region.dominantFaith;
         if (isSchism) {
-          schismWarning = `<br><span style="color: #ff5555; font-size: 0.85em; font-weight: bold; text-shadow: 0 1px 2px #000; display: inline-block; margin-top: 4px;">⚠️ Cisma Ativo (Instabilidade Extrema)</span>`;
+          schismWarning = `<br><span style="background: rgba(255, 60, 60, 0.15); border: 1px solid #ff5555; color: #ff5555; font-size: 0.85em; font-weight: bold; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 6px;">⚠️ Cisma Ativo (Instabilidade Extrema)</span>`;
         }
       }
-      dominantFaithText = `${dominantFaith?.name ?? region.dominantFaith} (${formatNumber(region.dominantShare * 100)}%)${schismWarning}`;
+      const domColor = dominantFaith?.color ?? '#ffffff';
+      dominantFaithText = `<span style="color: ${domColor}; text-shadow: 0 1px 3px rgba(0,0,0,0.9); font-weight: bold;">${dominantFaith?.name ?? region.dominantFaith}</span> (${formatNumber(region.dominantShare * 100)}%)${schismWarning}`;
       
       const minorityFaith = region.minorityFaith ? state.world.religions[region.minorityFaith] : null;
+      const minColor = minorityFaith?.color ?? '#ffffff';
       minorityFaithText = region.minorityFaith && typeof region.minorityShare === "number"
-        ? `${minorityFaith?.name ?? region.minorityFaith} (${formatNumber(region.minorityShare * 100)}%)`
+        ? `<span style="color: ${minColor}; text-shadow: 0 1px 3px rgba(0,0,0,0.9); font-weight: bold;">${minorityFaith?.name ?? region.minorityFaith}</span> (${formatNumber(region.minorityShare * 100)}%)`
         : "Nenhuma";
       manpowerText = formatNumber(currentManpower);
     } else if (isAdjacent) {
@@ -1941,13 +2045,89 @@ async function bootstrapApp(): Promise<void> {
 
         const button = document.createElement("button");
         button.disabled = !isAffordable;
-        button.innerHTML = `<span>${action.label}</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${costStrings.join(", ")}</small>`;
+        button.innerHTML = `<span>${action.label}</span><small style="display:block; font-size:0.75em; opacity:0.75; margin-top:2px;">Custo: ${costStrings.join(", ")}</small>`;
         button.addEventListener("click", () => {
           const result = session.executeRegionAction(selectedRegionId ?? "", action.id);
           showToast(result.message);
         });
         ui.regionActions.appendChild(button);
       }
+
+      // NEW: Building UI
+      const MAX_SLOTS = 2;
+      const buildings = region.buildings || [];
+      
+      const buildingContainer = document.createElement("div");
+      buildingContainer.style.marginTop = "20px";
+      buildingContainer.innerHTML = `<h4 style="margin-top: 0; border-bottom: 1px solid var(--border-color, #ccc); padding-bottom: 5px;">Slots de Infraestrutura (${buildings.length}/${MAX_SLOTS})</h4>`;
+      
+      if (buildings.length > 0) {
+          const list = document.createElement("ul");
+          list.style.listStyle = "none";
+          list.style.padding = "0";
+          list.style.margin = "10px 0";
+          for (const b of buildings) {
+              const config = session.getBuildingConfig(b);
+              const li = document.createElement("li");
+              li.style.background = "var(--bg-secondary, rgba(0,0,0,0.05))";
+              li.style.border = "1px solid var(--border-color, rgba(0,0,0,0.1))";
+              li.style.padding = "8px 12px";
+              li.style.borderRadius = "4px";
+              li.style.marginBottom = "5px";
+              li.style.display = "flex";
+              li.style.justifyContent = "space-between";
+              li.innerHTML = `<strong>${config.label}</strong><span style="opacity: 0.75; font-size: 0.9em;">${config.effectStr}</span>`;
+              list.appendChild(li);
+          }
+          buildingContainer.appendChild(list);
+      } else {
+          const emptyMsg = document.createElement("p");
+          emptyMsg.style.fontSize = "0.85em";
+          emptyMsg.style.opacity = "0.7";
+          emptyMsg.style.fontStyle = "italic";
+          emptyMsg.textContent = "Nenhum edifício construído.";
+          buildingContainer.appendChild(emptyMsg);
+      }
+
+      if (buildings.length < MAX_SLOTS) {
+          const buildGrid = document.createElement("div");
+          buildGrid.className = "action-grid";
+          buildGrid.style.marginTop = "10px";
+
+          const availableBuildings = Object.values(BuildingType).filter(b => !buildings.includes(b as BuildingType));
+          
+          for (const b of availableBuildings) {
+              const config = session.getBuildingConfig(b as BuildingType);
+              const canAfford = session.canAfford(config.cost);
+              const costStrings = Object.entries(config.cost).map(([res, val]) => `${val} ${resourceLabels[res as ResourceType]}`);
+              
+              const btn = document.createElement("button");
+              btn.disabled = !canAfford;
+              btn.style.textAlign = "left";
+              btn.style.padding = "10px";
+              btn.style.display = "flex";
+              btn.style.flexDirection = "column";
+              btn.style.gap = "4px";
+              btn.innerHTML = `
+                <strong style="display: block; margin-bottom: 2px;">Erguer ${config.label}</strong>
+                <span style="font-size: 0.8em; display: block; opacity: 0.85; margin-bottom: 2px;">Efeito: ${config.effectStr}</span>
+                <span style="font-size: 0.75em; display: block; opacity: 0.65;">Custo: ${costStrings.join(", ")}</span>
+              `;
+              
+              btn.addEventListener("click", () => {
+                  const res = session.executeBuildStructure(selectedRegionId!, b as BuildingType);
+                  showToast(res.message);
+                  if (res.ok) {
+                      renderRegionInfo(session.getState());
+                  }
+              });
+              
+              buildGrid.appendChild(btn);
+          }
+          buildingContainer.appendChild(buildGrid);
+      }
+
+      ui.regionActions.appendChild(buildingContainer);
     } else if (region.ownerId === "k_nature") {
       const isNomad = Object.keys(state.world.regions).filter(r => state.world.regions[r].ownerId === player.id).length === 1;
 
@@ -1967,11 +2147,11 @@ async function bootstrapApp(): Promise<void> {
         if (actionId === "colonize") extraCost = " | -50 Pop. da Capital";
         if (actionId === "exodus") extraCost = " | Abandona território";
 
-        button.innerHTML = `<span>${config.label}</span><small style="display:block; font-size:0.75em; color:#bbb; margin-top:2px;">Custo: ${costStrings.join(", ")}${extraCost}</small>`;
+        button.innerHTML = `<span>${config.label}</span><small style="display:block; font-size:0.75em; opacity:0.75; margin-top:2px;">Custo: ${costStrings.join(", ")}${extraCost}</small>`;
         
         if (!isAdjacent) {
           button.disabled = true;
-          button.innerHTML += `<small style="display:block; font-size:0.75em; color:#ff5555; margin-top:2px;">Requer fronteira vizinha</small>`;
+          button.innerHTML += `<small style="display:block; font-size:0.75em; opacity:0.9; font-weight:bold; margin-top:2px;">Requer fronteira vizinha</small>`;
         }
 
         button.addEventListener("click", () => {
@@ -1989,7 +2169,7 @@ async function bootstrapApp(): Promise<void> {
       const warBtn = document.createElement("button");
       warBtn.className = "danger";
       warBtn.disabled = !canWar;
-      warBtn.innerHTML = `<span>Declarar Guerra</span><small style="display:block; font-size:0.8em; color:#e5e7eb; margin-top:4px;">Custo: ${warCostStrings.join(", ")}</small><small style="display:block; font-size:0.8em; color:#ff6b6b; margin-top:2px;">Apoio do Conselho: ${formatNumber(warConfig.chance * 100)}%</small>`;
+      warBtn.innerHTML = `<span>Declarar Guerra</span><small style="display:block; font-size:0.8em; opacity:0.8; margin-top:4px;">Custo: ${warCostStrings.join(", ")}</small><small style="display:block; font-size:0.8em; opacity:0.9; margin-top:2px; font-weight:bold;">Apoio do Conselho: ${formatNumber(warConfig.chance * 100)}%</small>`;
       warBtn.addEventListener("click", () => {
         const result = session.executeDiplomaticAction(targetId, "war");
         showToast(result.message);
@@ -2001,7 +2181,7 @@ async function bootstrapApp(): Promise<void> {
       const canMissionary = session.canAfford(relConfig.cost);
       const relBtn = document.createElement("button");
       relBtn.disabled = !canMissionary;
-      relBtn.innerHTML = `<span>Enviar Missionários</span><small style="display:block; font-size:0.8em; color:#e5e7eb; margin-top:4px;">Custo: ${relCostStrings.join(", ")}</small><small style="display:block; font-size:0.8em; color:#60a5fa; margin-top:2px;">Eficácia da Conversão: ${formatNumber(relConfig.chance * 100)}%</small>`;
+      relBtn.innerHTML = `<span>Enviar Missionários</span><small style="display:block; font-size:0.8em; opacity:0.8; margin-top:4px;">Custo: ${relCostStrings.join(", ")}</small><small style="display:block; font-size:0.8em; opacity:0.9; margin-top:2px; font-weight:bold;">Eficácia da Conversão: ${formatNumber(relConfig.chance * 100)}%</small>`;
       relBtn.addEventListener("click", () => {
         const result = session.executeReligiousAction(targetId, "send_missionaries");
         showToast(result.message);
@@ -2028,6 +2208,167 @@ async function bootstrapApp(): Promise<void> {
     ui.budgetInputs.administration.value = String(round(player.economy.budgetPriority.administration));
     ui.budgetInputs.technology.value = String(round(player.economy.budgetPriority.technology));
     ui.expansionAutomationSelect.value = player.administration.automation.expansion;
+    ui.constructionAutomationSelect.value = player.administration.automation.construction ?? "manual";
+    ui.globalAutomationToggle.checked = !!player.administration.automation.globalToggleActive;
+  }
+
+  function renderCouncil(state: GameState): void {
+    const player = getPlayerKingdom(state);
+    const admin = player.administration;
+
+    const council = admin.council || {};
+    const candidatePool = admin.candidatePool || [];
+    const activeAdvice = admin.activeAdvice || [];
+
+    const ALL_ROLES = [MinisterRole.Steward, MinisterRole.Marshal, MinisterRole.Chancellor, MinisterRole.Chaplain, MinisterRole.Scholar];
+
+    const roleTitles: Record<string, string> = {
+      [MinisterRole.Steward]: "Intendente Real",
+      [MinisterRole.Marshal]: "Lorde Marechal",
+      [MinisterRole.Chancellor]: "Grão-Chanceler",
+      [MinisterRole.Chaplain]: "Alto Capelão",
+      [MinisterRole.Scholar]: "Sábio da Corte"
+    };
+
+    const roleDesc: Record<string, string> = {
+      [MinisterRole.Steward]: "Gerencia a economia, recolhe impostos e planeja obras.",
+      [MinisterRole.Marshal]: "Comanda os exércitos, o recrutamento e as defesas.",
+      [MinisterRole.Chancellor]: "Lida com aliados, pactos e declarações de guerra.",
+      [MinisterRole.Chaplain]: "Garante a ortodoxia, combate heresias e gera estabilidade.",
+      [MinisterRole.Scholar]: "Foca o império em ciência e avanço cultural veloz."
+    };
+
+    const persTitles: Record<string, string> = {
+      [MinisterPersonality.Militarist]: "Militarista",
+      [MinisterPersonality.Pacifist]: "Pacifista",
+      [MinisterPersonality.Greedy]: "Ganancioso",
+      [MinisterPersonality.Zealous]: "Zeloso",
+      [MinisterPersonality.Progressive]: "Progressista",
+      [MinisterPersonality.Cautious]: "Cauteloso"
+    };
+
+    const persDesc: Record<string, string> = {
+      [MinisterPersonality.Militarist]: "Foca verbas no exército; detesta acordos de paz.",
+      [MinisterPersonality.Pacifist]: "Busca diplomacia; pede demissão em guerras contínuas.",
+      [MinisterPersonality.Greedy]: "Extorce o povo; tolerante à corrupção se for bem pago.",
+      [MinisterPersonality.Zealous]: "Odeia heresias; exige inquisições e zelo cego.",
+      [MinisterPersonality.Progressive]: "Foca orçamento em Universidades e tecnologias.",
+      [MinisterPersonality.Cautious]: "Acumula cofres cheios; teme invasões e instabilidade."
+    };
+
+    // Renderiza o conselho atual
+    ui.councilPanel.innerHTML = "";
+    for (const role of ALL_ROLES) {
+      const minister = council[role];
+      if (minister) {
+        const card = document.createElement("div");
+        card.className = "rpg-card";
+        card.innerHTML = `
+          <div class="rpg-header">
+            <h4>${minister.name}</h4>
+            <span class="role-badge">${roleTitles[role]}</span>
+          </div>
+          <p class="rpg-desc">${roleDesc[role]}</p>
+          <div class="rpg-stats">
+            <div><span>Origem:</span> <br><strong>${minister.origin}</strong></div>
+            <div><span>Perfil:</span> <br><strong title="${persDesc[minister.personality]}">${persTitles[minister.personality]}</strong></div>
+            <div><span>Talento:</span> <br><strong class="skill-stars">${'★'.repeat(minister.skillLevel)}${'☆'.repeat(5 - minister.skillLevel)}</strong></div>
+            <div><span>Salário:</span> <br><strong>${formatNumber(minister.salary ?? 0)} Ouro</strong></div>
+          </div>
+          <div style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; color: #fff; font-weight: bold;">
+              <span>Lealdade do Titular</span>
+              <span class="${riskClass(minister.loyalty / 100)}">${formatNumber(minister.loyalty, 1)}%</span>
+            </div>
+            <div style="width: 100%; background: #222; height: 6px; border-radius: 3px; overflow: hidden; border: 1px solid #111;">
+              <div style="width: ${minister.loyalty}%; background: ${minister.loyalty > 70 ? '#4ade80' : minister.loyalty > 30 ? '#facc15' : '#f87171'}; height: 100%;"></div>
+            </div>
+          </div>
+          <div class="actions" style="flex-wrap: wrap; gap: 6px; margin-top: 10px;">
+            <button class="primary" style="flex: 1; font-size: 0.8rem;" data-interact-role="${role}" data-interact-action="consult">Conselhos</button>
+            <button style="flex: 1; font-size: 0.8rem;" data-interact-role="${role}" data-interact-action="praise">Elogiar</button>
+            <button style="flex: 1; font-size: 0.8rem;" data-interact-role="${role}" data-interact-action="raise_salary">+ Ouro</button>
+            <button style="flex: 1; font-size: 0.8rem;" data-interact-role="${role}" data-interact-action="cut_salary">- Ouro</button>
+            <button class="danger" style="flex: 1; font-size: 0.8rem;" data-interact-role="${role}" data-interact-action="threaten">Ameaçar</button>
+            <button class="danger" style="flex: 1; font-size: 0.8rem; border-color: #f00;" data-fire-role="${role}">Demitir</button>
+          </div>
+        `;
+        ui.councilPanel.appendChild(card);
+      } else {
+        ui.councilPanel.innerHTML += `
+          <div class="rpg-card empty-slot">
+            <div class="rpg-header" style="border-bottom-color: #ccc;">
+              <h4 style="color: #333; text-shadow: none;">Pasta sem Titular</h4>
+              <span class="role-badge" style="color: #444; border-color: #888; background: #e2e2e2; font-weight: bold; filter: none; opacity: 1;">${roleTitles[role]}</span>
+            </div>
+            <p class="rpg-desc" style="color: #555; opacity: 1;">${roleDesc[role]}</p>
+            <div style="text-align: center; padding: 20px 0; color: #b91c1c; font-size: 0.85rem; font-weight: bold; border: 1px dashed #b91c1c; border-radius: 4px; background: rgba(220, 38, 38, 0.05); margin-top: 15px;">
+              Gargalo Administrativo!<br>
+              <span style="font-weight: normal; color: #666; font-size: 0.75rem;">Contrate um talento abaixo para esta função.</span>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // Renderiza os candidatos do mercado
+    ui.councilCandidates.innerHTML = "";
+    if (candidatePool.length === 0) {
+      ui.councilCandidates.innerHTML = `<p class="hint-text">A corte está vazia. Novos talentos procurarão o palácio em breve.</p>`;
+    } else {
+      for (const candidate of candidatePool) {
+        const card = document.createElement("div");
+        card.className = "rpg-card";
+        card.innerHTML = `
+          <div class="rpg-header">
+            <h4>${candidate.name}</h4>
+            <span class="role-badge">${roleTitles[candidate.role]}</span>
+          </div>
+          <p class="rpg-desc">${roleDesc[candidate.role]}</p>
+          <div class="rpg-stats">
+            <div><span>Origem:</span> <br><strong>${candidate.origin}</strong></div>
+            <div><span>Perfil:</span> <br><strong title="${persDesc[candidate.personality]}">${persTitles[candidate.personality]}</strong></div>
+            <div><span>Talento:</span> <br><strong class="skill-stars">${'★'.repeat(candidate.skillLevel)}${'☆'.repeat(5 - candidate.skillLevel)}</strong></div>
+            <div><span>Pedida:</span> <br><strong style="color: #4ade80;">${formatNumber(candidate.salary ?? 0)} Ouro</strong></div>
+          </div>
+          <div class="actions" style="margin-top: 12px;">
+            <button class="primary" style="width: 100%; font-size: 0.9rem;" data-hire-id="${candidate.id}">Nomear para o Conselho</button>
+          </div>
+        `;
+        ui.councilCandidates.appendChild(card);
+      }
+    }
+
+    // Renderiza os conselhos
+    ui.councilAdvice.innerHTML = "";
+    if (activeAdvice.length === 0) {
+      ui.councilAdvice.innerHTML = `<li class="hint-text">Nenhum relatório recente do conselho.</li>`;
+    } else {
+      for (const advice of activeAdvice) {
+        const minister = Object.values(council).find(m => m?.id === advice.ministerId);
+        const item = document.createElement("li");
+        item.className = `event-${advice.urgency === 'high' ? 'critical' : advice.urgency === 'medium' ? 'warning' : 'info'}`;
+        
+        let optionsHtml = "";
+        if (!advice.resolved && advice.options && advice.options.length > 0) {
+          optionsHtml = `<div class="action-grid" style="margin-top: 8px; grid-template-columns: 1fr;">`;
+          for (const opt of advice.options) {
+            const btnClass = opt.loyaltyImpact < 0 ? "danger" : "primary";
+            optionsHtml += `<button class="${btnClass}" style="font-size: 0.85em; padding: 6px 12px; text-align: left;" data-resolve-advice="${advice.id}" data-resolve-option="${opt.id}">📜 ${opt.label}</button>`;
+          }
+          optionsHtml += `</div>`;
+        } else if (advice.resolved) {
+           optionsHtml = `<div style="margin-top: 8px; font-size: 0.8em; color: #888; font-style: italic;">Decisão já tomada pelo monarca.</div>`;
+        }
+
+        item.innerHTML = `
+          <strong>${advice.title} (de ${minister?.name ?? 'Conselho'})</strong>
+          <span>${advice.narrativeText}</span>
+          ${optionsHtml}
+        `;
+        ui.councilAdvice.appendChild(item);
+      }
+    }
   }
 
   function renderTechnologyTree(choices: TechnologyChoice[]): void {
@@ -2332,13 +2673,15 @@ async function bootstrapApp(): Promise<void> {
       const canPeace = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "peace").cost);
       const canTribute = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "tribute").cost);
       const canEmbargo = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "embargo").cost);
+      const canVassalage = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "demand_vassalage").cost);
       const canWar = session.canAfford(session.getDiplomaticConfig(state, player.id, targetId, "war").cost);
       const canMissionary = session.canAfford(session.getReligiousActionConfig(player.id, targetId, "send_missionaries").cost);
 
       actions.appendChild(createDiplomacyActionButton(targetId, "alliance", "Aliança", canAlliance));
       actions.appendChild(createDiplomacyActionButton(targetId, "non_aggression", "Pacto", canPact));
       actions.appendChild(createDiplomacyActionButton(targetId, "peace", "Paz", canPeace));
-      actions.appendChild(createDiplomacyActionButton(targetId, "tribute", "Tributo", canTribute));
+      actions.appendChild(createDiplomacyActionButton(targetId, "tribute", "Tributo Único", canTribute));
+      actions.appendChild(createDiplomacyActionButton(targetId, "demand_vassalage", "Exigir Vassalagem", canVassalage));
       actions.appendChild(createDiplomacyActionButton(targetId, "embargo", "Embargo", canEmbargo));
       actions.appendChild(createDiplomacyActionButton(targetId, "war", "Declarar guerra", canWar));
       actions.appendChild(createReligiousActionButton(targetId, "send_missionaries", "Enviar missionários", canMissionary));
@@ -2741,6 +3084,7 @@ async function bootstrapApp(): Promise<void> {
     renderRiskIndicators(state);
     renderExplainers(state);
     renderRegionInfo(state);
+    renderCouncil(state);
     renderGovernmentInputs(state);
     renderTechnology(state);
     renderReligion(state);
@@ -2838,6 +3182,54 @@ async function bootstrapApp(): Promise<void> {
     const level = ui.expansionAutomationSelect.value as AutomationLevel;
     session.setExpansionAutomation(level);
     showToast(`Automação de Expansão: ${automationLevelLabel(level)}.`);
+  });
+
+  ui.constructionAutomationSelect.addEventListener("change", () => {
+    const level = ui.constructionAutomationSelect.value as AutomationLevel;
+    session.setConstructionAutomation(level);
+    showToast(`Automação de Construção: ${automationLevelLabel(level)}.`);
+  });
+
+  ui.globalAutomationToggle.addEventListener("change", () => {
+    const active = ui.globalAutomationToggle.checked;
+    session.toggleGlobalAutomation(active);
+    showToast(`Modo Automático Total ${active ? "Ativado" : "Desativado"}.`);
+  });
+
+  // Event Delegation para os botões do Conselho
+  appRoot.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const hireId = target.dataset.hireId;
+    const fireRole = target.dataset.fireRole;
+
+    if (hireId) {
+      const result = session.hireMinister(hireId);
+      showToast(result.message);
+    }
+
+    if (fireRole) {
+      const result = session.fireMinister(fireRole as MinisterRole);
+      showToast(result.message);
+    }
+    
+    // Intercepta ações de diálogo e interação
+    const interactRole = target.dataset.interactRole;
+    const interactAction = target.dataset.interactAction;
+    if (interactRole && interactAction) {
+      const result = session.interactMinister(interactRole as MinisterRole, interactAction as any);
+      showToast(result.message);
+    }
+    
+    // Intercepta os cliques nos botões de Projetos de Lei do conselho
+    const btn = target.closest('button');
+    if (btn) {
+      const resolveAdviceId = btn.dataset.resolveAdvice;
+      const resolveOptionId = btn.dataset.resolveOption;
+      if (resolveAdviceId && resolveOptionId) {
+        const result = session.resolveCouncilAdvice(resolveAdviceId, resolveOptionId);
+        showToast(result.message);
+      }
+    }
   });
 
   // Botões de Religião (Poderes Divinos Diretos)

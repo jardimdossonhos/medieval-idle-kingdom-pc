@@ -16,6 +16,13 @@ function faithShare(region: RegionState, faithId: string): number {
 }
 
 function normalizeShares(region: RegionState): void {
+  // FUSÃO DE DADOS FANTASMAS: Impede que a mesma religião seja Maioria e Minoria
+  if (region.minorityFaith && region.minorityFaith === region.dominantFaith) {
+    region.dominantShare += (region.minorityShare ?? 0);
+    region.minorityFaith = undefined;
+    region.minorityShare = undefined;
+  }
+
   region.dominantShare = clamp(region.dominantShare, 0.05, 0.95);
   if (typeof region.minorityShare === "number") {
     region.minorityShare = clamp(region.minorityShare, 0.02, 0.5);
@@ -101,6 +108,7 @@ export function createReligionSystem(): SimulationSystem {
       let eventSeq = 0;
 
       for (const kingdomId of Object.keys(state.kingdoms).sort()) {
+        if (kingdomId === "k_nature") continue;
         const kingdom = state.kingdoms[kingdomId];
         const ownedRegions = getOwnedRegionIds(state, kingdom.id);
         const kingdomFaith = kingdom.religion.stateFaith;

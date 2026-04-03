@@ -1,4 +1,4 @@
-﻿import { ResourceType } from "../../models/enums";
+﻿﻿﻿﻿import { ResourceType, TreatyType } from "../../models/enums";
 import { createEmptyStock } from "../../models/economy";
 import type { SimulationSystem } from "../tick-pipeline";
 import { clamp, createEventId, ensureResourceNonNegative, getOwnedRegionIds, roundTo } from "./utils";
@@ -12,6 +12,7 @@ export function createEconomySystem(): SimulationSystem {
       let eventSeq = 0;
 
       for (const kingdomId of Object.keys(state.kingdoms).sort()) {
+        if (kingdomId === "k_nature") continue;
         const kingdom = state.kingdoms[kingdomId];
         const ownedRegionIds = getOwnedRegionIds(state, kingdom.id);
 
@@ -70,11 +71,20 @@ export function createEconomySystem(): SimulationSystem {
         const legitimacyIncome = roundTo(0.06 + kingdom.stability / 560 + kingdom.legitimacy / 1_200);
 
         const adminPenalty = clamp(kingdom.administration.usedCapacity / Math.max(1, kingdom.administration.adminCapacity), 0.4, 1.9);
+        
+        let councilSalaryTotal = 0;
+        if (kingdom.administration.council) {
+          for (const minister of Object.values(kingdom.administration.council)) {
+            if (minister && minister.salary) councilSalaryTotal += minister.salary;
+          }
+        }
+
         const goldUpkeep = roundTo(
           armyManpower / 8_300 +
             kingdom.administration.usedCapacity * 0.042 +
             kingdom.economy.corruption * 1.8 +
-            adminPenalty * (0.12 - administrationBudgetFactor * 0.04)
+            adminPenalty * (0.12 - administrationBudgetFactor * 0.04) +
+            councilSalaryTotal
         );
         const foodUpkeep = roundTo(kingdom.population.total / 95_000 + armyManpower / 5_500);
         const woodUpkeep = roundTo(armyManpower / 30_000);
@@ -129,6 +139,23 @@ export function createEconomySystem(): SimulationSystem {
             },
             occurredAt: context.now
           });
+        }
+      }
+
+      // Processamento de Tributos Contínuos (Vassalagem)
+      for (const kingdomId of Object.keys(state.kingdoms)) {
+        const kingdom = state.kingdoms[kingdomId];
+        for (const treaty of kingdom.diplomacy.treaties) {
+          if (treaty.type === TreatyType.Vassalage && treaty.terms.vassalId === kingdom.id) {
+             const overlord = state.kingdoms[treaty.terms.overlordId as string];
+             if (overlord) {
+                 const tribute = roundTo(kingdom.economy.incomePerTick[ResourceType.Gold] * (treaty.terms.tributeRate as number || 0.15));
+                 kingdom.economy.incomePerTick[ResourceType.Gold] -= tribute;
+                 kingdom.economy.stock[ResourceType.Gold] = Math.max(0, kingdom.economy.stock[ResourceType.Gold] - tribute);
+                 overlord.economy.incomePerTick[ResourceType.Gold] += tribute;
+                 overlord.economy.stock[ResourceType.Gold] += tribute;
+             }
+          }
         }
       }
     }

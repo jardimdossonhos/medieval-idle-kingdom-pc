@@ -82,10 +82,35 @@ export enum VictoryPath {
   DynasticLegacy = "dynastic_legacy"
 }
 
+export enum BuildingType {
+  Market = "market",         // Foco em Ouro (+25% Renda na província)
+  Barracks = "barracks",     // Foco em Recrutas (+25% Manpower base)
+  Monastery = "monastery",   // Foco em Fé (+Fé passiva e -Tensão Religiosa)
+  University = "university", // Foco em Tecnologia (+Pesquisa passiva)
+  Fortress = "fortress"      // Foco em Defesa (-Instabilidade e +Resistência a Cercos)
+}
+
 export enum BiomeType {
   Ocean = "ocean",
   Desert = "desert",
   Tundra = "tundra",
   Temperate = "temperate",
   Tropical = "tropical"
+}
+
+export enum MinisterRole {
+  Steward = "steward",       // Controla Economia e Construções
+  Marshal = "marshal",       // Controla Exército e Defesa
+  Chancellor = "chancellor", // Controla Expansão e Diplomacia
+  Chaplain = "chaplain",     // Controla Religião e Apaziguamento
+  Scholar = "scholar"        // Controla Foco Tecnológico
+}
+
+export enum MinisterPersonality {
+  Militarist = "militarist",   // Foca em guerra e alta prontidão
+  Pacifist = "pacifist",       // Evita conflito, busca alianças
+  Greedy = "greedy",           // Foca em impostos altos e mercados
+  Zealous = "zealous",         // Foca em conversão e repressão a heresias
+  Progressive = "progressive", // Foca em inovação e universidades
+  Cautious = "cautious"        // Foca em reservas altas (comida/ouro) e fortificações
 }
