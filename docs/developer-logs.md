@@ -1209,3 +1209,50 @@ O Exame Holter detectou uma falha inadmissível de *Game Design*: Tribos do Nilo
 4. **Correções no Linter:** Os parâmetros ociosos e blocos sintáticos cortados durante os *refactorings* da `GameSession` e `council-system.ts` (erros TS2339 e TS6133) foram higienizados e realinhados para garantir compilação segura.
 
 **Status:** O Sistema de Conselho atua agora de forma orgânica e cirúrgica, provendo UX avançada e tutorando as defesas do jogador com base na realidade geográfica do simulador. Fim dos loops repetitivos.
+
+---
+
+## Entrada: 83
+
+**Data:** [DATA_ATUAL]
+
+### Decisão Arquitetural: O Salto para RPG e a Dinastia Viva
+O Conselho e a IA diplomática revelaram uma lacuna narrativa: a falta de "rostos" e a eternidade artificial dos NPCs. Foi decidido formalmente iniciar a implementação do **Sistema de Personagens**.
+Em vez de ministros descartáveis, teremos entidades de RPG com Fichas de Atributos, Traits limitadas (max 5) e Level. O Monarca (O Jogador) e os NPCs vizinhos também participarão dessa teia.
+
+Para respeitar diferentes estilos de jogadores e não forçar o "Permadeath" em quem busca uma experiência de construção relaxante (Idle puro), foi adicionada a funcionalidade **Modo Imortalidade (Jogo Eterno)** na `GameMeta` e na Interface. Isso permite congelar o envelhecimento, garantindo o investimento nas Skills do conselho.
+
+---
+
+## Entrada: 84
+
+**Data:** [DATA_ATUAL]
+
+### Milestone Emocional: Modelagem Base e o Panteão Lendário (Tributo)
+Como núcleo da Fase 2 do sistema de Personagens, a árvore de dados foi expandida com as estruturas de Ficha de RPG (Character, Stats e Affinities). Durante a idealização, foi adicionada a mecânica do "Panteão Lendário" em `legendaries.ts` como tributo à linhagem e família do autor. A inserção desses personagens como Semi-Deuses narrativos cria um end-game riquíssimo e foi atrelada ao **Modo Deus**, permitindo que o desenvolvedor invoque sua família diretamente para a corte para testes de balanceamento de poder.
+
+---
+
+## Entrada: 85
+
+**Data:** [DATA_ATUAL]
+
+### Aprofundamento do Game Design: Jittering, Agência de NPCs e o Fim do Game Over
+**1. O Problema da Síndrome do Tick 0:** O sistema de Conselho operava em um *loop* fixo a cada 5 ticks. Isso causava um disparo simultâneo de relatórios (spam) gerando extrema previsibilidade (cara de máquina). 
+*Correção Arquitetural:* Implementada a técnica de **Jittering Temporal**. O motor agora utiliza um *offset* calculado pelo Hash do ID do Ministro `(tick + offset) % 7`. As mensagens passaram a ser entregues em "dias" diferentes da semana, eliminando a barreira artificial de simulação. Essa regra será aplicada a todos os futuros NPCs.
+
+**2. O Primeiro-Ministro e a Cadeira do Jogador:** A mecânica de RPG exige que o jogador não seja mais um cursor onipresente. O monarca e os ministros ganharam atributos reais (`CharacterStats`). O Cargo `PrimeMinister` foi formalizado na base de dados para atuar como o filtro centralizador de corrupção. A `GameSession` recebeu o método atômico `reassignMinister`, viabilizando a troca/swap dinâmico de pastas políticas sem perda de dados.
+
+**3. A Saga do Usurpador e a Agência:** Formalizado o planejamento da `AgencyEngine`. Personagens agora carregam `personalWealth` e `influence`. A perda de todos os domínios rebaixará o jogador para `Wanderer`, liberando o *Loop* de Jogabilidade de Subordinado (assumir uma pasta no reino de um NPC aliado). Isso prepara a base matemática para a eclosão da *Guerra Civil* (Golpe de Estado) através de *Minigames* (Dual Engine) em fases futuras.
+
+**4. Correções de Compilação (Linter):** Realizada limpeza cirúrgica de chaves perdidas no `event-log-system.ts` (`TS1128`) e a satisfação da tipagem estrita de `Character` na geração do Panteão Lendário no `main.ts`, provendo os valores de fortuna e capital político para as entidades invocadas pelo painel *God Mode*. A compilação está verde novamente.
+
+---
+
+## Entrada: 86
+
+**Data:** [DATA_ATUAL]
+
+### Implementação da Sala de Guerra (Character Creator)
+Alinhado à decisão de aprofundar as mecânicas de RPG (Opção 1), o painel de "Nova Campanha" foi destruído e reconstruído. 
+O jogo agora possui um criador de personagem com 25 pontos de distribuição de Habilidades, limites matemáticos (1 a 10) e botões de Arquétipos que auto-alocam os pontos (Guerreiro, Sábio, Diplomata). O Orquestrador intercepta a resposta desse formulário antes do Bootstrap e injeta o Jogador (`Character`) na ramificação `world.characters` como um `ruler` Lendário da Facção escolhida. O campo `rulerId` foi introduzido na base `KingdomState` garantindo vínculo vitalício no banco de dados.

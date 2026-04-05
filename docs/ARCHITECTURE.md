@@ -1,4 +1,4 @@
-﻿﻿# Arquitetura - Epochs Idle
+﻿# Arquitetura - Epochs Idle
 
 Este documento serve como a "memória" central do projeto, registrando os princípios arquiteturais, a estrutura e a evolução das decisões de engenharia.
 
@@ -529,6 +529,48 @@ Para aumentar o fator de imersão, o planejamento futuro inclui a adição de el
 *   **Consciência Geográfica (Estrategistas):** Conselheiros militares e diplomáticos cruzam dados com a `StaticWorldData`. Eles procuram proativamente por fronteiras vulneráveis (hexágonos que tocam inimigos) e propõem ações físicas (ex: `Erguer Fortaleza`) no ponto exato de invasão, substituindo reações genéricas por táticas precisas.
 *   **Desbloqueio Histórico:** Este sistema não estará disponível na Era da Aurora (Tribal). Ele será desbloqueado quando a civilização atingir o tamanho de um "Reino" formal (Idade do Bronze/Ferro), exigindo tecnologias de Burocracia Estatal para ser suportado.
 
+### 6.14. Sistema de Personagens, Dinastias e Mortalidade (RPG Elements)
+
+**Objetivo:** Elevar a simulação de um construtor de nações impessoal para um gerador de histórias emergentes focado nos indivíduos que governam o mundo.
+
+*   **Fichas de RPG (Character Sheets):** O jogador (O Monarca), seus Ministros e os Líderes NPC deixarão de ser abstrações e passarão a ser entidades com atributos base (Administração, Marcial, Diplomacia, Intriga, Erudição). 
+*   **Características (Traits) e Evolução:** Personagens poderão subir de nível e terão limite de até 5 Skills (ex: *Arquiteto*, *Cruel*, *Mestre Logístico*) que atuam como modificadores diretos no Worker ECS. O jogador pode pagar para enviar ministros para "Estudar" e ganhar XP.
+*   **Lealdade Biaxial:** A Lealdade será desmembrada em dois eixos cruciais:
+    *   *Dever (Institucional):* Respeito à Coroa.
+    *   *Afinidade (Pessoal):* Amizade, Amor ou Ódio pelo Governante atual.
+*   **Mortalidade e Sucessão:** Personagens envelhecem 1 ano a cada 12 ciclos. Eles podem morrer de velhice, doenças (ligado ao `DisasterSystem`) ou assassinatos. A morte do monarca aciona a "Crise de Sucessão", transferindo o controle do jogador para o Herdeiro (cujas skills ruins podem prejudicar o reino).
+*   **Imortalidade (Modo Jogo Eterno):** Para jogadores que preferem a gestão estrita e odeiam a frustração de perder personagens que evoluíram, o jogo possuirá uma flag `immortalityEnabled` no `GameMeta`. Quando ativada, a idade dos personagens congela e as mortes naturais são inibidas globalmente, alterando a contagem de anos apenas para cálculos abstratos.
+
+#### 6.14.1. O Panteão Lendário (Tributo e Lore)
+Para enriquecer o *Late-game* e prover picos de euforia na progressão, o jogo embarca um Dicionário de "Personagens Lendários" (Tributo do Criador à sua linhagem familiar). 
+*   **Design de Raridade:** Diferente da massa processual, Lendários (ex: *Josias, o Arquiteto* ou *Jonathas, o Estrategista*) possuem status de RPG titânicos e Traits exclusivos.
+*   **Aparição Narrativa:** Eles não são comprados passivamente. Eles surgem no mundo como "Andarilhos" (Wanderers) engatilhados por condições raríssimas no Motor de Eventos, oferecendo-se para atuar como Ministros Supremos no reino do jogador ou assumindo o controle (Rulers) de impérios NPCs para atuar como Chefes Finais (Endgame Bosses).
+*   **Auditoria via God Mode:** Para testes de balanceamento, as entidades do Panteão podem ser instanciadas no mundo através de botões diretos na aba de Lendas do Console de Desenvolvedor.
+
+### 6.14.2. O Fim do "Game Over" (A Saga do Exilado e Subordinado)
+**Visão:** Perder todas as terras não encerra a simulação. O jogo transiciona do "Modo Monarca" para o "Modo Subordinado", operando em três novos loops de jogabilidade assimétrica (RPG):
+*   **O Asilo:** O monarca destronado se torna um *Andarilho* e deve buscar abrigo nas cortes de NPCs baseando-se em Relações Históricas (`trust` e `affinity`).
+*   **A Jogabilidade de Pasta (O Leal):** O jogador pode assumir as funções de Conselheiro de um NPC. A Interface se adapta ao cargo (ex: O Marechal joga focado em logística militar e defesa de províncias para a IA). O sucesso no cargo gera uma nova moeda: **Influência**.
+*   **A Traição ou Reconquista:** O jogador acumula `personalWealth` (Ouro desviado) e `influence` para comprar o apoio de outras facções. Ele pode acionar uma **Guerra Civil (Golpe de Estado)** para roubar a coroa do NPC, ou convencer o Rei aliado a usar as tropas do estado para uma guerra de **Reconquista** contra os usurpadores da sua terra natal original.
+*   **Minigames Táticos:** Em guerras cruciais (como a Batalha do Golpe), a resolução automática do ECS será opcional. O jogador poderá abrir a arena tática 3D (*Dual Engine*) para tentar vencer batalhas matematicamente difíceis utilizando habilidade braçal, fundindo a Grande Estratégia ao RPG de Ação.
+
+### 6.14.3. Motor de Agência (Agency Engine) e o Padrão "Jittering"
+**Visão:** NPCs e Ministros não são estátuas esperando comandos. Eles possuem Vontade própria baseada em suas Fichas de RPG e Relacionamentos.
+*   **Agência e Iniciativa:** Ministros com baixa lealdade pessoal, mas altos atributos (ex: Intriga), realizarão "Testes de Habilidade" ocultos a cada Mês do jogo contra a ficha do Jogador (Monarca) ou do Primeiro-Ministro. Se vencerem, acionam eventos subversivos (Desvio de fundos para seu `personalWealth`, vazamento de mapas).
+*   **O Primeiro-Ministro (A Mão do Rei):** Um novo cargo na hierarquia. Ele não administra recursos estritos, mas simula a **Capacidade Administrativa Global** baseada na média de seus 5 Atributos. Ele funciona como o multiplicador final e escudo contra a corrupção de outros ministros.
+*   **Jittering Temporal (Fim da Previsibilidade):** Na programação da `TickPipeline`, eventos de varredura mental dos NPCs não utilizarão *hard-modulos* globais (ex: `tick % 5 === 0`). Para evitar a "Síndrome do Tick Zero" (onde dezenas de mensagens chegam no mesmo milissegundo), a arquitetura impõe o uso de **Hash Offset** (`(tick + offset) % 7 === 0`). O cérebro de cada NPC é processado em "dias" diferentes da semana da simulação, espalhando o custo computacional e criando um feed de avisos puramente orgânico.
+*   **O Monarca como Card Móvel:** O jogador é um Card. Ele não deve estar preso. Em sua gestão, ele poderá se "Remanejar" e remanejar subordinados via a função atômica de troca de pastas (Swap), aplicando malus ou bônus dependendo da afinidade do ministro com a nova função.
+
+### 6.15. Débito Técnico: O "God Object" e a Refatoração da UI
+
+**Problema Identificado:** Durante a prototipagem inicial das mecânicas complexas, o arquivo `src/main.ts` assumiu o antipadrão de *God Object* (Objeto Deus), violando a Responsabilidade Única (SRP). Atualmente, ele orquestra dependências, desenha o DOM (views), escuta cliques (controllers) e faz ponte IPC com o Worker.
+
+**Estratégia de Refatoração (MVC/MVP):** Antes da implementação do *Dual Engine* (Batalhas Táticas) ou Multiplayer, a camada superficial do jogo passará por uma componentização estrita:
+1.  **Isolamento de Estado:** A comunicação IPC com o Worker será extraída para uma classe de infraestrutura `SimulationClient`.
+2.  **Controladores Modulares:** Criação de `src/ui/controllers/` (ex: `CouncilController`, `ReligionController`) para ouvir eventos da tela e acionar a `GameSession`.
+3.  **Views Puras:** Criação de `src/ui/views/` encarregadas exclusivamente de injetar strings literais na DOM com base nos dados do estado.
+
+Isso reduzirá o `main.ts` a um mero inicializador de rotas com ~200 linhas, garantindo escalabilidade infinita para a adição de novas abas analíticas.
 ## 7. Problemas Anteriores (Resolvidos)
 
 Esta seção documenta problemas que foram identificados e corrigidos em fases anteriores do desenvolvimento, servindo como um registro histórico.

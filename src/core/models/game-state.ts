@@ -1,4 +1,4 @@
-﻿﻿import type { AdministrationState } from "./administration";
+﻿import type { AdministrationState } from "./administration";
 import type { DiplomacyState } from "./diplomacy";
 import type { EconomyState } from "./economy";
 import type { EventLogEntry } from "./events";
@@ -29,6 +29,7 @@ export interface KingdomState {
   adjective: string;
   isPlayer: boolean;
   capitalRegionId: string;
+  rulerId?: string; // NOVO: O ID do Personagem que governa o império
   economy: EconomyState;
   population: PopulationState;
   technology: TechnologyState;
@@ -76,6 +77,7 @@ export interface GameMeta {
   paused: boolean;
   disastersEnabled: boolean;
   offlineProgression?: boolean;
+  immortalityEnabled?: boolean;
   createdAt: TimestampMs;
   lastUpdatedAt: TimestampMs;
   lastClosedAt: TimestampMs | null;

@@ -1,4 +1,4 @@
-﻿﻿export enum ResourceType {
+﻿export enum ResourceType {
   Gold = "gold",
   Food = "food",
   Wood = "wood",
@@ -103,7 +103,9 @@ export enum MinisterRole {
   Marshal = "marshal",       // Controla Exército e Defesa
   Chancellor = "chancellor", // Controla Expansão e Diplomacia
   Chaplain = "chaplain",     // Controla Religião e Apaziguamento
-  Scholar = "scholar"        // Controla Foco Tecnológico
+  Scholar = "scholar",       // Controla Foco Tecnológico
+  PrimeMinister = "prime_minister", // A Mão do Rei / Grão-Vizir (Multiplicador de Eficiência)
+  Wildcard = "wildcard"      // Lendários: Podem assumir qualquer cargo
 }
 
 export enum MinisterPersonality {

@@ -23,6 +23,7 @@ import { BrowserClockService } from "./infrastructure/runtime/browser-clock-serv
 import { LocalEventBus } from "./infrastructure/runtime/local-event-bus";
 import { LocalWarResolver } from "./infrastructure/war/local-war-resolver";
 import { calculateTechnologyBonuses } from "./core/models/technology-effects-service";
+import { FAMILY_TRIBUTE_LEGENDARIES } from "./core/data/legendaries";
 import { loadDirectoryHandle, saveDirectoryHandle, clearDirectoryHandle, WebFsGameStateRepository, WebFsSaveRepository } from "./infrastructure/persistence/web-fs-repositories";
 
 interface UiRefs {
@@ -85,6 +86,7 @@ interface UiRefs {
   tabButtons: HTMLButtonElement[];
   tabPanels: HTMLElement[];
   offlineProgressionToggle: HTMLInputElement;
+  immortalityToggle: HTMLInputElement;
   splashScreen: HTMLElement;
   splashContinueBtn: HTMLButtonElement;
   splashNewBtn: HTMLButtonElement;
@@ -381,20 +383,32 @@ async function bootstrapApp(): Promise<void> {
 
   document.documentElement.lang = "pt-BR";
   document.title = "Epochs Idle PC";
+  document.body.classList.add("is-modal-open"); // Garante que o scroll do fundo fique travado no Boot
+
   const showDevMetrics = import.meta.env.DEV;
 
   appRoot.innerHTML = `
     <style>
-      .splash-overlay { position: fixed; inset: 0; z-index: 10000; background: rgba(10, 10, 15, 0.95); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+      .splash-overlay { position: fixed; inset: 0; z-index: 10000; background: rgba(10, 10, 15, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; backdrop-filter: blur(8px); overflow-y: auto; padding: 2rem 1rem; box-sizing: border-box; }
       .splash-overlay.is-hidden { display: none !important; }
-      .splash-card { background: var(--surface-color, #1e1e24); border: 1px solid var(--border-color, #333); padding: 2.5rem; border-radius: 12px; width: 100%; max-width: 450px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+      .splash-card { background: var(--surface-color, #1e1e24); border: 1px solid var(--border-color, #333); padding: 2.5rem; border-radius: 12px; width: 100%; max-width: 520px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.8); margin: auto; flex-shrink: 0; }
       .splash-card h1 { color: var(--primary-color, #d4af37); margin-bottom: 0.5rem; font-size: 2.2rem; font-family: serif; }
       .splash-actions { display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; }
       .splash-actions button { flex: 1; padding: 0.8rem; font-size: 1.05rem; }
-      .splash-form { margin-top: 2rem; text-align: left; animation: fadeIn 0.3s ease; }
+      .splash-form { margin-top: 1.5rem; text-align: left; animation: fadeIn 0.3s ease; }
       .splash-form hr { border-color: var(--border-color, #333); margin-bottom: 1.5rem; }
       .splash-form label { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.2rem; font-weight: bold; color: #ccc; }
       .splash-form input, .splash-form select { width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, #444); color: white; border-radius: 4px; }
+      .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+      .stat-row:last-child { border-bottom: none; }
+      .stat-row label { margin: 0; font-size: 0.95rem; color: #e5e7eb; flex: 1; font-weight: 500; }
+      .stat-controls { display: flex; align-items: center; gap: 12px; }
+      .stat-controls button { width: 32px; height: 32px; padding: 0; font-weight: bold; border-radius: 6px; background: #333; color: #fff; border: 1px solid #555; cursor: pointer; transition: background 0.2s; }
+      .stat-controls button:hover:not(:disabled) { background: #555; }
+      .stat-controls button:disabled { opacity: 0.3; cursor: not-allowed; }
+      .stat-controls span { width: 40px; text-align: center; font-weight: 900; color: #ffffff; font-size: 1.2rem; background: #000000; padding: 6px 0; border-radius: 6px; border: 1px solid #d4af37; box-shadow: 0 0 8px rgba(212, 175, 55, 0.3); }
+      .archetype-btn { background: rgba(0,0,0,0.4); border: 1px solid #555; color: #ccc; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+      .archetype-btn:hover { border-color: var(--primary-color, #d4af37); color: white; background: rgba(212, 175, 55, 0.1); }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
       
       /* Melhorias de UX Globais */
@@ -447,17 +461,56 @@ async function bootstrapApp(): Promise<void> {
         </div>
         <div id="splash-form" class="splash-form is-hidden">
           <hr />
-          <h3 style="margin-bottom: 1rem; text-align: center; color: var(--primary-color, #d4af37);">Fundar Novo Império</h3>
-          <label>Nome do Monarca
-            <input id="splash-monarch" type="text" value="${loadLocalProfile().name || 'Soberano'}" maxlength="30">
-          </label>
-          <label>Nação Inicial
-            <select id="splash-country"></select>
-          </label>
-          <label>Cor do Estandarte
-            <input id="splash-color" type="color" value="${loadLocalProfile().color || '#d4af37'}" style="padding: 0; height: 40px; cursor: pointer;">
-          </label>
-          <button id="splash-start-btn" class="primary" style="width: 100%; margin-top: 0.5rem; font-size: 1.1rem; padding: 0.8rem;">Fundar Império</button>
+          <h2 style="margin-bottom: 1rem; text-align: center; color: var(--primary-color, #d4af37);">A Sala de Guerra</h2>
+          
+          <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border: 1px solid #333; margin-bottom: 15px;">
+            <label>Nome do Monarca (Você)
+              <input id="splash-monarch" type="text" value="${loadLocalProfile().name || 'Soberano'}" maxlength="30">
+            </label>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+              <label style="margin-bottom: 0;">Nação Inicial
+                <select id="splash-country"></select>
+              </label>
+              <label style="margin-bottom: 0;">Cor da Dinastia
+                <input id="splash-color" type="color" value="${loadLocalProfile().color || '#d4af37'}" style="padding: 0; height: 40px; cursor: pointer; width: 100%;">
+              </label>
+            </div>
+          </div>
+
+          <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border: 1px solid #333;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h3 style="margin: 0; color: #e5e7eb;">Sua Ficha (RPG)</h3>
+              <span id="splash-points-left" style="color: #4ade80; font-weight: bold; font-size: 1.05rem;">Pontos: 0</span>
+            </div>
+            
+            <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+              <button type="button" class="archetype-btn" data-arch="balanced" style="flex: 1; font-size: 0.8rem; padding: 6px;">Equilibrado</button>
+              <button type="button" class="archetype-btn" data-arch="warrior" style="flex: 1; font-size: 0.8rem; padding: 6px;">Guerreiro</button>
+              <button type="button" class="archetype-btn" data-arch="scholar" style="flex: 1; font-size: 0.8rem; padding: 6px;">Sábio</button>
+              <button type="button" class="archetype-btn" data-arch="diplomat" style="flex: 1; font-size: 0.8rem; padding: 6px;">Diplomata</button>
+            </div>
+
+            <div class="stat-distributor">
+              ${[
+                { id: 'administration', name: 'Administração (Eficiência e Impostos)' },
+                { id: 'martial', name: 'Marcial (Exército e Táticas)' },
+                { id: 'diplomacy', name: 'Diplomacia (Pactos e Carisma)' },
+                { id: 'intrigue', name: 'Intriga (Tramas e Sombras)' },
+                { id: 'learning', name: 'Erudição (Ciência e Religião)' }
+              ].map(stat => `
+                <div class="stat-row">
+                  <label title="${stat.name}">${stat.name}</label>
+                  <div class="stat-controls">
+                    <button type="button" class="btn-stat-minus" data-stat="${stat.id}">-</button>
+                    <span id="stat-val-${stat.id}">5</span>
+                    <button type="button" class="btn-stat-plus" data-stat="${stat.id}">+</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <button id="splash-start-btn" class="primary" style="width: 100%; margin-top: 1.5rem; font-size: 1.1rem; padding: 1rem;">Forjar Destino</button>
         </div>
       </div>
     </div>
@@ -751,6 +804,11 @@ async function bootstrapApp(): Promise<void> {
               <input id="settings-offline-progression" type="checkbox">
               Simular progresso offline (cálculo de tempo fechado)
             </label>
+            <label class="inline-check" style="margin-top: 10px;">
+              <input id="settings-immortality" type="checkbox">
+              <strong style="color: #4ade80;">Modo Jogo Eterno (Desativar Mortalidade)</strong>
+            </label>
+            <small style="color: #bbb; display: block; margin-left: 28px; font-style: italic;">Aviso: Ao ativar, você, seus ministros e governantes estrangeiros não envelhecerão nem morrerão de velhice. A sucessão dinástica e a perda de talentos serão inibidas, alterando profundamente o desafio narrativo do jogo.</small>
           </div>
           <div style="margin-top: 1.5rem; padding: 1rem; border: 1px solid #444; border-radius: 6px; background: rgba(0,0,0,0.2);">
             <h3 style="margin-top: 0;">💾 Armazenamento Multi-Navegador</h3>
@@ -855,6 +913,7 @@ async function bootstrapApp(): Promise<void> {
     tabButtons: Array.from(appRoot.querySelectorAll<HTMLButtonElement>(".tab-btn")),
     tabPanels: Array.from(appRoot.querySelectorAll<HTMLElement>(".tab-panel")),
     offlineProgressionToggle: queryElement(appRoot, "#settings-offline-progression"),
+    immortalityToggle: queryElement(appRoot, "#settings-immortality"),
     splashScreen: queryElement(appRoot, "#splash-screen"),
     splashContinueBtn: queryElement(appRoot, "#splash-continue-btn"),
     splashNewBtn: queryElement(appRoot, "#splash-new-btn"),
@@ -864,6 +923,55 @@ async function bootstrapApp(): Promise<void> {
     splashColorInput: queryElement(appRoot, "#splash-color"),
     splashStartBtn: queryElement(appRoot, "#splash-start-btn")
   };
+
+  // --- Lógica de Criação de Personagem (Sala de Guerra) ---
+  let playerStats = { administration: 5, martial: 5, diplomacy: 5, intrigue: 5, learning: 5 };
+  
+  function getUsedPoints() {
+    return Object.values(playerStats).reduce((a, b) => a + b, 0);
+  }
+  
+  function updateStatUI() {
+    const used = getUsedPoints();
+    const left = 25 - used;
+    const pointsEl = document.getElementById("splash-points-left");
+    if (pointsEl) {
+      pointsEl.textContent = `Pontos Restantes: ${left}`;
+      pointsEl.style.color = left === 0 ? "#ffffff" : left < 0 ? "#ff5555" : "#4ade80";
+    }
+  
+    for (const stat in playerStats) {
+      const valEl = document.getElementById(`stat-val-${stat}`);
+      if (valEl) valEl.textContent = String(playerStats[stat as keyof typeof playerStats]);
+      
+      const btnMinus = document.querySelector(`.btn-stat-minus[data-stat="${stat}"]`) as HTMLButtonElement;
+      const btnPlus = document.querySelector(`.btn-stat-plus[data-stat="${stat}"]`) as HTMLButtonElement;
+      
+      if (btnMinus) btnMinus.disabled = playerStats[stat as keyof typeof playerStats] <= 1;
+      if (btnPlus) btnPlus.disabled = playerStats[stat as keyof typeof playerStats] >= 10 || left <= 0;
+    }
+    
+    const startBtn = document.getElementById("splash-start-btn") as HTMLButtonElement;
+    if (startBtn) startBtn.disabled = left < 0;
+  }
+  
+  appRoot.querySelectorAll('.btn-stat-minus').forEach(btn => btn.addEventListener('click', (e) => {
+    const stat = (e.currentTarget as HTMLElement).dataset.stat as keyof typeof playerStats;
+    if (playerStats[stat] > 1) { playerStats[stat]--; updateStatUI(); }
+  }));
+  appRoot.querySelectorAll('.btn-stat-plus').forEach(btn => btn.addEventListener('click', (e) => {
+    const stat = (e.currentTarget as HTMLElement).dataset.stat as keyof typeof playerStats;
+    if (playerStats[stat] < 10 && getUsedPoints() < 25) { playerStats[stat]++; updateStatUI(); }
+  }));
+  appRoot.querySelectorAll('.archetype-btn').forEach(btn => btn.addEventListener('click', (e) => {
+    const arch = (e.currentTarget as HTMLElement).dataset.arch;
+    if (arch === 'balanced') playerStats = { administration: 5, martial: 5, diplomacy: 5, intrigue: 5, learning: 5 };
+    if (arch === 'warrior') playerStats = { administration: 3, martial: 9, diplomacy: 4, intrigue: 6, learning: 3 };
+    if (arch === 'scholar') playerStats = { administration: 6, martial: 2, diplomacy: 5, intrigue: 3, learning: 9 };
+    if (arch === 'diplomat') playerStats = { administration: 5, martial: 2, diplomacy: 9, intrigue: 6, learning: 3 };
+    updateStatUI();
+  }));
+  updateStatUI();
 
   // Lógica do Modal de Forjar Religião (Interface Dinâmica)
   const btnOpenFounder = queryOptionalElement<HTMLButtonElement>(appRoot, "#btn-open-founder");
@@ -1114,6 +1222,7 @@ async function bootstrapApp(): Promise<void> {
   let currentWorkerPaused = false;
   
   let playerFaithCache = 0;
+  let lastCandidatePoolHash = "";
 
   // TELEMETRIA CONTÍNUA (Exame Holter)
   let isRecordingTelemetry = false;
@@ -2220,9 +2329,10 @@ async function bootstrapApp(): Promise<void> {
     const candidatePool = admin.candidatePool || [];
     const activeAdvice = admin.activeAdvice || [];
 
-    const ALL_ROLES = [MinisterRole.Steward, MinisterRole.Marshal, MinisterRole.Chancellor, MinisterRole.Chaplain, MinisterRole.Scholar];
+    const ALL_ROLES = [MinisterRole.PrimeMinister, MinisterRole.Steward, MinisterRole.Marshal, MinisterRole.Chancellor, MinisterRole.Chaplain, MinisterRole.Scholar];
 
     const roleTitles: Record<string, string> = {
+      [MinisterRole.PrimeMinister]: "Primeiro-Ministro (A Mão)",
       [MinisterRole.Steward]: "Intendente Real",
       [MinisterRole.Marshal]: "Lorde Marechal",
       [MinisterRole.Chancellor]: "Grão-Chanceler",
@@ -2231,6 +2341,7 @@ async function bootstrapApp(): Promise<void> {
     };
 
     const roleDesc: Record<string, string> = {
+      [MinisterRole.PrimeMinister]: "Reduz a corrupção e mitiga ineficiência administrativa do império.",
       [MinisterRole.Steward]: "Gerencia a economia, recolhe impostos e planeja obras.",
       [MinisterRole.Marshal]: "Comanda os exércitos, o recrutamento e as defesas.",
       [MinisterRole.Chancellor]: "Lida com aliados, pactos e declarações de guerra.",
@@ -2258,22 +2369,76 @@ async function bootstrapApp(): Promise<void> {
 
     // Renderiza o conselho atual
     ui.councilPanel.innerHTML = "";
+
+    const monarch = state.world.characters ? state.world.characters[player.rulerId || ""] : null;
+    if (monarch) {
+      const monarchCard = document.createElement("div");
+      monarchCard.className = "rpg-card monarch-card";
+      monarchCard.style.textAlign = "center";
+      monarchCard.style.padding = "25px";
+      monarchCard.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8), inset 0 0 40px rgba(212,175,55,0.05)";
+      
+      const traitsHtml = monarch.traits && monarch.traits.length > 0 
+        ? monarch.traits.map((t: string) => `<span style="display: inline-block; background: rgba(212,175,55,0.15); color: #d4af37; border: 1px solid rgba(212,175,55,0.4); border-radius: 4px; padding: 4px 12px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin: 0 4px;">${t === 'ambitious' ? 'Ambicioso' : t}</span>`).join('')
+        : '';
+
+      monarchCard.innerHTML = `
+          <div style="margin-bottom: 20px;">
+            <h3 style="color: #d4af37; font-family: serif; font-size: 2rem; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.8), 0 0 15px rgba(212,175,55,0.3);">${monarch.name}</h3>
+            <div style="color: #ccc; font-style: italic; font-size: 1rem; margin-top: 5px;">${monarch.title || 'Soberano Supremo'}</div>
+            <div style="margin-top: 12px;">${traitsHtml}</div>
+          </div>
+          
+          <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+            <div style="background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 8px; padding: 12px 15px; min-width: 130px; flex: 1;">
+              <div style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;">Administração</div>
+              <div style="color: #fff; font-size: 1.6rem; font-weight: bold; font-family: monospace; text-shadow: 0 0 8px rgba(255,255,255,0.3);">${monarch.stats.administration}</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 8px; padding: 12px 15px; min-width: 130px; flex: 1;">
+              <div style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;">Marcial</div>
+              <div style="color: #fff; font-size: 1.6rem; font-weight: bold; font-family: monospace; text-shadow: 0 0 8px rgba(255,255,255,0.3);">${monarch.stats.martial}</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 8px; padding: 12px 15px; min-width: 130px; flex: 1;">
+              <div style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;">Diplomacia</div>
+              <div style="color: #fff; font-size: 1.6rem; font-weight: bold; font-family: monospace; text-shadow: 0 0 8px rgba(255,255,255,0.3);">${monarch.stats.diplomacy}</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 8px; padding: 12px 15px; min-width: 130px; flex: 1;">
+              <div style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;">Intriga</div>
+              <div style="color: #fff; font-size: 1.6rem; font-weight: bold; font-family: monospace; text-shadow: 0 0 8px rgba(255,255,255,0.3);">${monarch.stats.intrigue}</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 8px; padding: 12px 15px; min-width: 130px; flex: 1;">
+              <div style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;">Erudição</div>
+              <div style="color: #fff; font-size: 1.6rem; font-weight: bold; font-family: monospace; text-shadow: 0 0 8px rgba(255,255,255,0.3);">${monarch.stats.learning}</div>
+            </div>
+          </div>
+      `;
+      ui.councilPanel.appendChild(monarchCard);
+    }
+
     for (const role of ALL_ROLES) {
       const minister = council[role];
+      const isPM = role === MinisterRole.PrimeMinister;
       if (minister) {
         const card = document.createElement("div");
-        card.className = "rpg-card";
+        card.className = `rpg-card ${isPM ? 'pm-card' : ''}`;
         card.innerHTML = `
           <div class="rpg-header">
             <h4>${minister.name}</h4>
             <span class="role-badge">${roleTitles[role]}</span>
           </div>
           <p class="rpg-desc">${roleDesc[role]}</p>
-          <div class="rpg-stats">
-            <div><span>Origem:</span> <br><strong>${minister.origin}</strong></div>
-            <div><span>Perfil:</span> <br><strong title="${persDesc[minister.personality]}">${persTitles[minister.personality]}</strong></div>
-            <div><span>Talento:</span> <br><strong class="skill-stars">${'★'.repeat(minister.skillLevel)}${'☆'.repeat(5 - minister.skillLevel)}</strong></div>
-            <div><span>Salário:</span> <br><strong>${formatNumber(minister.salary ?? 0)} Ouro</strong></div>
+          <div class="rpg-stats" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div title="Administração"><span>Adm:</span> <strong>${minister.stats?.administration ?? (minister.skillLevel*2)}</strong></div>
+            <div title="Marcial"><span>Mar:</span> <strong>${minister.stats?.martial ?? (minister.skillLevel*2)}</strong></div>
+            <div title="Diplomacia"><span>Dip:</span> <strong>${minister.stats?.diplomacy ?? (minister.skillLevel*2)}</strong></div>
+            <div title="Intriga"><span>Int:</span> <strong>${minister.stats?.intrigue ?? (minister.skillLevel*2)}</strong></div>
+            <div title="Erudição"><span>Sab:</span> <strong>${minister.stats?.learning ?? (minister.skillLevel*2)}</strong></div>
+            <div style="text-align: right;"><strong class="skill-stars">${'★'.repeat(minister.skillLevel)}</strong></div>
+          </div>
+          <div class="rpg-stats" style="margin-top: -6px; grid-template-columns: 1fr 1fr;">
+            <div style="grid-column: 1 / -1;"><span>Origem:</span> <strong>${minister.origin}</strong></div>
+            <div><span>Perfil:</span> <strong title="${persDesc[minister.personality]}">${persTitles[minister.personality]}</strong></div>
+            <div style="text-align: right;"><span>Salário:</span> <strong style="color: #4ade80;">${formatNumber(minister.salary ?? 0)}G</strong></div>
           </div>
           <div style="margin-bottom: 10px;">
             <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; color: #fff; font-weight: bold;">
@@ -2296,7 +2461,7 @@ async function bootstrapApp(): Promise<void> {
         ui.councilPanel.appendChild(card);
       } else {
         ui.councilPanel.innerHTML += `
-          <div class="rpg-card empty-slot">
+          <div class="rpg-card empty-slot ${isPM ? 'pm-card' : ''}">
             <div class="rpg-header" style="border-bottom-color: #ccc;">
               <h4 style="color: #333; text-shadow: none;">Pasta sem Titular</h4>
               <span class="role-badge" style="color: #444; border-color: #888; background: #e2e2e2; font-weight: bold; filter: none; opacity: 1;">${roleTitles[role]}</span>
@@ -2312,31 +2477,67 @@ async function bootstrapApp(): Promise<void> {
     }
 
     // Renderiza os candidatos do mercado
-    ui.councilCandidates.innerHTML = "";
-    if (candidatePool.length === 0) {
-      ui.councilCandidates.innerHTML = `<p class="hint-text">A corte está vazia. Novos talentos procurarão o palácio em breve.</p>`;
-    } else {
-      for (const candidate of candidatePool) {
-        const card = document.createElement("div");
-        card.className = "rpg-card";
-        card.innerHTML = `
-          <div class="rpg-header">
-            <h4>${candidate.name}</h4>
-            <span class="role-badge">${roleTitles[candidate.role]}</span>
-          </div>
-          <p class="rpg-desc">${roleDesc[candidate.role]}</p>
-          <div class="rpg-stats">
-            <div><span>Origem:</span> <br><strong>${candidate.origin}</strong></div>
-            <div><span>Perfil:</span> <br><strong title="${persDesc[candidate.personality]}">${persTitles[candidate.personality]}</strong></div>
-            <div><span>Talento:</span> <br><strong class="skill-stars">${'★'.repeat(candidate.skillLevel)}${'☆'.repeat(5 - candidate.skillLevel)}</strong></div>
-            <div><span>Pedida:</span> <br><strong style="color: #4ade80;">${formatNumber(candidate.salary ?? 0)} Ouro</strong></div>
-          </div>
-          <div class="actions" style="margin-top: 12px;">
-            <button class="primary" style="width: 100%; font-size: 0.9rem;" data-hire-id="${candidate.id}">Nomear para o Conselho</button>
-          </div>
-        `;
-        ui.councilCandidates.appendChild(card);
+    const missingRoles = ALL_ROLES.filter(r => !council[r]);
+    const isCouncilFull = missingRoles.length === 0;
+    
+    const currentHash = candidatePool.map(c => c.id).join(",") + "|" + missingRoles.join(",");
+    
+    if (currentHash !== lastCandidatePoolHash) {
+      lastCandidatePoolHash = currentHash;
+
+      let candidatesHtml = "";
+      if (candidatePool.length === 0) {
+        candidatesHtml = `<p class="hint-text">A corte está vazia. Novos talentos procurarão o palácio em breve.</p>`;
+      } else {
+        for (const candidate of candidatePool) {
+          let hireActionHtml = "";
+          
+          if (candidate.role === MinisterRole.Wildcard) {
+            if (missingRoles.length === 0) {
+              hireActionHtml = `<button disabled style="width:100%;">Corte Cheia</button>`;
+            } else {
+              const opts = missingRoles.map(r => `<option value="${r}">${roleTitles[r]}</option>`).join('');
+              hireActionHtml = `<select id="wildcard-role-${candidate.id}" style="width: 100%; margin-bottom: 8px; padding: 6px; background: #111; color: #d4af37; border: 1px solid #d4af37; font-weight: bold;">
+                                  <option value="" disabled selected>-- Escolher Cargo --</option>${opts}
+                                </select>
+                                <button class="primary" style="width: 100%; font-size: 0.9rem;" data-hire-id="${candidate.id}">Nomear a Lenda</button>`;
+            }
+          } else {
+            hireActionHtml = `<button class="primary" style="width: 100%; font-size: 0.9rem;" data-hire-id="${candidate.id}">Nomear para o Conselho</button>`;
+          }
+
+          candidatesHtml += `
+          <div class="rpg-card">
+            <div class="rpg-header">
+              <h4>${candidate.name}</h4>
+              <span class="role-badge">${candidate.role === MinisterRole.Wildcard ? 'Curinga Lendário' : roleTitles[candidate.role]}</span>
+            </div>
+            <p class="rpg-desc">${roleDesc[candidate.role]}</p>
+            <div class="rpg-stats" style="grid-template-columns: 1fr 1fr;">
+              <div style="grid-column: 1 / -1;"><span>Origem:</span> <br><strong>${candidate.origin}</strong></div>
+              <div><span>Perfil:</span> <br><strong title="${persDesc[candidate.personality]}">${persTitles[candidate.personality]}</strong></div>
+              <div style="text-align: right;"><span>Pedida:</span> <br><strong style="color: #4ade80;">${formatNumber(candidate.salary ?? 0)} Ouro</strong></div>
+            </div>
+            <div class="actions" style="margin-top: 12px;">
+              ${hireActionHtml}
+            </div>
+          </div>`;
+        }
       }
+      
+      const detailsEl = ui.councilCandidates.querySelector('details');
+      const wasOpen = detailsEl ? detailsEl.open : !isCouncilFull;
+
+      ui.councilCandidates.innerHTML = `
+        <details ${wasOpen ? 'open' : ''} style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; border: 1px solid #333; outline: none;">
+          <summary style="cursor: pointer; color: #e5e7eb; font-weight: bold; font-size: 1.05rem; outline: none;">
+            Mercado de Talentos ${isCouncilFull ? '(Corte Cheia - Clique para Expandir)' : '(Clique para Ocultar)'}
+          </summary>
+          <div class="candidate-grid" style="margin-top: 15px;">
+            ${candidatesHtml}
+          </div>
+        </details>
+      `;
     }
 
     // Renderiza os conselhos
@@ -2344,10 +2545,22 @@ async function bootstrapApp(): Promise<void> {
     if (activeAdvice.length === 0) {
       ui.councilAdvice.innerHTML = `<li class="hint-text">Nenhum relatório recente do conselho.</li>`;
     } else {
+      const pendingAdvice = [];
+      const historyAdvice = [];
+
       for (const advice of activeAdvice) {
-        const minister = Object.values(council).find(m => m?.id === advice.ministerId);
+        if (advice.resolved || (advice.isRead && (!advice.options || advice.options.length === 0))) {
+          historyAdvice.push(advice);
+        } else {
+          pendingAdvice.push(advice);
+        }
+      }
+
+      const renderAdviceItem = (advice: any, isHistory: boolean) => {
+        const minister = Object.values(council).find((m: any) => m?.id === advice.ministerId);
         const item = document.createElement("li");
         item.className = `event-${advice.urgency === 'high' ? 'critical' : advice.urgency === 'medium' ? 'warning' : 'info'}`;
+        if (isHistory) item.style.opacity = "0.7";
         
         let optionsHtml = "";
         if (!advice.resolved && advice.options && advice.options.length > 0) {
@@ -2357,16 +2570,60 @@ async function bootstrapApp(): Promise<void> {
             optionsHtml += `<button class="${btnClass}" style="font-size: 0.85em; padding: 6px 12px; text-align: left;" data-resolve-advice="${advice.id}" data-resolve-option="${opt.id}">📜 ${opt.label}</button>`;
           }
           optionsHtml += `</div>`;
+        } else if (!advice.resolved && !advice.isRead) {
+           optionsHtml = `<div style="margin-top: 8px;"><button style="font-size: 0.85em; padding: 6px 12px; background: #e5e7eb; color: #111827; font-weight: bold; border: 1px solid #9ca3af; border-radius: 4px; cursor: pointer;" data-mark-read="${advice.id}">✔️ Ciente (Arquivar)</button></div>`;
         } else if (advice.resolved) {
            optionsHtml = `<div style="margin-top: 8px; font-size: 0.8em; color: #888; font-style: italic;">Decisão já tomada pelo monarca.</div>`;
         }
 
+        const badge = (!advice.isRead && !isHistory) ? `<span style="background: #ff3366; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em; margin-left: 8px; vertical-align: super; box-shadow: 0 0 5px #ff3366;">NOVO</span>` : "";
+
         item.innerHTML = `
-          <strong>${advice.title} (de ${minister?.name ?? 'Conselho'})</strong>
+          <strong>${advice.title} (de ${minister?.name ?? 'Conselho'})${badge}</strong>
           <span>${advice.narrativeText}</span>
           ${optionsHtml}
         `;
-        ui.councilAdvice.appendChild(item);
+        return item;
+      };
+
+      if (pendingAdvice.length === 0 && historyAdvice.length > 0) {
+        const noPendingMsg = document.createElement("p");
+        noPendingMsg.className = "hint-text";
+        noPendingMsg.textContent = "Nenhum relatório pendente de atenção.";
+        ui.councilAdvice.appendChild(noPendingMsg);
+      }
+
+      for (const advice of pendingAdvice) {
+        ui.councilAdvice.appendChild(renderAdviceItem(advice, false));
+      }
+
+      if (historyAdvice.length > 0) {
+        const details = document.createElement("details");
+        details.style.marginTop = "15px";
+        details.style.background = "rgba(0,0,0,0.2)";
+        details.style.padding = "10px";
+        details.style.borderRadius = "6px";
+        details.style.border = "1px solid #333";
+        
+        const summary = document.createElement("summary");
+        summary.style.cursor = "pointer";
+        summary.style.color = "#111827";
+        summary.style.background = "#d1d5db";
+        summary.style.padding = "8px 12px";
+        summary.style.borderRadius = "4px";
+        summary.style.fontWeight = "bold";
+        summary.textContent = `Histórico de Relatórios (${historyAdvice.length})`;
+        details.appendChild(summary);
+
+        const histList = document.createElement("ul");
+        histList.className = "list compact";
+        histList.style.marginTop = "10px";
+        for (const advice of historyAdvice) {
+          histList.appendChild(renderAdviceItem(advice, true));
+        }
+        details.appendChild(histList);
+        
+        ui.councilAdvice.appendChild(details);
       }
     }
   }
@@ -3093,6 +3350,7 @@ async function bootstrapApp(): Promise<void> {
     renderEventLog(state);
     mapRenderer.render(state.world, state.kingdoms, buildMapRenderContext(state));
     ui.offlineProgressionToggle.checked = state.meta.offlineProgression ?? false;
+    ui.immortalityToggle.checked = state.meta.immortalityEnabled ?? false;
   }
 
   ui.tabButtons.forEach((button) => {
@@ -3203,7 +3461,12 @@ async function bootstrapApp(): Promise<void> {
     const fireRole = target.dataset.fireRole;
 
     if (hireId) {
-      const result = session.hireMinister(hireId);
+      let targetRole: MinisterRole | undefined = undefined;
+      // Checa se era um candidato curinga e tenta pegar o cargo escolhido no dropdown
+      const selectEl = document.getElementById(`wildcard-role-${hireId}`) as HTMLSelectElement;
+      if (selectEl) targetRole = selectEl.value as MinisterRole;
+
+      const result = session.hireMinister(hireId, targetRole);
       showToast(result.message);
     }
 
@@ -3228,6 +3491,11 @@ async function bootstrapApp(): Promise<void> {
       if (resolveAdviceId && resolveOptionId) {
         const result = session.resolveCouncilAdvice(resolveAdviceId, resolveOptionId);
         showToast(result.message);
+      }
+      
+      const markReadId = btn.dataset.markRead;
+      if (markReadId) {
+        session.markAdviceRead(markReadId);
       }
     }
   });
@@ -3334,6 +3602,11 @@ async function bootstrapApp(): Promise<void> {
   ui.offlineProgressionToggle.addEventListener("change", () => {
     session.setOfflineProgression(ui.offlineProgressionToggle.checked);
     showToast(`Progresso offline ${ui.offlineProgressionToggle.checked ? "ativado" : "desativado"}.`);
+  });
+
+  ui.immortalityToggle.addEventListener("change", () => {
+    session.setImmortalityEnabled(ui.immortalityToggle.checked);
+    showToast(`Modo Jogo Eterno ${ui.immortalityToggle.checked ? "ATIVADO" : "DESATIVADO"}.`);
   });
   
   const btnLinkFolder = document.getElementById("btn-link-folder") as HTMLButtonElement;
@@ -3654,6 +3927,55 @@ async function bootstrapApp(): Promise<void> {
         }
         break;
       }
+      default: {
+        if (command.startsWith("spawn_legend:")) {
+          const legendId = command.split(":")[1];
+          const template = FAMILY_TRIBUTE_LEGENDARIES.find(l => l.historicalId === legendId);
+          
+          if (!template) {
+             showToast(`Modo Deus: A Lenda '${legendId}' não foi reconhecida pelas crônicas.`);
+             break;
+          }
+
+          if (!state.world.characters) state.world.characters = {};
+          
+          // Verifica se a lenda já nasceu neste universo
+          const existing = Object.values(state.world.characters).find(c => c.historicalId === legendId);
+          if (existing) {
+             showToast(`Modo Deus: ${template.name} já caminha pelo mundo!`);
+             break;
+          }
+
+          // Cria a entidade imortal/poderosa
+          const charId = `char_${legendId}_${Date.now()}`;
+          state.world.characters[charId] = {
+             id: charId, historicalId: template.historicalId, name: template.name, title: template.title,
+             isLegendary: true, birthTick: state.meta.tick, deathTick: null,
+             stats: template.stats, traits: template.traits, status: "wanderer",
+             locationKingdomId: targetKingdom?.id || null, employerKingdomId: null,
+             affinity: { institutionalLoyalty: 100, personalAffinity: 100 },
+             personalWealth: 5000,
+             influence: 100,
+             memory: [`Despertou no mundo como mito no ano ${formatCalendarTime(state.meta.tick)}.`]
+          };
+
+          // Força a entrada dele como um candidato recrutável na Corte do Alvo (Para o jogador poder testar a contratação)
+          if (targetKingdom && targetKingdom.administration) {
+             if (!targetKingdom.administration.candidatePool) targetKingdom.administration.candidatePool = [];
+             
+             targetKingdom.administration.candidatePool.unshift({
+                id: charId, name: `${template.name}, ${template.title}`, role: MinisterRole.Wildcard,
+                personality: MinisterPersonality.Progressive, origin: "Descido dos Céus (O Panteão)",
+                skillLevel: 5, salary: 0, delegationLevel: AutomationLevel.Manual, loyalty: 100
+             });
+             state.world.characters[charId].status = "minister";
+          }
+          
+          session.updateEcsState(state.ecs!); // Força persistência
+          showToast(`Modo Deus: ${template.name} desceu aos mortais! Verifique os Candidatos do Conselho.`);
+        }
+        break;
+      }
     }
   }, () => {
     const state = session.getState();
@@ -3779,6 +4101,23 @@ async function bootstrapApp(): Promise<void> {
       playerKingdom.name = `Tribo de ${monarchName}`;
       playerKingdom.adjective = def ? def.name : "Nativo";
       playerKingdom.color = profile.color;
+
+      // Cria a Entidade do Monarca no ECS e entrega a ele o Trono
+      const charId = `char_player_${Date.now()}`;
+      playerKingdom.rulerId = charId;
+      
+      if (!freshState.world.characters) freshState.world.characters = {};
+      freshState.world.characters[charId] = {
+        id: charId, historicalId: "player_monarch",
+        name: monarchName, title: "o Fundador",
+        isLegendary: true, // Monarcas do jogador vivem até os 75 anos no mínimo
+        birthTick: 0, deathTick: null,
+        stats: { ...playerStats }, traits: ["ambitious"],
+        status: "ruler", locationKingdomId: playerKingdom.id, employerKingdomId: playerKingdom.id,
+        affinity: { institutionalLoyalty: 100, personalAffinity: 100 },
+        personalWealth: 0, influence: 100,
+        memory: [`Unificou as tribos e forjou a coroa no Ano 1.`]
+      };
     }
 
     await persistence.gameStateRepository.saveCurrent(freshState);
@@ -3814,6 +4153,8 @@ async function bootstrapApp(): Promise<void> {
 
     // Oculta a tela somente APÓS a matemática terminar e o mapa estar desenhado
     ui.splashScreen.classList.add("is-hidden");
+    document.body.classList.remove("is-modal-open");
+    document.body.classList.remove("is-modal-open");
 
     session.subscribe((state) => {
       renderState(state);

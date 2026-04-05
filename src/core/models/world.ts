@@ -1,5 +1,6 @@
 import type { KingdomId, Point2D, RegionId, ReligionId } from "./types";
 import { BiomeType, BuildingType } from "./enums";
+import type { Character } from "./character";
 import type { WorldReligion } from "./religion";
 
 export type RegionZone =
@@ -57,4 +58,5 @@ export interface WorldState {
   mapId: string;
   regions: Record<RegionId, RegionState>;
   religions: Record<ReligionId, WorldReligion>; // Dicionário vivo de fés ativas no mundo
+  characters?: Record<string, Character>; // População universal (Lendários, NPCs)
 }

@@ -1,4 +1,4 @@
-﻿import type { DiplomacyResolver, INpcDecisionService, WarResolver } from "../contracts/services";
+import type { DiplomacyResolver, INpcDecisionService, WarResolver } from "../contracts/services";
 import type { StaticWorldData } from "../models/static-world-data";
 import type { RegionDefinition } from "../models/world";
 import type { SimulationSystem } from "./tick-pipeline";
@@ -18,6 +18,7 @@ import { createTechnologySystem } from "./systems/technology-system";
 import { createVictorySystem } from "./systems/victory-system";
 import { createWarSystem } from "./systems/war-system";
 import { createWorldActivitySystem } from "./systems/world-activity-system";
+import { createCharacterSystem } from "./systems/character-system";
 
 export interface SimulationServices {
   npcDecisionService: INpcDecisionService;
@@ -45,6 +46,7 @@ export function createDefaultSimulationSystems(services: SimulationServices): Si
     createWarSystem(services.warResolver),
     createWorldActivitySystem(),
     createVictorySystem(),
-    createEventLogSystem()
+    createEventLogSystem(),
+    createCharacterSystem()
   ];
 }

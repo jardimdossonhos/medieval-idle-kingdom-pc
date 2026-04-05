@@ -83,6 +83,7 @@ export class GodModeConsole {
         <button class="god-tab" data-target="god-tab-map" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Mapa</button>
         <button class="god-tab" data-target="god-tab-demo" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Demografia</button>
         <button class="god-tab" data-target="god-tab-crisis" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Crises</button>
+        <button class="god-tab" data-target="god-tab-legends" style="background: transparent; color: #d4af37; border: 1px solid #d4af37; padding: 5px 10px; cursor: pointer; text-shadow: 0 0 5px #d4af37;">Lendas</button>
         <button class="god-tab" data-target="god-tab-debug" style="background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">Debug</button>
       </div>
       
@@ -123,6 +124,20 @@ export class GodModeConsole {
         <button id="btn-force-disaster" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%;">Forçar Desastre Aleatório</button>
         <button id="btn-add-unrest" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%; margin-top: 5px;">Forçar 100% de Instabilidade</button>
         <button id="btn-add-dev" style="background: #200; color: #ff3333; border: 1px solid #ff3333; padding: 5px; cursor: pointer; width: 100%; margin-top: 5px;">Forçar 100% de Devastação</button>
+      </div>
+
+      <div id="god-tab-legends" class="god-tab-content" style="display: none; border-color: #d4af37;">
+        <p style="margin-top: 0; font-size: 14px; color: #d4af37;"><strong>O Panteão Lendário:</strong></p>
+        <div style="max-height: 250px; overflow-y: auto; padding-right: 5px;">
+          <button class="btn-spawn-legend" data-legend-id="josias_michel" style="background: #221a00; color: #d4af37; border: 1px solid #d4af37; padding: 5px; cursor: pointer; width: 100%; margin-bottom: 5px; text-align: left;">👑 Invocar: Josias Michel (Arquiteto)</button>
+          <button class="btn-spawn-legend" data-legend-id="jonathas_michel" style="background: #221a00; color: #d4af37; border: 1px solid #d4af37; padding: 5px; cursor: pointer; width: 100%; margin-bottom: 5px; text-align: left;">⚔️ Invocar: Jonathas Michel (Estrategista)</button>
+          <button class="btn-spawn-legend" data-legend-id="joao_michel" style="background: #221a00; color: #d4af37; border: 1px solid #d4af37; padding: 5px; cursor: pointer; width: 100%; margin-bottom: 5px; text-align: left;">⚖️ Invocar: João Michel (Patriarca)</button>
+          <button class="btn-spawn-legend" data-legend-id="donizeti_bueno" style="background: #221a00; color: #d4af37; border: 1px solid #d4af37; padding: 5px; cursor: pointer; width: 100%; margin-bottom: 5px; text-align: left;">❤️ Invocar: Donizeti Bueno (Matriarca)</button>
+          <button class="btn-spawn-legend" data-legend-id="lene_melo" style="background: #221a00; color: #d4af37; border: 1px solid #d4af37; padding: 5px; cursor: pointer; width: 100%; margin-bottom: 5px; text-align: left;">🛡️ Invocar: Lene Melo (Conselheira)</button>
+          <button class="btn-spawn-legend" data-legend-id="josiane_michel" style="background: #221a00; color: #d4af37; border: 1px solid #d4af37; padding: 5px; cursor: pointer; width: 100%; margin-bottom: 5px; text-align: left;">🗣️ Invocar: Josiane Michel (Voz)</button>
+          <button class="btn-spawn-legend" data-legend-id="cristiane_michel" style="background: #221a00; color: #d4af37; border: 1px solid #d4af37; padding: 5px; cursor: pointer; width: 100%; margin-bottom: 5px; text-align: left;">🪙 Invocar: Cristiane Michel (Pragmática)</button>
+          <button class="btn-spawn-legend" data-legend-id="lucia_michel" style="background: #221a00; color: #d4af37; border: 1px solid #d4af37; padding: 5px; cursor: pointer; width: 100%; margin-bottom: 5px; text-align: left;">🌟 Invocar: Lúcia de Melo (Herdeira)</button>
+        </div>
       </div>
 
       <div id="god-tab-debug" class="god-tab-content" style="display: none;">
@@ -184,9 +199,18 @@ export class GodModeConsole {
       tab.addEventListener("click", (e) => {
         const targetId = (e.target as HTMLElement).getAttribute("data-target");
         tabs.forEach(t => { (t as HTMLElement).style.background = "transparent"; (t as HTMLElement).style.color = "#00ff00"; });
+        
+        // Estilização especial para a aba de Lendas
+        const isLegendTab = targetId === "god-tab-legends";
+        const activeColor = isLegendTab ? "#d4af37" : "#00ff00";
+        tabs.forEach(t => { 
+           const tEl = t as HTMLElement;
+           tEl.style.color = tEl.getAttribute("data-target") === "god-tab-legends" ? "#d4af37" : "#00ff00"; 
+        });
+
         contents.forEach(c => (c as HTMLElement).style.display = "none");
         
-        (e.target as HTMLElement).style.background = "#00ff00";
+        (e.target as HTMLElement).style.background = activeColor;
         (e.target as HTMLElement).style.color = "#000";
         const targetContent = this.panelElement!.querySelector(`#${targetId}`) as HTMLElement;
         if (targetContent) targetContent.style.display = "block";
@@ -209,5 +233,12 @@ export class GodModeConsole {
     this.panelElement.querySelector("#btn-add-dev")?.addEventListener("click", () => this.onCommand("add_dev", getTarget()));
     this.panelElement.querySelector("#btn-dump-state")?.addEventListener("click", () => this.onCommand("dump_state", getTarget()));
     this.panelElement.querySelector("#btn-toggle-telemetry")?.addEventListener("click", () => this.onCommand("toggle_telemetry", getTarget()));
+
+    this.panelElement.querySelectorAll(".btn-spawn-legend").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const legendId = (e.target as HTMLElement).getAttribute("data-legend-id");
+        if (legendId) this.onCommand(`spawn_legend:${legendId}`, getTarget());
+      });
+    });
   }
 }

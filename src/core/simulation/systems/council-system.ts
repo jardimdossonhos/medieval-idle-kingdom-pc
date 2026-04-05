@@ -27,6 +27,22 @@ function generateCandidate(idSeq: number): Minister {
   if (roll > 0.95) skill = 4;
   if (roll > 0.99) skill = 5;
 
+  // Gera Atributos de RPG baseados no Nível de Skill (1 a 5)
+  const baseStat = skill * 2;
+  const stats = {
+    administration: baseStat + Math.floor(Math.random() * 4),
+    martial: baseStat + Math.floor(Math.random() * 4),
+    diplomacy: baseStat + Math.floor(Math.random() * 4),
+    intrigue: baseStat + Math.floor(Math.random() * 4),
+    learning: baseStat + Math.floor(Math.random() * 4),
+  };
+
+  // Dá um Bônus focado na vocação da personalidade
+  if (personality === MinisterPersonality.Greedy) stats.administration += 3;
+  if (personality === MinisterPersonality.Militarist) stats.martial += 3;
+  if (personality === MinisterPersonality.Pacifist) stats.diplomacy += 3;
+  if (personality === MinisterPersonality.Progressive) stats.learning += 3;
+
   const baseSalary = skill * 4 + (personality === MinisterPersonality.Greedy ? 8 : 0);
 
   return {
@@ -36,6 +52,7 @@ function generateCandidate(idSeq: number): Minister {
     personality,
     origin,
     skillLevel: skill,
+    stats,
     salary: baseSalary,
     delegationLevel: "manual" as any,
     loyalty: Math.floor(Math.random() * 30) + 50 // Inicia entre 50 e 80
@@ -96,7 +113,7 @@ function evaluateMinisterLoyalty(minister: Minister, state: GameState, kingdomId
   minister.loyalty = roundTo(clamp(minister.loyalty + loyaltyDelta, 0, 100));
 }
 
-function generateAdvice(minister: Minister, state: GameState, kingdomId: string, staticData: StaticWorldData): MinisterAdvice | null {
+function generateAdvice(minister: Minister, state: GameState, kingdomId: string, staticData: StaticWorldData, activeAdvice: MinisterAdvice[]): MinisterAdvice | null {
   const kingdom = state.kingdoms[kingdomId];
   const isAtWar = Object.values(state.wars).some(w => w.attackers.includes(kingdomId) || w.defenders.includes(kingdomId));
   
@@ -109,8 +126,9 @@ function generateAdvice(minister: Minister, state: GameState, kingdomId: string,
   if (minister.role === MinisterRole.Steward) {
     const food = kingdom.economy.stock[ResourceType.Food];
     const pop = kingdom.population.total;
-    if (food < pop / 8000) {
-      if (kingdom.economy.budgetPriority.economy < 35) {
+    const currentTax = kingdom.economy.taxPolicy.baseRate;
+
+    if (food < pop / 8000 && kingdom.economy.budgetPriority.economy < 35) {
         urgency = "high";
         title = "Crise de Fome Iminente";
         if (minister.personality === MinisterPersonality.Greedy) text = "Os plebeus morrem de fome, Majestade. Isso é péssimo, pois cadáveres não pagam impostos! Libere verbas agrícolas imediatamente.";
@@ -119,9 +137,15 @@ function generateAdvice(minister: Minister, state: GameState, kingdomId: string,
           { id: "opt_1", label: "Aprovar: Direcionar 35% do Orçamento para Economia", actionType: "update_budget", payload: { economy: 35 }, loyaltyImpact: 10 },
           { id: "opt_2", label: "Rejeitar: A coroa tem outras prioridades", actionType: "ignore", loyaltyImpact: -15 }
         ];
-      }
+    } else if (kingdom.population.unrest > 0.5 && currentTax > 0.35) {
+        urgency = "high";
+        title = "Revolta Fiscal Opressiva";
+        text = "Majestade, a cobrança implacável de impostos está estrangulando os plebeus. Se não reduzirmos a Taxa Base, o sangue correrá nas ruas.";
+        options = [
+          { id: "opt_1", label: "Aprovar: Reduzir Taxa Base em -10%", actionType: "update_tax", payload: { baseRate: Math.max(0.05, currentTax - 0.1) }, loyaltyImpact: minister.personality === MinisterPersonality.Greedy ? -20 : 15 },
+          { id: "opt_2", label: "Rejeitar: O povo deve pagar", actionType: "ignore", loyaltyImpact: minister.personality === MinisterPersonality.Greedy ? 10 : -15 }
+        ];
     } else if (kingdom.economy.stock[ResourceType.Gold] < 100) {
-      const currentTax = kingdom.economy.taxPolicy.baseRate;
       if (currentTax >= 0.5) {
          text = "O tesouro seca, mas os impostos já estão no limite suportável. Cobrar mais causará uma rebelião sangrenta!";
       } else if (currentTax < 0.5) {
@@ -138,7 +162,16 @@ function generateAdvice(minister: Minister, state: GameState, kingdomId: string,
   } 
   else if (minister.role === MinisterRole.Marshal) {
     if (isAtWar) {
-      if (kingdom.economy.budgetPriority.military < 35) {
+      const manpower = kingdom.military.reserveManpower;
+      if (manpower < 100) {
+        urgency = "high";
+        title = "Reservas Humanas Esgotadas";
+        text = "As linhas de frente estão dizimadas e não temos mais camponeses para recrutar. Sugiro buscarmos a paz ou erguermos Quartéis urgentemente.";
+        options = [
+          { id: "opt_1", label: "Aprovar: Focar Orçamento Militar (35%)", actionType: "update_budget", payload: { military: 35 }, loyaltyImpact: 10 },
+          { id: "opt_2", label: "Ignorar Alerta", actionType: "ignore", loyaltyImpact: -10 }
+        ];
+      } else if (kingdom.economy.budgetPriority.military < 35) {
         urgency = "high";
         title = "Esforço de Guerra";
         if (minister.personality === MinisterPersonality.Pacifist) text = "Nossos filhos morrem nas fronteiras, meu Senhor. Imploro que busque um tratado de paz antes que não reste ninguém para lutar.";
@@ -168,6 +201,14 @@ function generateAdvice(minister: Minister, state: GameState, kingdomId: string,
           { id: "opt_3", label: "Rejeitar Apelo (Manter Tolerância)", actionType: "ignore", loyaltyImpact: minister.personality === MinisterPersonality.Zealous ? -25 : -5 }
         ];
       }
+    } else if (kingdom.religion.policy === ReligiousPolicy.Zealous && kingdom.religion.cohesion > 0.85) {
+        urgency = "low";
+        title = "Purificação Alcançada";
+        text = "A verdadeira fé domina nossas terras. O derramamento de sangue inquisitorial já não é necessário. Sugiro retornarmos à Ortodoxia.";
+        options = [
+          { id: "opt_1", label: "Aprovar: Retornar à Ortodoxia", actionType: "set_religious_policy", payload: { policy: ReligiousPolicy.Orthodoxy }, loyaltyImpact: minister.personality === MinisterPersonality.Zealous ? -15 : 15 },
+          { id: "opt_2", label: "Rejeitar: Manter a Inquisição", actionType: "ignore", loyaltyImpact: minister.personality === MinisterPersonality.Zealous ? 15 : -10 }
+        ];
     }
   }
   else if (minister.role === MinisterRole.Chancellor) {
@@ -243,6 +284,31 @@ function generateAdvice(minister: Minister, state: GameState, kingdomId: string,
       }
     }
   }
+  else if (minister.role === MinisterRole.Scholar) {
+    const hasUniversity = state.world.regions[kingdom.capitalRegionId]?.buildings?.includes(BuildingType.University);
+    if (!hasUniversity && kingdom.economy.stock[ResourceType.Gold] >= 600) {
+      urgency = "medium";
+      title = "Patrocínio Acadêmico";
+      text = "Nossos sábios não têm onde se reunir. Com o ouro sobrando nos cofres, peço permissão para fundar uma Universidade na Capital e acelerar nossa pesquisa.";
+      options = [
+        { id: "opt_1", label: "Aprovar: Construir Universidade (-400 Ouro)", actionType: "build_structure", payload: { regionId: kingdom.capitalRegionId, buildingType: BuildingType.University }, loyaltyImpact: 20 },
+        { id: "opt_2", label: "Ignorar Conselho", actionType: "ignore", loyaltyImpact: -15 }
+      ];
+    } else if (kingdom.technology.unlocked.length < 3 && !kingdom.technology.researchGoalId) {
+      urgency = "medium";
+      title = "Estagnação Científica";
+      text = "Nosso povo vive na ignorância enquanto o mundo avança. Defina uma Meta Tecnológica para orientar os mentes do império.";
+    }
+  }
+
+  // FILTRO ANTI-SPAM (IDEMPOTÊNCIA DE MENSAGEM)
+  // Se uma mensagem com este exato título já existe e ainda não foi resolvida (arquivada), a IA aborta o envio silenciosamente.
+  if (text !== "") {
+    const isSpam = activeAdvice.some(a => !a.resolved && a.title === title);
+    if (isSpam) {
+      return null;
+    }
+  }
 
   // Interceptação de Demanda Salarial
   const expectedSalary = minister.skillLevel * 5 + (minister.personality === MinisterPersonality.Greedy ? 12 : 0);
@@ -259,7 +325,8 @@ function generateAdvice(minister: Minister, state: GameState, kingdomId: string,
         { id: "opt_sal_1", label: "Conceder Aumento (+5 Ouro/ciclo)", actionType: "change_salary", payload: { amount: 5 }, loyaltyImpact: minister.personality === MinisterPersonality.Greedy ? 20 : 10 },
         { id: "opt_sal_2", label: "Recusar", actionType: "ignore", loyaltyImpact: minister.personality === MinisterPersonality.Greedy ? -30 : -15 }
       ],
-      resolved: false
+      resolved: false,
+      isRead: false
     };
   }
 
@@ -276,7 +343,8 @@ function generateAdvice(minister: Minister, state: GameState, kingdomId: string,
     urgency,
     issuedAt: state.meta.lastUpdatedAt,
     options: options.length > 0 ? options : undefined,
-    resolved: false
+    resolved: false,
+    isRead: false
   };
 }
 
@@ -317,7 +385,7 @@ export function generateRoutineAdvice(minister: Minister, state: GameState, king
   return {
     id: `adv_rout_${Date.now()}_${minister.id}`, ministerId: minister.id, role: minister.role,
     title, narrativeText: text, urgency: "low", issuedAt: state.meta.lastUpdatedAt,
-    options, resolved: false
+    options, resolved: false, isRead: false
   };
 }
 
@@ -346,15 +414,18 @@ export function createCouncilSystem(): SimulationSystem {
         }
       }
 
-      // O resto da lógica pesada roda a cada 5 ciclos
-      if (state.meta.tick % 5 !== 0) return;
-
       let eventSeq = 0;
       const currentCouncil = player.administration.council;
 
       for (const role of Object.keys(currentCouncil) as MinisterRole[]) {
         const minister = currentCouncil[role];
         if (!minister) continue;
+
+        // JITTERING (Descompasso temporal): 
+        // Cada ministro avalia o reino em seu próprio ritmo, quebrando a previsibilidade robótica
+        // e impedindo que todas as mensagens cheguem no exato mesmo segundo.
+        const ministerOffset = minister.id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) % 7;
+        if ((state.meta.tick + ministerOffset) % 7 !== 0) continue;
 
         // 2. Cálculo da Psicologia e Lealdade
         evaluateMinisterLoyalty(minister, state, player.id);
@@ -383,7 +454,7 @@ export function createCouncilSystem(): SimulationSystem {
         const hasRecentAdvice = player.administration.activeAdvice.some(a => a.ministerId === minister.id && (context.now - a.issuedAt) < 35000);
         
         if (!hasRecentAdvice) {
-          const advice = generateAdvice(minister, state, player.id, context.staticData);
+          const advice = generateAdvice(minister, state, player.id, context.staticData, player.administration.activeAdvice);
           if (advice) {
             player.administration.activeAdvice.unshift(advice);
             

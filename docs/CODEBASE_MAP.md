@@ -26,6 +26,7 @@ A casca visual que o usuário interage. **Nenhuma lógica de negócios reside aq
 *   **`src/ui/`**: 
     *   `i18n/messages.ts`, `types.ts`: Dicionários de traduções e internacionalização (en-US, pt-BR).
 *   **`src/main.ts`**: O Maestro. 
+    *   ⚠️ *Nota de Débito Técnico:* Atualmente atua como um "God Object" (Renderização, Binding e Inicialização misturados). Mapeado para refatoração futura em Controllers/Views (Padrão MVC).
     *   Monta a DOM.
 *   **`src/application/god-mode.ts`**: Ferramenta de auditoria do Desenvolvedor. Um console injetável que ignora as regras do jogo e permite manipular o Worker diretamente (cheat menu).
     *   Instancia a `GameSession` (Aplicação).

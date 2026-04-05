@@ -1,4 +1,4 @@
-﻿import type { DomainEvent, EventLogEntry } from "../../models/events";
+import type { DomainEvent, EventLogEntry } from "../../models/events";
 import type { GameState } from "../../models/game-state";
 import type { SimulationSystem } from "../tick-pipeline";
 import type { StaticWorldData } from "../../models/static-world-data";
@@ -214,6 +214,16 @@ function describeEvent(event: DomainEvent, state: GameState, staticData: StaticW
         groupKey: "world.activity_summary"
       };
     }
+    case "character.death": {
+      const cName = String(event.payload.characterName ?? "Alguém");
+      const cTitle = event.payload.title ? `, ${event.payload.title}` : "";
+      const age = event.payload.age;
+      return {
+        title: "Falecimento Eminente",
+        details: `${cName}${cTitle} faleceu de velhice aos ${age} anos.`,
+        severity: "warning"
+      };
+    }
     case "automation.build_structure": {
       const actor = kingdomName(state, event.actorKingdomId);
       const bType = String(event.payload.buildingType);
@@ -223,6 +233,17 @@ function describeEvent(event: DomainEvent, state: GameState, staticData: StaticW
         title: "Infraestrutura Automatizada",
         details: `${actor} concluiu a construção de um(a) ${bName} em ${rName}.`,
         severity: "info"
+      };
+    }
+    case "council.advice_issued": {
+      const ministerName = String(event.payload.ministerName ?? "Conselheiro");
+      const urgency = String(event.payload.urgency ?? "low");
+      return {
+        title: "Relatório do Conselho",
+        details: `${ministerName} apresentou um novo relatório para vossa análise.`,
+        severity: urgency === "high" ? "warning" : "info",
+        suggestedAction: "Abra a aba Governo e decida sobre as propostas pendentes.",
+        groupKey: `council.advice_issued|${event.actorKingdomId ?? "none"}`
       };
     }
     default:

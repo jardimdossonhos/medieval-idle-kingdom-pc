@@ -110,6 +110,9 @@ export class GameSession {
     if (state.meta.disastersEnabled === undefined) {
       state.meta.disastersEnabled = true;
     }
+    if (state.meta.immortalityEnabled === undefined) {
+      state.meta.immortalityEnabled = false;
+    }
     if (!state.world.religions) {
       state.world.religions = {} as any;
       const now = this.deps.clock.now();
@@ -286,6 +289,14 @@ export class GameSession {
     this.emitState();
   }
 
+  setImmortalityEnabled(enabled: boolean): void {
+    const state = this.requireState();
+    state.meta.immortalityEnabled = enabled;
+    this.recordPlayerCommand("session.immortality", { enabled });
+    this.persistCurrent();
+    this.emitState();
+  }
+
   togglePause(): void {
     const state = this.requireState();
     this.setPaused(!state.meta.paused);
@@ -353,7 +364,7 @@ export class GameSession {
     this.emitState();
   }
 
-  public hireMinister(candidateId: string): PlayerActionResult {
+  public hireMinister(candidateId: string, targetRole?: MinisterRole): PlayerActionResult {
     const state = this.requireState();
     const player = this.getPlayerKingdom(state);
     const admin = player.administration;
@@ -367,19 +378,58 @@ export class GameSession {
     }
     
     const candidate = admin.candidatePool[candidateIndex];
-    if (admin.council[candidate.role]) {
-      return { ok: false, message: `O cargo de ${candidate.role} já está ocupado.` };
+    
+    if (candidate.role === MinisterRole.Wildcard) {
+      if (!targetRole) return { ok: false, message: "Para lendas, selecione o cargo desejado." };
+      candidate.role = targetRole; // Transmuta a Lenda para o cargo escolhido
+    } else {
+      targetRole = candidate.role;
+    }
+
+    if (admin.council[targetRole]) {
+      return { ok: false, message: `Este cargo já está ocupado por outro ministro.` };
     }
 
     admin.candidatePool.splice(candidateIndex, 1);
-    admin.council[candidate.role] = candidate;
+    admin.council[targetRole] = candidate;
     
-    this.appendActionLog("Novo Conselheiro", `${candidate.name} foi nomeado para o cargo de ${candidate.role}.`, "info");
+    this.appendActionLog("Novo Conselheiro", `${candidate.name} foi nomeado para o cargo de ${targetRole}.`, "info");
     this.recordPlayerCommand("council.hire", { candidateId, role: candidate.role });
     this.persistCurrent();
     this.emitState();
     
     return { ok: true, message: "Conselheiro contratado." };
+  }
+
+  public reassignMinister(currentRole: MinisterRole, targetRole: MinisterRole): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const admin = player.administration;
+
+    if (!admin.council) return { ok: false, message: "Conselho não inicializado." };
+    if (currentRole === targetRole) return { ok: false, message: "O ministro já está neste cargo." };
+
+    const sourceMinister = admin.council[currentRole];
+    if (!sourceMinister) return { ok: false, message: "Nenhum ministro no cargo de origem." };
+
+    const targetMinister = admin.council[targetRole]; // Pode ser undefined
+
+    // Executa a troca (Swap)
+    admin.council[targetRole] = sourceMinister;
+    sourceMinister.role = targetRole;
+    
+    if (targetMinister) {
+      admin.council[currentRole] = targetMinister;
+      targetMinister.role = currentRole;
+    } else {
+      delete admin.council[currentRole];
+    }
+
+    this.appendActionLog("Reestruturação da Corte", `${sourceMinister.name} foi remanejado para o cargo de ${targetRole}.`, "info");
+    this.recordPlayerCommand("council.reassign", { ministerId: sourceMinister.id, from: currentRole, to: targetRole });
+    this.persistCurrent();
+    this.emitState();
+    return { ok: true, message: "Cargo remanejado com sucesso!" };
   }
 
   public fireMinister(role: MinisterRole): PlayerActionResult {
@@ -424,6 +474,7 @@ export class GameSession {
     }
 
     advice.resolved = true; // Marca a lei como julgada
+    advice.isRead = true; // Também remove a marcação de 'NOVO'
     
     // O Orquestrador executa fisicamente a proposta do Ministro
     switch (option.actionType) {
@@ -464,6 +515,19 @@ export class GameSession {
         break;
     }
     return { ok: true, message: `Decisão tomada: ${option.label}` };
+  }
+
+  public markAdviceRead(adviceId: string): PlayerActionResult {
+    const state = this.requireState();
+    const player = this.getPlayerKingdom(state);
+    const advice = player.administration.activeAdvice.find(a => a.id === adviceId);
+    
+    if (!advice) return { ok: false, message: "Relatório não encontrado." };
+    
+    advice.isRead = true;
+    this.persistCurrent();
+    this.emitState();
+    return { ok: true, message: "Relatório arquivado." };
   }
 
   public interactMinister(role: MinisterRole, interaction: "praise" | "threaten" | "consult" | "raise_salary" | "cut_salary"): PlayerActionResult {

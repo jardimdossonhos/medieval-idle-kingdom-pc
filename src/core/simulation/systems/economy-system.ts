@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import { ResourceType, TreatyType } from "../../models/enums";
+﻿import { ResourceType, TreatyType } from "../../models/enums";
 import { createEmptyStock } from "../../models/economy";
 import type { SimulationSystem } from "../tick-pipeline";
 import { clamp, createEventId, ensureResourceNonNegative, getOwnedRegionIds, roundTo } from "./utils";

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import { ArmyPosture, AutomationLevel, BuildingType, ResourceType, TechnologyDomain } from "../../models/enums";
+﻿import { ArmyPosture, AutomationLevel, BuildingType, ResourceType, TechnologyDomain } from "../../models/enums";
 import { selectDefaultResearchNode, selectResearchNodeTowardsTarget } from "../../data/technology-tree";
 import type { BudgetPriority } from "../../models/economy";
 import type { EcsState, GameState, KingdomState } from "../../models/game-state";

@@ -1,5 +1,6 @@
 import { AutomationLevel, BuildingType, MinisterPersonality, MinisterRole } from "./enums";
 import type { RegionId } from "./types";
+import type { CharacterStats } from "./character";
 
 export interface AdministrativePolicy {
   regionalAutonomyTarget: number;
@@ -34,6 +35,7 @@ export interface Minister {
   role: MinisterRole;
   personality: MinisterPersonality;
   skillLevel: number; // 1 a 5 (Molda a eficiência administrativa e chance de sucesso de ações delegadas)
+  stats?: CharacterStats; // Os atributos de RPG reais (Admin, Martial, Diplo, Intriga, Saber)
   salary: number; // Salário atual do ministro em ouro por ciclo
   delegationLevel: AutomationLevel; // Manual (Apenas avisa), Assistido (Emite propostas), Automático (Executa e reporta)
   loyalty: number; // 0 a 100. Cai se o jogador tomar decisões contrárias à sua personalidade. < 15 causa renúncia.
@@ -59,6 +61,7 @@ export interface MinisterAdvice {
   issuedAt: number;
   options?: AdviceOption[];
   resolved?: boolean;
+  isRead?: boolean;
 }
 
 export interface AdministrationState {
