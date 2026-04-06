@@ -345,7 +345,10 @@ function createKingdom(
         diplomacyReactive: blueprint.isPlayer ? AutomationLevel.Manual : AutomationLevel.Assisted,
         expansion: blueprint.isPlayer ? AutomationLevel.Manual : AutomationLevel.Assisted,
         technology: blueprint.isPlayer ? AutomationLevel.Assisted : AutomationLevel.Assisted
-      }
+      },
+      council: {},
+      candidatePool: [],
+      activeAdvice: []
     },
     victoryProgress: {
       [VictoryPath.TerritorialDomination]: 0,

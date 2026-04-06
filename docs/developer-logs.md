@@ -571,7 +571,7 @@ A suíte de testes `save-and-load-audit.test.ts` começou a falhar com o erro `T
 **O Desastre:** Essa alteração "acordou" o sistema de segurança do jogo (Offline Catch-up). O teste esperava que o jogo estivesse no Ciclo 10, mas a `GameSession` via que o tempo do relógio estava adiantado, simulava o tempo offline e entregava o Ciclo 13, quebrando a asserção (`expected 13 to be 10`).
 
 ### Análise e Correção:
-O sistema de persistência do jogo estava e continua **100% perfeito**. O problema era puramente de Hardware/Ambiente de Teste. O mapa em `world-definitions-v1.ts` estava tão massivo (62.000 hexágonos) que a função nativa `structuredClone` (usada pelo teste para simular a escrita em disco) demorava mais de 5 segundos na CPU do Node.js, fazendo o Vitest abortar o teste por Timeout.
+O sistema de persistência do jogo estava e continua **100% perfeito**. O problema era puramente de Hardware/Ambiente de Teste. O mapa em `world-definitions-v1.ts` estava tão massivo (62.000 hexágonos) que a função nativa `structuredClone` (usada pelo teste para simular a escrita em disco) demorava mais de 5 segundos na CPU do Node.js, fazendo o Vitest abortar o teste por Timeout. Atualmente esse arquivo foi convertido para um wrapper leve que importa `public/assets/maps/world-definitions-v1.json`, preservando a mesma malha de regiões sem forçar o TypeScript a analisar um arquivo de dados bruto.
 **Ação:** Revertemos as alterações lógicas dos testes (preservando o isolamento) e apenas aumentamos o Timeout da suíte no Vitest para 15 segundos (`15000ms`), permitindo que a CPU tenha tempo de clonar o mapa massivo na RAM. Todos os testes voltaram a passar.
 
 ---

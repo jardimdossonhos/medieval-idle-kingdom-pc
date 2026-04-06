@@ -7,8 +7,19 @@ export type ModifierTarget =
   | "population.growth_rate_multiplier"
   | "military.manpower_modifier"
   | "military.reserveManpower"
+  | "military.techLevel"
   | "administration.capacity"
+  | "administration.corruption"
   | "religion.cohesion"
+  | "religion.authority"
+  | "religion.tolerance"
+  | "population.growthRate"
+  | "economy.goldStock"
+  | "economy.foodStock"
+  | "economy.woodStock"
+  | "economy.ironStock"
+  | "economy.faithStock"
+  | "stability"
   | "legitimacy";
 
 export type EcsModifiers = Partial<Record<ModifierTarget, Float64Array>>;

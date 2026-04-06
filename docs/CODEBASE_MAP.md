@@ -44,7 +44,7 @@ Sistemas de controle de fluxo de estado. Eles ditam "o quê" fazer, orquestrando
     *   Despacha as intenções do jogador (ex: botões de Diplomacia ou Governo) e verifica custos (`canAfford`) usando sua cópia local (e potencialmente desatualizada) do `EcsState`.
     *   **`boot/`**: Rotinas para construir a campanha "do zero".
         *   `create-initial-state.ts`, `static-world-data.ts`: Fabricas que constroem a árvore inicial JSON.
-        *   `generated/world-definitions-v1.ts`: A lista *hardcoded* final de regiões. **O length deste arquivo dita a alocação do Worker de alta performance.**
+        *   `generated/world-definitions-v1.ts`: Um wrapper leve que carrega o dado real de `src/application/boot/generated/world-definitions-v1.json`. O array de regiões ainda dita a alocação do Worker de alta performance, mas não fica hardcoded como TS bruto.
     *   **`save/`**: Rotinas exclusivas de snapshots.
         *   `build-save-summary.ts`: Fabrica os metadados (Tamanho do exército, Nome do Monarca, Tempo jogado) legíveis no Menu de Saves sem precisar carregar o mapa inteiro na RAM.
 
@@ -122,7 +122,7 @@ Centenas de megabytes rodando a cada segundo em arrays coladas e contínuas na M
 **Cenário D: Alterar propriedades da malha hexagonal do mundo (Clima, Tamanho do Tabuleiro):**
     *   Alterar a lógica procedural (Turf.js) no `scripts/generate-world-geojson.mjs`.
     *   Rodar `npm run map:build` para fatiar o mundo e gerar os Vector Tiles (`.pbf`).
-    *   O build reescreverá `world-definitions-v1.ts`. O ECS ajustará automaticamente a memória RAM com base no tamanho novo do Array.
+    *   O build continuará usando o wrapper `src/application/boot/generated/world-definitions-v1.ts`, que importa `public/assets/maps/world-definitions-v1.json`. Isso mantém a alocação de memória do ECS intacta sem expor os dados como literal TypeScript.
     *   *Risco*: Qualquer alteração na quantidade de zonas geográficas corrompe os Saves antigos devido ao desalinhamento estrutural dos índices. O jogo precisará ser recomeçado.
 
 ---

@@ -72,7 +72,8 @@ npm run dev -- --host 0.0.0.0 --port 5173
 - Generated outputs:
   - `public/assets/maps/world-countries-v1.geojson`
   - `public/assets/maps/world-definitions-v1.json`
-  - `src/application/boot/generated/world-definitions-v1.ts`
+  - `src/application/boot/generated/world-definitions-v1.json` (JSON fonte usado pelo jogo)
+  - `src/application/boot/generated/world-definitions-v1.ts` (wrapper leve que importa o JSON local).
 - Generator: `scripts/generate-world-geojson.mjs` (`npm run map:build`).
 
 ## Structure
